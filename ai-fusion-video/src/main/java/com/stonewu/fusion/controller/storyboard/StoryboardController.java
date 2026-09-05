@@ -237,6 +237,13 @@ public class StoryboardController {
         return CommonResult.success(storyboardService.updateItemAssets(id, patch));
     }
 
+    @Operation(summary = "获取分镜条目 Production Summary")
+    @GetMapping("/item/{id}/production-summary")
+    public CommonResult<java.util.Map<String, Object>> getProductionSummary(
+            @PathVariable Long id) {
+        return CommonResult.success(storyboardService.getProductionSummary(id));
+    }
+
     /**
      * 更新分镜条目的首帧或尾帧参考图。
      *

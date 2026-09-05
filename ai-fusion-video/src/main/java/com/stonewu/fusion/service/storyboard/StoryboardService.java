@@ -445,8 +445,53 @@ public class StoryboardService {
     @Transactional
     public StoryboardItem updateItem(StoryboardItem item) {
         getItemById(item.getId());
+        // PR-006: 保护 production 字段不被普通 CRUD 意外覆盖
+        // production 字段只能通过 ProductionTakeService.selectTake() 和
+        // ProductionStepService.updateProductionStatus() 修改
+        item.setProductionStatus(null);
+        item.setSelectedTakeId(null);
+        item.setWorkflowProfileId(null);
         itemMapper.updateById(item);
         return itemMapper.selectById(item.getId());
+    }
+
+    /**
+     * PR-006: 更新分镜条目的 production 字段（仅供 Production 层调用）。
+     * 普通更新路径 updateItem() 会将这些字段置 null，不会被覆盖。
+     */
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
+    @Transactional
+    public StoryboardItem updateProductionFields(Long itemId, String productionStatus,
+            Long selectedTakeId, Long workflowProfileId) {
+        StoryboardItem existing = getItemById(itemId);
+        if (productionStatus != null) {
+            existing.setProductionStatus(productionStatus);
+        }
+        if (selectedTakeId != null) {
+            existing.setSelectedTakeId(selectedTakeId);
+        }
+        if (workflowProfileId != null) {
+            existing.setWorkflowProfileId(workflowProfileId);
+        }
+        itemMapper.updateById(existing);
+        return itemMapper.selectById(itemId);
+    }
+
+    /**
+     * PR-006: 获取分镜条目的 production summary（供 Overview 页面使用）。
+     */
+    @Cacheable(value = "storyboardItem", key = "#itemId + ':prodSummary'")
+    public java.util.Map<String, Object> getProductionSummary(Long itemId) {
+        StoryboardItem item = getItemById(itemId);
+        java.util.Map<String, Object> summary = new java.util.LinkedHashMap<>();
+        summary.put("itemId", item.getId());
+        summary.put("productionStatus", item.getProductionStatus());
+        summary.put("selectedTakeId", item.getSelectedTakeId());
+        summary.put("workflowProfileId", item.getWorkflowProfileId());
+        summary.put("videoUrl", item.getGeneratedVideoUrl());
+        summary.put("firstFrameUrl", item.getFirstFrameImageUrl());
+        summary.put("lastFrameUrl", item.getLastFrameImageUrl());
+        return summary;
     }
 
     /**
