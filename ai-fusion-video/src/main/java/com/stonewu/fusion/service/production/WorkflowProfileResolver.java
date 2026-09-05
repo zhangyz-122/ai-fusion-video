@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.production;
 
 import com.stonewu.fusion.entity.production.WorkflowProfile;
+import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 public class WorkflowProfileResolver {
 
     private final WorkflowProfileService profileService;
+    private final ComfyUiWorkflowService workflowService;
 
     public ResolvedWorkflow resolve(Long profileId) {
         WorkflowProfile profile = profileService.getById(profileId);
@@ -36,10 +38,13 @@ public class WorkflowProfileResolver {
 
     private String profileCode(WorkflowProfile p) { return p.getProfileCode(); }
 
-    // TODO: 注入 ComfyUiWorkflowService 查询最新 published version
     private Long getLatestPublishedVersionId(Long workflowId) {
-        // 简化实现：假设调用方已保证 workflow 有 published version
-        // 实际实现需查询 ComfyUiWorkflowVersionService
-        return null;
+        // 通过 ComfyUiWorkflowService 查询该 workflow 的最新 published 版本
+        var versions = workflowService.getVersionsByWorkflowId(workflowId);
+        return versions.stream()
+            .filter(v -> "PUBLISHED".equals(v.getStatus()))
+            .map(v -> v.getId())
+            .max(Long::compareTo)
+            .orElse(null);
     }
 }
