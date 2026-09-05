@@ -36,11 +36,9 @@ def evaluate(req: EvaluateRequest):
     t0 = time.monotonic()
     checks = []
     for c in req.checks:
-        if c == "TECHNICAL_VALIDITY":
-            ok = req.video_url and os.path.exists(req.video_url)
-            checks.append(QcCheckResult(criterion=c, verdict="PASS" if ok else "FAIL", failure_code=None if ok else "FILE_NOT_FOUND"))
+        checks.append(QcCheckResult(**check_technical(req.video_url)))
         elif c == "DURATION":
-            checks.append(QcCheckResult(criterion=c, verdict="PASS", value_score=req.expected_duration_seconds))
+            checks.append(QcCheckResult(**check_duration(req.video_url, req.expected_duration_seconds)))
         elif c == "CHARACTER_COUNT":
             checks.append(QcCheckResult(criterion=c, verdict="PASS", value_score=req.expected_character_count))
         else:
