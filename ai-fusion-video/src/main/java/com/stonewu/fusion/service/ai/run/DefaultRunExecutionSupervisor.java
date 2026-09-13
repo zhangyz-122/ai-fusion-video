@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.HashSet;
 import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -60,6 +61,7 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     private final AgentRunRedisSignalService signals;
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final AgentWaitingStatePort waitingState;
+    private DeterministicPipelineRecoveryService deterministicRecovery;
     private final AtomicBoolean accepting = new AtomicBoolean(true);
     private final AtomicReference<Mono<Void>> shutdownSignal = new AtomicReference<>();
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
@@ -67,6 +69,12 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     @Autowired
     void setMetrics(AgentRuntimeMetrics metrics) {
         this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
+
+    @Autowired
+    void setDeterministicRecovery(DeterministicPipelineRecoveryService deterministicRecovery) {
+        this.deterministicRecovery = Objects.requireNonNull(
+                deterministicRecovery, "deterministicRecovery must not be null");
     }
 
     public DefaultRunExecutionSupervisor(
@@ -169,6 +177,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                 stateSessionId, deadline, runtimeRequest);
         AtomicReference<String> pauseType = new AtomicReference<>();
         AtomicLong lastCommittedSequence = new AtomicLong(-1);
+        Set<String> successfulBusinessTools = new LinkedHashSet<>();
+        Set<String> failedBusinessToolCalls = new HashSet<>();
         return executionFactory.start(
                         runId,
                         ownerInstanceId,
@@ -183,15 +193,22 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                         deadline,
                          chunks::coalesce,
                          events -> events.concatMap(
-                                         event -> appendOwned(execution, event)
+                                         event -> {
+                                             recordSuccessfulBusinessTool(
+                                                     spec.agentDefinitionStableKey(),
+                                                     event,
+                                                     successfulBusinessTools,
+                                                     failedBusinessToolCalls);
+                                             return appendOwned(execution, event)
                                                  .flatMap(committed -> afterAppend(
                                                          execution,
                                                          event,
                                                          committed,
                                                          pauseType,
-                                                         lastCommittedSequence)), 1)
+                                                         lastCommittedSequence));
+                                         }, 1)
                                  .then(),
-                        ignored -> signals.cancellations(runId)
+                                 ignored -> signals.cancellations(runId)
                                 .next()
                                 .flatMap(cancelledRunId ->
                                         leases.observeCancellationSignal(
@@ -203,8 +220,10 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                                  execution,
                                  outcome,
                                  kernelSnapshot,
+                                 runtimeRequest,
                                  pauseType.get(),
-                                 lastCommittedSequence.get())))
+                                 lastCommittedSequence.get(),
+                                 successfulBusinessTools)))
                 .onErrorResume(
                         OwnedExecutionRegistry.ExecutionAlreadyOwnedException.class,
                         Mono::error)
@@ -358,8 +377,10 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             AgentExecution execution,
             AgentExecutionHandle.Outcome outcome,
             AgentKernelSnapshot kernelSnapshot,
+            AgentScopeRuntimeContextRequest runtimeRequest,
             String pauseType,
-            long lastCommittedSequence) {
+            long lastCommittedSequence,
+            Set<String> successfulBusinessTools) {
         metrics.providerClosed();
         AgentRunStatus providerStatus = switch (outcome.kind()) {
             case COMPLETED -> AgentRunStatus.COMPLETED;
@@ -369,11 +390,22 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             case OVERFLOW, SOURCE_FAILURE, JOURNAL_FAILURE -> AgentRunStatus.FAILED;
         };
         metrics.providerTerminal(providerStatus);
+        if (outcome.kind() == AgentExecutionHandle.OutcomeKind.COMPLETED) {
+            String validationError = validateBusinessCompletion(
+                    kernelSnapshot.payload().agentDefinitionStableKey(),
+                    successfulBusinessTools);
+            if (validationError != null) {
+                return terminalFailure(
+                        execution,
+                        AgentRuntimeErrorCode.TOOL_VALIDATION_FAILED,
+                        validationError);
+            }
+        }
         return switch (outcome.kind()) {
             case COMPLETED -> "REQUIRE_USER_CONFIRM".equals(pauseType)
                     ? enterWaitingConfirmation(
                             execution, kernelSnapshot, lastCommittedSequence)
-                    : terminalCompleted(execution);
+                    : recoverThenComplete(execution, kernelSnapshot, runtimeRequest);
             case OVERFLOW -> terminalFailure(
                     execution,
                     AgentRuntimeErrorCode.AGENT_EVENT_BACKPRESSURE_OVERFLOW,
@@ -395,6 +427,137 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                             "Agent run deadline expired")
                     : Mono.empty();
         };
+    }
+
+    private Mono<Void> recoverThenComplete(
+            AgentExecution execution,
+            AgentKernelSnapshot kernelSnapshot,
+            AgentScopeRuntimeContextRequest runtimeRequest) {
+        if (deterministicRecovery == null) {
+            return terminalCompleted(execution);
+        }
+        return deterministicRecovery.recover(
+                        kernelSnapshot.payload().agentDefinitionStableKey(),
+                        runtimeRequest.project())
+                .then(terminalCompleted(execution))
+                .onErrorResume(failure -> terminalFailure(
+                        execution,
+                        AgentRuntimeErrorCode.AGENTSCOPE_INTERNAL_ERROR,
+                        "结果落库失败：" + safeMessage(failure)));
+    }
+
+    private String safeMessage(Throwable failure) {
+        return failure.getMessage() == null || failure.getMessage().isBlank()
+                ? failure.getClass().getSimpleName()
+                : failure.getMessage();
+    }
+
+    /**
+     * A provider finishing its text response is not the same thing as a
+     * pipeline finishing its business work. Keep this check at the durable
+     * terminal boundary so refresh/reconnect cannot turn a no-op into a
+     * successful historical task.
+     */
+    private String validateBusinessCompletion(
+            String agentDefinitionStableKey,
+            Set<String> successfulBusinessTools) {
+        Set<String> required = requiredBusinessTools(agentDefinitionStableKey);
+        if (required.isEmpty()) {
+            return null;
+        }
+        // 这两个总流程有确定性的原文兜底：模型即使不会调用工具，前端也会
+        // 在 DONE 后按数据库中的剧本原文补齐可编辑结构，再进行结果校验。
+        // 不能在这里提前终止，否则兜底回调没有机会执行。
+        if (hasDeterministicFallback(agentDefinitionStableKey)) {
+            return null;
+        }
+        if (required.stream().noneMatch(successfulBusinessTools::contains)) {
+            return "模型已结束输出，但没有完成必须的写入操作（需要调用："
+                    + String.join(" 或 ", required)
+                    + "）。请更换支持工具调用的模型后重试。";
+        }
+        return null;
+    }
+
+    private boolean hasDeterministicFallback(String agentName) {
+        return "script_full_parse".equals(agentName)
+                || "script_to_storyboard".equals(agentName);
+    }
+
+    private Set<String> requiredBusinessTools(String agentName) {
+        if (agentName == null || agentName.isBlank()) {
+            return Set.of();
+        }
+        return switch (agentName) {
+            case "script_full_parse", "story_to_script" ->
+                    Set.of("save_script_episode", "save_script_scene_items");
+            case "script_episode_parse", "episode_scene_writer" ->
+                    Set.of("save_script_scene_items");
+            case "script_to_storyboard" ->
+                    Set.of("save_storyboard_episode", "save_storyboard_scene_shots");
+            case "episode_storyboard_writer" ->
+                    Set.of("save_storyboard_scene_shots");
+            case "asset_image_gen", "asset_image_executor" ->
+                    Set.of("update_asset_image");
+            case "storyboard_frame_gen", "storyboard_frame_executor" ->
+                    Set.of("update_storyboard_item_frame");
+            case "storyboard_video_gen", "storyboard_video_executor" ->
+                    Set.of("update_storyboard_item_video");
+            default -> Set.of();
+        };
+    }
+
+    private void recordSuccessfulBusinessTool(
+            String agentName,
+            AgentEventEnvelope event,
+            Set<String> successfulBusinessTools,
+            Set<String> failedBusinessToolCalls) {
+        if (event.rawEventType().endsWith("TOOL_RESULT_TEXT_DELTA")
+                || event.rawEventType().endsWith("TOOL_RESULT_DATA_DELTA")) {
+            String delta = firstText(event.payload(), "delta", "content", "text");
+            if (event.toolCallId() != null && looksLikeToolFailure(delta)) {
+                failedBusinessToolCalls.add(event.toolCallId());
+            }
+            return;
+        }
+        if (!"TOOL_FINISHED".equals(event.outputType())) {
+            return;
+        }
+        Set<String> required = requiredBusinessTools(agentName);
+        if (required.isEmpty()) {
+            return;
+        }
+        JsonNode payload = event.payload();
+        String toolName = firstText(payload, "toolCallName", "toolName", "name");
+        String state = firstText(payload, "state", "status", "toolStatus");
+        if (toolName != null && required.contains(toolName)
+                && "SUCCESS".equalsIgnoreCase(state)
+                && !failedBusinessToolCalls.contains(event.toolCallId())
+                && !looksLikeToolFailure(firstText(payload, "toolResult", "content", "text"))) {
+            successfulBusinessTools.add(toolName);
+        }
+    }
+
+    private boolean looksLikeToolFailure(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String normalized = value.trim().toLowerCase();
+        return normalized.startsWith("error:")
+                || normalized.contains("\"status\":\"error\"")
+                || normalized.contains("\"status\": \"error\"")
+                || normalized.contains("parameter validation failed")
+                || normalized.contains("tool execution failed");
+    }
+
+    private String firstText(JsonNode object, String... fields) {
+        for (String field : fields) {
+            JsonNode value = object.get(field);
+            if (value != null && value.isTextual() && !value.textValue().isBlank()) {
+                return value.textValue();
+            }
+        }
+        return null;
     }
 
     private Mono<Void> enterWaitingConfirmation(

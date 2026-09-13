@@ -17,7 +17,10 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 剧本服务（含分集、分场次管理）
@@ -25,6 +28,17 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ScriptService {
+
+    private static final Pattern EPISODE_HEADING = Pattern.compile(
+            "(?m)^#\\s*第\\s*([0-9一二三四五六七八九十百]+)\\s*集\\s*[：:|｜-]?\\s*(.*)$");
+    private static final Pattern SCENE_HEADING = Pattern.compile(
+            "(?m)^##\\s*(镜头|场景|场次)\\s*([0-9一二三四五六七八九十百]+)?\\s*[｜|：:.-]?\\s*(.*)$");
+
+    /**
+     * MySQL TEXT 字段最多约 64KB；中文按 UTF-8 保存时一个字符可能占 3 个字节。
+     * 留出余量，避免超长原文作为单个场景描述写入时触发 Data too long。
+     */
+    private static final int MAX_SCENE_DESCRIPTION_CHARS = 12000;
 
     /** BeanUtil 更新时需要排除的基础字段（不应由前端覆盖） */
     private static final String[] IGNORE_FIELDS = {
@@ -76,6 +90,177 @@ public class ScriptService {
         script.setParsingProgress(progress);
         scriptMapper.updateById(script);
     }
+
+    /**
+     * 本地模型未执行保存工具时的确定性兜底解析。
+     * 只按原文中已有的集数和镜头标题切分，不生成任何剧情内容。
+     */
+    @CacheEvict(value = { "script", "episode", "scene" }, allEntries = true, beforeInvocation = true)
+    @Transactional
+    public Script fallbackParseStructure(Long scriptId) {
+        Script script = getById(scriptId);
+        String raw = script.getRawContent();
+        if (raw == null || raw.isBlank()) {
+            throw new BusinessException("剧本原文为空，无法解析");
+        }
+
+        List<ScriptEpisode> existingEpisodes = listEpisodes(scriptId);
+        if (existingEpisodes.isEmpty()) {
+            List<TextBlock> episodeBlocks = splitBlocks(raw, EPISODE_HEADING, true);
+            if (episodeBlocks.isEmpty()) {
+                episodeBlocks = List.of(new TextBlock(1, "第1集", raw));
+            }
+            for (TextBlock block : episodeBlocks) {
+                ScriptEpisode episode = saveEpisode(
+                        scriptId,
+                        block.number(),
+                        block.title(),
+                        null,
+                        block.content(),
+                        2,
+                        block.number());
+                saveScenesFromText(episode, block.content());
+            }
+        } else {
+            for (ScriptEpisode episode : existingEpisodes) {
+                if (episode.getTotalScenes() == null || episode.getTotalScenes() == 0) {
+                    saveScenesFromText(episode, episode.getRawContent());
+                }
+            }
+        }
+
+        // 原文已经完整保存在 mediumtext 的 raw_content 中；content 是 TEXT，
+        // 超长剧本不能再次整段写入，否则会在解析完成收尾时触发 Data too long。
+        script.setContent(raw.length() <= MAX_SCENE_DESCRIPTION_CHARS ? raw : null);
+        script.setTotalEpisodes(listEpisodes(scriptId).size());
+        script.setParsingStatus(2);
+        script.setParsingProgress("解析完成");
+        scriptMapper.updateById(script);
+        return script;
+    }
+
+    private void saveScenesFromText(ScriptEpisode episode, String episodeText) {
+        if (episodeText == null || episodeText.isBlank()
+                || !listScenesByEpisode(episode.getId()).isEmpty()) {
+            return;
+        }
+        List<TextBlock> sceneBlocks = splitBlocks(episodeText, SCENE_HEADING, false);
+        if (sceneBlocks.isEmpty()) {
+            sceneBlocks = List.of(new TextBlock(1, episode.getTitle(), episodeText));
+        }
+        List<ScriptSceneItem> scenes = new ArrayList<>();
+        for (TextBlock block : sceneBlocks) {
+            List<String> descriptionChunks = splitSceneDescription(block.content());
+            for (int i = 0; i < descriptionChunks.size(); i++) {
+                String heading = block.title();
+                if (descriptionChunks.size() > 1) {
+                    heading = heading + "（片段 " + (i + 1) + "/" + descriptionChunks.size() + "）";
+                }
+                scenes.add(ScriptSceneItem.builder()
+                        .sceneHeading(heading)
+                        .sceneDescription(descriptionChunks.get(i))
+                        .status(1)
+                        .build());
+            }
+        }
+        batchSaveSceneItems(episode.getId(), episode.getVersion(), scenes, true);
+    }
+
+    /**
+     * 将没有明确镜头标题的超长原文拆成多个可保存的场景描述。
+     * 优先在段落/换行处切分，只有单行本身超长时才按长度硬切，确保原文不被截断。
+     */
+    private List<String> splitSceneDescription(String text) {
+        String source = text == null ? "" : text.trim();
+        if (source.isEmpty()) {
+            return List.of("");
+        }
+        List<String> chunks = new ArrayList<>();
+        int start = 0;
+        while (start < source.length()) {
+            int remaining = source.length() - start;
+            if (remaining <= MAX_SCENE_DESCRIPTION_CHARS) {
+                chunks.add(source.substring(start).trim());
+                break;
+            }
+
+            int end = start + MAX_SCENE_DESCRIPTION_CHARS;
+            int split = source.lastIndexOf("\n\n", end);
+            if (split <= start + MAX_SCENE_DESCRIPTION_CHARS / 2) {
+                split = source.lastIndexOf('\n', end);
+            }
+            if (split <= start + MAX_SCENE_DESCRIPTION_CHARS / 2) {
+                split = source.lastIndexOf('。', end) + 1;
+            }
+            if (split <= start + MAX_SCENE_DESCRIPTION_CHARS / 2) {
+                split = end;
+            }
+
+            String chunk = source.substring(start, split).trim();
+            if (!chunk.isEmpty()) {
+                chunks.add(chunk);
+            }
+            start = split;
+            while (start < source.length() && Character.isWhitespace(source.charAt(start))) {
+                start++;
+            }
+        }
+        return chunks;
+    }
+
+    private List<TextBlock> splitBlocks(String text, Pattern pattern, boolean episode) {
+        Matcher matcher = pattern.matcher(text);
+        List<TextBlock> blocks = new ArrayList<>();
+        List<MatchBlock> matches = new ArrayList<>();
+        while (matcher.find()) {
+            int number = parseChineseNumber(matcher.group(2 - (episode ? 1 : 0)));
+            String label = matcher.group(0).trim();
+            String title = matcher.group(matcher.groupCount()).trim();
+            if (episode) {
+                title = title.isBlank() ? label : label;
+            }
+            matches.add(new MatchBlock(number > 0 ? number : matches.size() + 1,
+                    title.isBlank() ? label : title, matcher.start()));
+        }
+        for (int i = 0; i < matches.size(); i++) {
+            MatchBlock current = matches.get(i);
+            int end = i + 1 < matches.size() ? matches.get(i + 1).start() : text.length();
+            String content = text.substring(current.start(), end);
+            int lineEnd = content.indexOf('\n');
+            if (lineEnd >= 0) {
+                content = content.substring(lineEnd + 1);
+            }
+            blocks.add(new TextBlock(current.number(), current.title(), content));
+        }
+        return blocks;
+    }
+
+    private int parseChineseNumber(String value) {
+        if (value == null || value.isBlank()) return 0;
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            String digits = "零一二三四五六七八九";
+            int total = 0;
+            int current = 0;
+            for (char c : value.toCharArray()) {
+                if (c == '十') {
+                    total += (current == 0 ? 1 : current) * 10;
+                    current = 0;
+                } else if (c == '百') {
+                    total += (current == 0 ? 1 : current) * 100;
+                    current = 0;
+                } else {
+                    int digit = digits.indexOf(c);
+                    if (digit >= 0) current = digit;
+                }
+            }
+            return total + current;
+        }
+    }
+
+    private record MatchBlock(int number, String title, int start) { }
+    private record TextBlock(int number, String title, String content) { }
 
     @CacheEvict(value = { "script", "episode", "scene" }, allEntries = true)
     @Transactional

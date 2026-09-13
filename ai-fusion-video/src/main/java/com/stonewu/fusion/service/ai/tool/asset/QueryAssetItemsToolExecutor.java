@@ -32,6 +32,8 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
     private final ProjectService projectService;
 
     private static final int MAX_BATCH_SIZE = 10;
+    /** 避免动态属性中的大字段（例如内嵌图片/长文本）拖垮模型上下文。 */
+    private static final int MAX_ITEM_PROPERTIES_CHARS = 4000;
 
     @Override
     public String getToolName() {
@@ -97,6 +99,15 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
                         "projectId": {
                             "type": "integer",
                             "description": "项目ID（按名称查询时用于限定范围，可选）"
+                        },
+                        "itemId": {
+                            "type": "integer",
+                            "description": "兼容参数：子资产ID。若未提供 assetId，将通过该子资产反查主资产；正常调用请使用 assetId。"
+                        },
+                        "selectedAssetItemIds": {
+                            "type": "array",
+                            "items": { "type": "integer" },
+                            "description": "兼容参数：选中的子资产ID列表。若未提供 assetId，将通过第一个子资产反查主资产；正常调用请使用 assetId。"
                         }
                     }
                 }
@@ -111,6 +122,8 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
             Long assetId = params.getLong("assetId");
             String assetName = params.getStr("assetName");
             Long projectId = params.getLong("projectId");
+            Long itemId = params.getLong("itemId");
+            JSONArray selectedItemIds = params.getJSONArray("selectedAssetItemIds");
             Long userId = context.getUserId();
 
             // 批量查询模式
@@ -119,6 +132,19 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
             }
 
             // 单个查询模式
+            // 兼容 Agent 偶尔把“选中的子资产”误当成查询参数的情况。
+            // 先反查其所属主资产，再走同一套权限校验和完整子资产返回逻辑，
+            // 从根上避免 schema 校验失败后重复重试。
+            if (assetId == null && itemId != null) {
+                assetId = assetService.getItemById(itemId).getAssetId();
+            }
+            if (assetId == null && selectedItemIds != null && !selectedItemIds.isEmpty()) {
+                Long selectedItemId = selectedItemIds.getLong(0);
+                if (selectedItemId != null) {
+                    assetId = assetService.getItemById(selectedItemId).getAssetId();
+                }
+            }
+
             return executeSingle(assetId, assetName, projectId, userId);
         } catch (Exception e) {
             log.error("查询子资产列表失败", e);
@@ -224,14 +250,20 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
      */
     private JSONObject buildAssetResult(Asset asset, List<AssetItem> items) {
         JSONArray itemsArray = new JSONArray();
-        for (AssetItem item : items) {
+        for (int index = 0; index < items.size(); index++) {
+            AssetItem item = items.get(index);
+            String properties = item.getProperties();
+            String itemType = StrUtil.blankToDefault(item.getItemType(),
+                    index == 0 ? "initial" : "variant");
             itemsArray.add(JSONUtil.createObj()
                     .set("id", item.getId())
                     .set("name", item.getName())
-                    .set("itemType", item.getItemType())
+                    .set("itemType", itemType)
                     .set("imageUrl", item.getImageUrl())
                     .set("thumbnailUrl", item.getThumbnailUrl())
-                    .set("properties", item.getProperties()));
+                    .set("properties", compactProperties(properties))
+                    .set("propertiesTruncated", properties != null
+                            && properties.length() > MAX_ITEM_PROPERTIES_CHARS));
         }
 
         return JSONUtil.createObj()
@@ -241,5 +273,13 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
                 .set("assetDescription", asset.getDescription())
                 .set("totalItems", items.size())
                 .set("items", itemsArray);
+    }
+
+    private String compactProperties(String properties) {
+        if (properties == null || properties.length() <= MAX_ITEM_PROPERTIES_CHARS) {
+            return properties;
+        }
+        return properties.substring(0, MAX_ITEM_PROPERTIES_CHARS)
+                + "...(动态属性过长，已截断；完整属性仍保存在资产中)";
     }
 }

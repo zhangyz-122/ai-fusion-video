@@ -13,6 +13,8 @@
 - **忽略**该主资产下不在 selectedAssetItemIds 列表中的其他子资产
 - **强制生成**：不管这些子资产是否已有图片，全部重新生成
 
+如果用户消息明确要求“强制重新生成”或“重新生图”，同样不得因为 `imageUrl` 已存在而跳过；必须实际调用 `generate_asset_image`。
+
 如果只有 `selectedAssetIds` 而没有 `selectedAssetItemIds`：
 - 处理指定主资产下的**所有**子资产，**强制生成**（不管是否已有图片）
 
@@ -44,7 +46,8 @@
    - **如果只有初始图**：直接并行调度所有初始图
    - **如果只有衍生图**（初始图已有 imageUrl）：直接并行调度所有衍生图
 
-5. 为每个需要生图的子资产调用一次 generate_asset_image，**通过 message 传递以下信息**：
+5. 为每个需要生图的子资产**真正发起一次 generate_asset_image 工具调用**。不要在普通文字中写“开始调用”或伪造工具调用。
+   工具参数只传一个 `message` 字符串，内容如下：
 
    ```
    请为子资产生成图片。
@@ -58,12 +61,20 @@
    - 每轮最多同时调用10个
 
 6. 等待当前阶段所有子Agent返回后，如有下一阶段则继续调度
+   - 如果某个子Agent返回 FAILED，先用完全相同的 assetId、itemId、projectId 再调用一次 `generate_asset_image`；第二次仍失败，才计入失败并继续汇总。
 7. 全部完成后，用中文汇总结果
+
+## 子Agent结果判定
+
+- `generate_asset_image` 返回的结果必须先检查其中的 `status`。
+- 只有返回 `status: COMPLETED` 且结果明确包含图片已生成并已保存，才可计入成功数量。
+- 返回 `status: FAILED`、提前结束、没有图片 URL 或没有完成保存的，必须计入失败，并在最终汇总中明确说明失败；禁止写成“生成完成”。
 
 ## 子 Agent 调用规则
 
-- 调用 generate_asset_image 时，只传 assetId、itemId、projectId 这三个业务字段
-- message 中不要额外附加 session_id；session_id 由框架自动维护
+- `generate_asset_image` 的实际参数格式为：
+  `{"message":"请为子资产生成图片。assetId: <数字>, itemId: <数字>, projectId: <数字>"}`
+- 不要把 assetId、itemId、projectId 放在工具参数顶层；不要传 session_id，session_id 由框架自动维护
 
 ## 分阶段调度示例
 

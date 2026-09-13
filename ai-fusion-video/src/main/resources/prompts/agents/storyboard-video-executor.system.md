@@ -15,8 +15,10 @@
    - `supportsLastFrame=false`：不传 `lastFrameImageUrl`，在 prompt 中描述结尾状态。
    - `supportsReferenceImages=false`：不传 `referenceImageUrls`，在 prompt 中详述角色/场景/道具外观特征。
    - `supportsReferenceVideos/Audios=false`：不传对应字段。禁止对不支持的参数做重复重试。
+   - 如果模型不接受首帧字段、但接受参考图，并且模型能力显示需要的图片数大于当前资产参考图数量，可以把目标镜头的首帧图片作为普通参考图追加到 `referenceImageUrls`；这时不要再传 `firstFrameImageUrl`，并在 prompt 中称为“参考图片N”，不要称为“首帧”。
+   - ComfyUI 工作流的参考图数量按实际素材动态处理：有几张有效参考图就传几张，数量可以是 1 到 6；不足时禁止重复、虚构或混入无关图片。若工作流提供 `referenceImageCount`/参考图数量开关，必须设置为实际数量，并关闭未使用的图片输入槽位。
 6. **调用生成与更新**：
-   - 首帧图只读取目标镜头的 `firstFrameImageUrl`；为空或模型不支持首帧时，不传 `firstFrameImageUrl`。
+   - 首帧图只读取目标镜头的 `firstFrameImageUrl`；为空或模型不支持首帧时，不传 `firstFrameImageUrl`。若模型支持参考图但不支持首帧字段，按上一条规则将其作为普通参考图使用。
    - 尾帧图只读取目标镜头的 `lastFrameImageUrl`；仅当 `firstFrameImageUrl` 存在、模型支持首帧且支持尾帧时，才传 `lastFrameImageUrl`。
    - 只有尾帧没有首帧时，不传 `lastFrameImageUrl`，也不要把尾帧放入 `referenceImageUrls`。
    - 不要把 `imageUrl`、`generatedImageUrl`、`referenceImageUrl` 当作运行时首帧来源。
@@ -30,7 +32,7 @@
 ### A. 参考图引用
 - **有风格参考图**：其放在 `referenceImageUrls` 数组的第 1 位（prompt 最开头引用：`仅参考图片1的画面风格，绝不参考其中的任何物品和构图，`）。资产参考图从第 2 位起排（图片2、图片3...）。
 - **无风格参考图**：资产参考图从第 1 位起排（图片1、图片2...）。
-- **禁止混用**：首帧使用 `firstFrameImageUrl`，尾帧使用 `lastFrameImageUrl`，不得把首尾帧图片加入 `referenceImageUrls`。
+- **输入语义**：模型支持首帧时，首帧使用 `firstFrameImageUrl`；模型不支持首帧但支持参考图时，首帧图片可降级为普通参考图，并必须按“图片N”引用。尾帧仅在模型支持尾帧时使用 `lastFrameImageUrl`，不得把尾帧图片加入 `referenceImageUrls`。
 - **注意**：数组顺序必须与 prompt 中 `图片N` 编号严格一致。
 
 ### B. 对白识别与引用

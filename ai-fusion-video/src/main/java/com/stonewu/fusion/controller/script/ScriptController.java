@@ -60,6 +60,12 @@ public class ScriptController {
         return CommonResult.success(scriptService.replaceSourceAndReset(id, reqVO.getRawContent()));
     }
 
+    @Operation(summary = "使用本地规则兜底生成剧本结构")
+    @PostMapping("/{id}/fallback-parse")
+    public CommonResult<Script> fallbackParse(@PathVariable Long id) {
+        return CommonResult.success(scriptService.fallbackParseStructure(id));
+    }
+
     // ========== 分集 ==========
 
     @Operation(summary = "获取分集列表")

@@ -34,6 +34,45 @@ public class AiAgentRegistry {
                         }
                         """;
 
+        /** 资产生图子 Agent 的稳定调用格式。对本机 Ollama/Qwen 使用 message 包装业务参数，
+         * 避免模型把子 Agent 调用误输出成普通文字。 */
+        private static final String ASSET_IMAGE_SUB_AGENT_MESSAGE_SCHEMA = """
+                        {
+                          "type": "object",
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                              "description": "发送给子 Agent 的任务消息，必须包含 assetId、itemId、projectId 三个数字"
+                            }
+                          },
+                          "required": ["message"],
+                          "additionalProperties": false
+                        }
+                        """;
+
+        /** 分镜视频子 Agent 兼容模型直接传镜头与项目业务字段的调用格式。 */
+        private static final String STORYBOARD_VIDEO_SUB_AGENT_MESSAGE_SCHEMA = """
+                        {
+                          "type": "object",
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                              "description": "发送给子 Agent 的任务消息；也可直接传下面两个业务字段"
+                            },
+                            "storyboardItemId": {
+                              "type": "integer",
+                              "description": "目标分镜镜头ID（必传，直接调用格式）"
+                            },
+                            "projectId": {
+                              "type": "integer",
+                              "description": "项目ID（必传，直接调用格式）"
+                            }
+                          },
+                          "required": ["storyboardItemId", "projectId"],
+                          "additionalProperties": false
+                        }
+                        """;
+
         private final Map<String, AiAgentDefinition> agentMap = new LinkedHashMap<>();
 
         public AiAgentRegistry() {
@@ -122,9 +161,12 @@ public class AiAgentRegistry {
                                 .type("script_full_parse")
                                 .name("完整剧本解析")
                                 .toolNames(List.of(
-                                                "get_project_script", "list_project_assets", "batch_create_assets",
+                                                // Keep the root turn small enough for local Ollama/Qwen models.
+                                                // Asset extraction is intentionally deferred; this pipeline must
+                                                // persist the script structure before doing optional enrichment.
+                                                "get_project_script", "list_project_assets",
                                                 "update_script_info", "save_script_episode",
-                                                "get_script_structure", "query_asset_metadata"))
+                                                "get_script_structure"))
                                 .subAgentTools(List.of(
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("episode_scene_writer")
@@ -462,18 +504,14 @@ public class AiAgentRegistry {
                                                                 .description("""
                                                                                 为单个子资产生成AI图片并自动保存。每次调用只处理一个子资产，可在同一轮同时调用多个实例并行执行。
 
-                                                                                调用时 message 必须包含以下信息（每行一个键值对）：
-                                                                                - assetId: 主资产ID（数字，必传）
-                                                                                - itemId: 子资产ID（数字，必传）
-                                                                                - projectId: 项目ID（数字，必传）
-                                                                                - 不要额外传 session_id，框架会自动维护会话
+                                                                                必须真正调用本工具，不能只在普通回复里写“开始调用”。
+                                                                                参数只传一个 message 字符串，并在其中写明以下三个数字字段：
+                                                                                assetId、itemId、projectId。
+                                                                                不要传 session_id，框架会自动维护会话。
 
-                                                                                message 格式示例：
-                                                                                请为子资产生成图片。
-                                                                                assetId: 1
-                                                                                itemId: 3
-                                                                                projectId: 5""")
-                                                                .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA)
+                                                                                参数格式示例：
+                                                                                {"message":"请为子资产生成图片。assetId: 1, itemId: 3, projectId: 5"}""")
+                                                                .parametersSchema(ASSET_IMAGE_SUB_AGENT_MESSAGE_SCHEMA)
                                                                 .refAgentType("asset_image_executor")
                                                                 .build()))
                                 .systemPrompt(loadPrompt("asset-image-generation.system.md"))
@@ -588,16 +626,14 @@ public class AiAgentRegistry {
                                                                 .description("""
                                                                                 为单个分镜镜头生成AI视频并自动保存。每次调用只处理一个镜头，可在同一轮同时调用多个实例并行执行。
 
-                                                                                调用时 message 必须包含以下信息（每行一个键值对）：
-                                                                                - storyboardItemId: 分镜条目ID（数字，必传）
-                                                                                - projectId: 项目ID（数字，必传）
-                                                                                - 不要额外传 session_id，框架会自动维护会话
+                                                                                调用时必须直接传以下两个数字字段，不要只发送说明文字：
+                                                                                - storyboardItemId: 分镜条目ID（必传）
+                                                                                - projectId: 项目ID（必传）
+                                                                                message 为可选补充字段；不要额外传 session_id，框架会自动维护会话
 
-                                                                                message 格式示例：
-                                                                                请为分镜镜头生成视频。
-                                                                                storyboardItemId: 42
-                                                                                projectId: 5""")
-                                                                .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA)
+                                                                                参数格式示例：
+                                                                                {"storyboardItemId":42,"projectId":5}""")
+                                                                .parametersSchema(STORYBOARD_VIDEO_SUB_AGENT_MESSAGE_SCHEMA)
                                                                 .refAgentType("storyboard_video_executor")
                                                                 .build()))
                                 .systemPrompt(loadPrompt("storyboard-video-gen.system.md"))

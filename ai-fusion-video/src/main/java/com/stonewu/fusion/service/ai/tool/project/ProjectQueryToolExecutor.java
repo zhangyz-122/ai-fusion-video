@@ -8,6 +8,7 @@ import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.project.ProjectService;
 import com.stonewu.fusion.service.system.SystemConfigService;
+import com.stonewu.fusion.service.storyboard.StoryboardService;
 import cn.hutool.core.util.StrUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
 
     private final ProjectService projectService;
     private final SystemConfigService systemConfigService;
+    private final StoryboardService storyboardService;
 
     @Override
     public String getToolName() {
@@ -45,6 +47,8 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
                 查询指定项目的详细信息，包括项目名称、描述、封面、创建时间，
                 以及项目画风配置（artStyleInfo：画风描述、英文提示词、参考图URL）。
                 仅能查询当前用户有权限访问的项目。
+                正常参数是 projectId；如果上一步只返回了 storyboardId，也可以传 storyboardId，
+                工具会自动解析其所属项目，避免把分镜ID误当成项目ID。
                 """;
     }
 
@@ -56,10 +60,14 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
                     "properties": {
                         "projectId": {
                             "type": "integer",
-                            "description": "项目ID（必填）"
+                            "description": "项目ID；优先使用此参数"
+                        },
+                        "storyboardId": {
+                            "type": "integer",
+                            "description": "兼容参数：分镜容器ID。仅在没有 projectId 时使用，工具会解析所属项目"
                         }
                     },
-                    "required": ["projectId"]
+                    "description": "必须提供 projectId 或 storyboardId；优先提供 projectId，系统会自动转换 storyboardId"
                 }
                 """;
     }
@@ -69,8 +77,14 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
             Long projectId = params.getLong("projectId");
+            Long storyboardId = params.getLong("storyboardId");
+            if (projectId == null && storyboardId != null) {
+                projectId = storyboardService.getById(storyboardId).getProjectId();
+                log.warn("get_project received legacy storyboardId={}, resolved projectId={}", storyboardId, projectId);
+            }
             if (projectId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 projectId").toString();
+                return JSONUtil.createObj().set("status", "error")
+                        .set("message", "缺少 projectId（也未提供可转换的 storyboardId）").toString();
             }
 
             Long userId = context.getUserId();

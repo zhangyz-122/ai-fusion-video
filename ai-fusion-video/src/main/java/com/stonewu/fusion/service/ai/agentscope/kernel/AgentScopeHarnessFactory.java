@@ -9,6 +9,7 @@ import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceBaseStor
 import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import io.agentscope.core.state.AgentStateStore;
+import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
 import io.agentscope.harness.agent.HarnessAgent;
@@ -27,6 +28,13 @@ import java.util.Set;
 @Component
 public final class AgentScopeHarnessFactory {
     private static final int COMPACTION_TRIGGER_PERCENT = 80;
+    /**
+     * ComfyUI image/video tools wait for the local workflow to finish. AgentScope's
+     * default tool timeout is five minutes, which is too short for a cold local
+     * model load or a high-resolution generation.
+     */
+    private static final java.time.Duration LONG_RUNNING_TOOL_TIMEOUT =
+            java.time.Duration.ofMinutes(30);
 
     private final AgentKernelModelFactory modelFactory;
     private final AgentKernelToolRegistry toolRegistry;
@@ -108,8 +116,17 @@ public final class AgentScopeHarnessFactory {
         AgentKernelToolkitResources toolResources = null;
         HarnessAgent agent = null;
         try {
+            ExecutionConfig longRunningExecutionConfig = ExecutionConfig.builder()
+                    .timeout(LONG_RUNNING_TOOL_TIMEOUT)
+                    .maxAttempts(1)
+                    .build();
+            // 资产图片执行器必须串行：必须先拿到 generate_image 的实际返回地址，
+            // 再调用 update_asset_image，避免模型在同一轮预先拼接错误的远程 URL。
+            boolean parallelTools = !"asset_image_executor".equals(
+                    spec.agentDefinitionStableKey());
             Toolkit toolkit = new Toolkit(ToolkitConfig.builder()
-                    .parallel(true)
+                    .parallel(parallelTools)
+                    .executionConfig(longRunningExecutionConfig)
                     .build());
             toolResources = Objects.requireNonNull(
                     toolRegistry.register(spec, toolkit), "toolRegistry returned null resources");
@@ -129,6 +146,8 @@ public final class AgentScopeHarnessFactory {
                             ownedModel.model(), failures, contextWindow))
                     .stateStore(stateStore)
                     .toolkit(toolkit)
+                    .modelExecutionConfig(longRunningExecutionConfig)
+                    .toolExecutionConfig(longRunningExecutionConfig)
                     .permissionContext(AgentToolPermissionPolicy.contextFor(
                             toolkit, ToolExecutionMode.DEFAULT))
                     .middleware(shutdownRecoveryBridge)

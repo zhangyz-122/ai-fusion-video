@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.ai.tool;
 
+import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.service.ai.tool.asset.ListProjectAssetsToolExecutor;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
@@ -16,6 +17,25 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ListProjectAssetsToolExecutorTests {
+
+    @Test
+    void acceptsChineseAssetTypeWithoutSchemaValidationFailure() {
+        AssetService assetService = mock(AssetService.class);
+        ProjectService projectService = mock(ProjectService.class);
+        SystemConfigService systemConfigService = mock(SystemConfigService.class);
+        ListProjectAssetsToolExecutor executor = new ListProjectAssetsToolExecutor(
+                assetService, projectService, systemConfigService);
+
+        when(projectService.canAccessProject(1L, 7L)).thenReturn(true);
+        when(assetService.listByProject(1L, "character", null)).thenReturn(List.of());
+
+        String result = executor.execute(
+                "{\"projectId\":1,\"type\":\"角色\"}",
+                ToolExecutionContext.builder().userId(7L).build());
+
+        assertThat(JSONUtil.parseObj(result).getStr("type")).isEqualTo("character");
+        assertThat(JSONUtil.parseObj(result).getStr("requestedType")).isEqualTo("角色");
+    }
 
     @Test
     void returnsAbsolutePublicUrlsForAssetImages() {

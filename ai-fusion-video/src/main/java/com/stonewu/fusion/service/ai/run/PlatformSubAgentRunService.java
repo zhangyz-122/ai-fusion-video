@@ -28,6 +28,9 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
 
     private static final Set<String> TERMINAL_OUTPUT_TYPES =
             Set.of("DONE", "ERROR", "CANCELLED");
+    private static final String ASSET_IMAGE_EXECUTOR = "generate_asset_image";
+    private static final Set<String> ASSET_IMAGE_REQUIRED_TOOLS =
+            Set.of("generate_image", "update_asset_image");
 
     private final AgentRunCoordinator coordinator;
     private final AgentKernelSnapshotBuilder snapshots;
@@ -125,6 +128,17 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                     "Unsupported child Agent terminal output: "
                             + terminal.outputType());
         };
+        String error = status == AgentRunStatus.COMPLETED
+                ? null
+                : firstText(terminal.projection(), "error", "message");
+        if (status == AgentRunStatus.COMPLETED
+                && ASSET_IMAGE_EXECUTOR.equals(child.agentName())) {
+            Set<String> successfulTools = successfulToolNames(events);
+            if (!successfulTools.containsAll(ASSET_IMAGE_REQUIRED_TOOLS)) {
+                status = AgentRunStatus.FAILED;
+                error = "资产图片子任务提前结束：尚未完成实际生图或图片回填";
+            }
+        }
         StringBuilder content = new StringBuilder();
         for (CommittedAgentEvent event : events) {
             if (!"CONTENT".equals(event.outputType())) {
@@ -135,9 +149,6 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                 content.append(delta);
             }
         }
-        String error = status == AgentRunStatus.COMPLETED
-                ? null
-                : firstText(terminal.projection(), "error", "message");
         if (status == AgentRunStatus.CANCELLED && error == null) {
             error = "Child Agent run was cancelled";
         } else if (status == AgentRunStatus.FAILED && error == null) {
@@ -151,6 +162,22 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                 status,
                 content.isEmpty() ? null : content.toString(),
                 error);
+    }
+
+    private Set<String> successfulToolNames(List<CommittedAgentEvent> events) {
+        Set<String> successful = new java.util.LinkedHashSet<>();
+        for (CommittedAgentEvent event : events) {
+            if (!"TOOL_FINISHED".equals(event.outputType())) {
+                continue;
+            }
+            JsonNode payload = event.projection();
+            String state = firstText(payload, "state", "toolStatus", "status");
+            String toolName = firstText(payload, "toolCallName", "toolName", "name");
+            if (toolName != null && "success".equalsIgnoreCase(state)) {
+                successful.add(toolName);
+            }
+        }
+        return successful;
     }
 
     private String firstText(JsonNode payload, String... fields) {

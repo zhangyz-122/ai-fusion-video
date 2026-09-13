@@ -32,4 +32,10 @@ public class ToolExecutionContext {
      * 所有者 ID（个人模式下等于 userId）
      */
     private Long ownerId;
+
+    /**
+     * 当前 Agent 任务关联的项目 ID；没有项目上下文时为空。
+     * 用于在模型遗漏业务 ID 时进行受控的上下文兜底，不替代权限校验。
+     */
+    private Long projectId;
 }

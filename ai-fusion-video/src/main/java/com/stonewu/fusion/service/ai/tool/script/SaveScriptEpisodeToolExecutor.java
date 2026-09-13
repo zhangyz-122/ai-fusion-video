@@ -1,7 +1,9 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
 import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONUtil;
+import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
@@ -38,6 +40,7 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
     public String getToolDescription() {
         return """
                 创建或更新剧本的一集记录。如果该集数已存在则更新，不存在则创建。
+                scriptId、episodeNumber、title 是正常调用时必须提供的业务参数；如果模型遗漏参数，系统会根据当前项目上下文进行一次受控兜底，禁止重复发送空参数。
                 建议传入 sortOrder 排序值进行排序（默认设置为集号），若不传入则默认使用集号进行排序。
                 返回值中包含 episode_version，请在后续调用 save_script_scene_items 时传入此值。
                 """;
@@ -78,7 +81,7 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
                             "description": "剧本分集排序值。默认应设为与该集的 episodeNumber（集号）相同的值（例如第1集传 1，第2集传 2）。"
                         }
                     },
-                    "required": ["scriptId", "episodeNumber", "title"]
+                    "description": "正常调用必须传入 scriptId、episodeNumber、title。为了兼容不支持严格函数参数的本地模型，缺参由执行器返回可恢复结果，不在框架层直接拦截。"
                 }
                 """;
     }
@@ -91,16 +94,61 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
             Integer episodeNumber = params.getInt("episodeNumber");
             String title = params.getStr("title");
             String synopsis = params.getStr("synopsis");
-            String rawContent = params.getStr("rawContent");
+            String rawContent = firstNonBlank(
+                    params.getStr("rawContent"),
+                    // 兼容旧提示词/旧模型曾输出的字段名，统一落到数据库的 raw_content。
+                    params.getStr("originalText"));
             Integer sourceType = params.getInt("sourceType");
             Integer sortOrder = params.getInt("sortOrder");
 
-            if (scriptId == null || episodeNumber == null || title == null || title.isBlank()) {
+            if (scriptId == null && context.getProjectId() != null) {
+                Script script = scriptService.getByProjectId(context.getProjectId());
+                if (script != null) {
+                    scriptId = script.getId();
+                }
+            }
+
+            if (scriptId == null) {
                 return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: scriptId, episodeNumber, title").toString();
+                        .set("message", "缺少 scriptId，且当前任务没有可用的项目上下文；请先调用 get_project_script 获取真实 scriptId，不要重试空参数").toString();
             }
 
             accessGuard.requireScript(scriptId, context.getUserId());
+
+            // 完整剧本解析偶尔会被兼容模型生成为 {}。已有原文时直接走确定性兜底，
+            // 确保“提示成功但剧本为空”不会再次发生；无原文的创作任务则明确报错，避免凭空建集。
+            if (episodeNumber == null && (title == null || title.isBlank())
+                    && (rawContent == null || rawContent.isBlank())) {
+                Script script = scriptService.getById(scriptId);
+                if (script.getRawContent() != null && !script.getRawContent().isBlank()) {
+                    Script parsed = scriptService.fallbackParseStructure(scriptId);
+                    JSONArray episodes = new JSONArray();
+                    scriptService.listEpisodes(parsed.getId()).forEach(episode -> episodes.add(
+                            JSONUtil.createObj()
+                                    .set("scriptEpisodeId", episode.getId())
+                                    .set("episodeNumber", episode.getEpisodeNumber())
+                                    .set("title", episode.getTitle())
+                                    .set("episode_version", episode.getVersion())));
+                    return JSONUtil.createObj()
+                            .set("status", "success")
+                            .set("recovered", true)
+                            .set("episodes", episodes)
+                            .set("message", "模型未提供分集参数，已根据剧本原文完成确定性分集解析；请调用 get_script_structure 获取最新结构，不要重复保存空参数")
+                            .toString();
+                }
+                return JSONUtil.createObj().set("status", "error")
+                        .set("message", "缺少 episodeNumber 和 title，当前剧本也没有原文可用于兜底解析；请补齐参数后再调用").toString();
+            }
+
+            if (episodeNumber == null) {
+                episodeNumber = 1;
+            }
+            if (title == null || title.isBlank()) {
+                title = "第" + episodeNumber + "集";
+            }
+            if (sourceType == null && rawContent != null && !rawContent.isBlank()) {
+                sourceType = 2;
+            }
             ScriptEpisode episode = scriptService.saveEpisode(scriptId, episodeNumber, title,
                     synopsis, rawContent, sourceType, sortOrder);
 
@@ -116,5 +164,9 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
             log.error("保存集记录失败", e);
             return JSONUtil.createObj().set("status", "error").set("message", "保存失败: " + e.getMessage()).toString();
         }
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        return primary != null && !primary.isBlank() ? primary : fallback;
     }
 }

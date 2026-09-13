@@ -8,6 +8,7 @@ import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.ToolPermissionRisk;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.tool.AbstractPlatformAgentTool;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
 import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
@@ -62,9 +63,10 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                             JSONUtil.toJsonStr(input),
                             com.stonewu.fusion.service.ai.ToolExecutionContext.builder()
                                     .userId(toolContext.userId())
-                                    .ownerType(toolContext.ownerType())
-                                    .ownerId(toolContext.ownerId())
-                                    .build()))
+                            .ownerType(toolContext.ownerType())
+                            .ownerId(toolContext.ownerId())
+                            .projectId(projectId(runtime))
+                            .build()))
                     .subscribeOn(toolScheduler);
             return cancellation.checkpoint()
                     .then(assertLease(run))
@@ -74,6 +76,11 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                             .thenReturn(projectResult(param, result)))
                     .timeout(remaining);
         });
+    }
+
+    private Long projectId(RuntimeContext runtime) {
+        ProjectContext project = runtime.get(ProjectContext.class);
+        return project == null ? null : project.projectId();
     }
 
     @Override

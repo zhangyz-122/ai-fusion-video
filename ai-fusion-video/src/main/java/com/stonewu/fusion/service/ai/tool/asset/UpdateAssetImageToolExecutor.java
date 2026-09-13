@@ -107,6 +107,10 @@ public class UpdateAssetImageToolExecutor implements ToolExecutor {
                 return JSONUtil.createObj().set("status", "error")
                         .set("message", "缺少必要参数: imageUrl").toString();
             }
+            if (imageUrl.length() > 1024) {
+                return JSONUtil.createObj().set("status", "error")
+                        .set("message", "图片地址过长，未保存。请将 generate_image 返回的 imageUrl 原样传入，禁止自行拼接远程图片地址").toString();
+            }
 
             Long userId = context.getUserId();
 

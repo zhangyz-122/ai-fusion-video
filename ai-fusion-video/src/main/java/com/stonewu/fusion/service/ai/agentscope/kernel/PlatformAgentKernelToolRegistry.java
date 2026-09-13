@@ -14,6 +14,9 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRunPort;
 import com.stonewu.fusion.service.ai.run.RunLeaseGuard;
+import com.stonewu.fusion.service.ai.run.DirectAssetImageGenerationService;
+import com.stonewu.fusion.service.ai.run.DirectStoryboardFrameGenerationService;
+import com.stonewu.fusion.service.ai.run.DirectStoryboardVideoGenerationService;
 import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.Toolkit;
@@ -38,6 +41,9 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
     private final RunLeaseGuard leaseGuard;
     private final ObjectMapper objectMapper;
     private final AgentScopeMcpRegistry mcpRegistry;
+    private final DirectAssetImageGenerationService directAssetImageGenerationService;
+    private final DirectStoryboardFrameGenerationService directStoryboardFrameGenerationService;
+    private final DirectStoryboardVideoGenerationService directStoryboardVideoGenerationService;
 
     public PlatformAgentKernelToolRegistry(
             ToolExecutorRegistry executors,
@@ -48,7 +54,10 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             AgentRuntimeSchedulers schedulers,
             RunLeaseGuard leaseGuard,
             ObjectMapper objectMapper,
-            AgentScopeMcpRegistry mcpRegistry) {
+            AgentScopeMcpRegistry mcpRegistry,
+            DirectAssetImageGenerationService directAssetImageGenerationService,
+            DirectStoryboardFrameGenerationService directStoryboardFrameGenerationService,
+            DirectStoryboardVideoGenerationService directStoryboardVideoGenerationService) {
         this.executors = Objects.requireNonNull(executors, "executors must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -59,6 +68,12 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
         this.leaseGuard = Objects.requireNonNull(leaseGuard, "leaseGuard must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.mcpRegistry = Objects.requireNonNull(mcpRegistry, "mcpRegistry must not be null");
+        this.directAssetImageGenerationService = Objects.requireNonNull(
+                directAssetImageGenerationService, "directAssetImageGenerationService must not be null");
+        this.directStoryboardFrameGenerationService = Objects.requireNonNull(
+                directStoryboardFrameGenerationService, "directStoryboardFrameGenerationService must not be null");
+        this.directStoryboardVideoGenerationService = Objects.requireNonNull(
+                directStoryboardVideoGenerationService, "directStoryboardVideoGenerationService must not be null");
     }
 
     @Override
@@ -115,7 +130,10 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                             specFactory,
                             childRuns::getIfAvailable,
                             leaseGuard,
-                            objectMapper));
+                            objectMapper,
+                            directAssetImageGenerationService,
+                            directStoryboardFrameGenerationService,
+                            directStoryboardVideoGenerationService));
                 } else if (mcpTool) {
                     AgentTool registered = Objects.requireNonNull(
                             toolkit.getTool(toolName),

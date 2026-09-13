@@ -49,6 +49,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
         return """
                 列出项目下的资产列表（含子资产信息）。
                 支持的资产类型：character（角色）、scene（场景）、prop（道具）
+                type 为可选筛选项；省略、传 all/全部/所有或传中文类型时，工具会自动规范化。
 
                 使用场景：
                 - 创建资产前先查看已有资产，避免重复创建
@@ -71,8 +72,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
                         },
                         "type": {
                             "type": "string",
-                            "enum": ["character", "scene", "prop"],
-                            "description": "资产类型筛选（可选）"
+                            "description": "资产类型筛选（可选）：character/角色、scene/场景、prop/道具；all/全部表示返回全部"
                         }
                     },
                     "required": []
@@ -85,7 +85,8 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
         try {
             JSONObject params = JSONUtil.parseObj(toolInput);
             Long projectId = params.getLong("projectId");
-            String type = params.getStr("type");
+            String requestedType = params.getStr("type");
+            String type = normalizeType(requestedType);
             Long userId = context.getUserId();
 
             List<Asset> assets;
@@ -124,6 +125,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
 
             return JSONUtil.createObj()
                     .set("type", type != null ? type : "all")
+                    .set("requestedType", requestedType)
                     .set("total", assets.size())
                     .set("assets", resultArray).toString();
         } catch (Exception e) {
@@ -138,5 +140,23 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
         }
         String publicUrl = systemConfigService.resolvePublicUrl(resourceUrl);
         return publicUrl != null ? publicUrl : resourceUrl;
+    }
+
+    /** 将模型常用的中文或“全部”表达统一为数据库筛选值。未知筛选值安全回退为全部。 */
+    private String normalizeType(String requestedType) {
+        if (requestedType == null || requestedType.isBlank()) {
+            return null;
+        }
+        String normalized = requestedType.trim().toLowerCase();
+        return switch (normalized) {
+            case "character", "角色", "人物" -> "character";
+            case "scene", "场景", "环境" -> "scene";
+            case "prop", "道具", "物品" -> "prop";
+            case "all", "全部", "所有", "资产", "assets" -> null;
+            default -> {
+                log.warn("list_project_assets received unsupported type='{}'; falling back to all", requestedType);
+                yield null;
+            }
+        };
     }
 }

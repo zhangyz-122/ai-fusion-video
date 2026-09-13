@@ -19,6 +19,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -72,12 +73,18 @@ public class AssetService {
             return List.of();
 
         List<Long> assetIds = assets.stream().map(Asset::getId).collect(Collectors.toList());
+        // properties is a potentially large JSON/TEXT column. Letting MySQL
+        // sort the full rows by sort_order can exhaust its sort buffer. The
+        // result set is already scoped to this project, so sort small groups
+        // after retrieval instead.
         List<AssetItem> allItems = assetItemMapper.selectList(new LambdaQueryWrapper<AssetItem>()
-                .in(AssetItem::getAssetId, assetIds)
-                .orderByAsc(AssetItem::getSortOrder));
+                .in(AssetItem::getAssetId, assetIds));
 
         Map<Long, List<AssetItem>> itemsMap = allItems.stream()
                 .collect(Collectors.groupingBy(AssetItem::getAssetId));
+        itemsMap.values().forEach(items -> items.sort(
+                Comparator.comparing(AssetItem::getSortOrder,
+                        Comparator.nullsFirst(Comparator.naturalOrder()))));
 
         return assets.stream().map(asset -> {
             Map<String, Object> map = BeanUtil.beanToMap(asset, false, true);
