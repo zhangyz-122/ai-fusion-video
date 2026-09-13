@@ -145,7 +145,7 @@ class GenerationTaskReaperTests {
 
     private GenerationTaskReaper reaper() {
         return new GenerationTaskReaper(imageTaskMapper, videoTaskMapper,
-                productionRunMapper, productionStepMapper, repairRouter);
+                productionRunMapper, productionStepMapper, repairRouter, 2);
     }
 
     @SuppressWarnings("unchecked")

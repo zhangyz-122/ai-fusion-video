@@ -12,8 +12,8 @@ import com.stonewu.fusion.mapper.production.ProductionRunMapper;
 import com.stonewu.fusion.mapper.production.ProductionStepMapper;
 import com.stonewu.fusion.service.production.ProductionRepairRouter;
 import com.stonewu.fusion.service.production.ProductionRunService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -29,16 +29,10 @@ import java.util.stream.Collectors;
  * 被回收的视频任务若仍被进行中的 ProductionRun 等待，同步把运行标记为失败，避免运行永久悬挂。
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class GenerationTaskReaper {
 
-    /** 滞留阈值：超过该时长仍处于排队/执行中的任务视为卡死。 */
-    private static final int STALE_HOURS = 2;
-
     private static final int FAILURE_STATUS = 3;
-
-    private static final String TIMEOUT_MESSAGE = "任务滞留超过 " + STALE_HOURS + " 小时，已自动标记失败";
 
     /** 生产运行侧的超时失败码，与 reconcile 失败路径的码风格保持一致。 */
     private static final String RUN_FAILURE_CODE = "VIDEO_TASK_TIMEOUT";
@@ -49,9 +43,35 @@ public class GenerationTaskReaper {
     private final ProductionStepMapper productionStepMapper;
     private final ProductionRepairRouter repairRouter;
 
-    @Scheduled(fixedDelay = 10 * 60 * 1000L, initialDelay = 60 * 1000L)
+    /** 滞留阈值（小时）：超过该时长仍处于排队/执行中的任务视为卡死。 */
+    private final int staleHours;
+
+    private final String timeoutMessage;
+
+    public GenerationTaskReaper(
+            ImageTaskMapper imageTaskMapper,
+            VideoTaskMapper videoTaskMapper,
+            ProductionRunMapper productionRunMapper,
+            ProductionStepMapper productionStepMapper,
+            ProductionRepairRouter repairRouter,
+            @Value("${app.generation.reaper.stale-hours:2}") int staleHours) {
+        if (staleHours <= 0) {
+            throw new IllegalArgumentException("app.generation.reaper.stale-hours 必须为正整数");
+        }
+        this.imageTaskMapper = imageTaskMapper;
+        this.videoTaskMapper = videoTaskMapper;
+        this.productionRunMapper = productionRunMapper;
+        this.productionStepMapper = productionStepMapper;
+        this.repairRouter = repairRouter;
+        this.staleHours = staleHours;
+        this.timeoutMessage = "任务滞留超过 " + staleHours + " 小时，已自动标记失败";
+    }
+
+    @Scheduled(
+            fixedDelayString = "${app.generation.reaper.fixed-delay-ms:600000}",
+            initialDelayString = "${app.generation.reaper.initial-delay-ms:60000}")
     public void reapStaleTasks() {
-        LocalDateTime threshold = LocalDateTime.now().minusHours(STALE_HOURS);
+        LocalDateTime threshold = LocalDateTime.now().minusHours(staleHours);
 
         List<Long> staleImageIds = imageTaskMapper.selectList(new LambdaQueryWrapper<ImageTask>()
                 .select(ImageTask::getId)
@@ -61,7 +81,7 @@ public class GenerationTaskReaper {
             int updated = imageTaskMapper.update(null, new LambdaUpdateWrapper<ImageTask>()
                     .in(ImageTask::getId, staleImageIds)
                     .set(ImageTask::getStatus, FAILURE_STATUS)
-                    .set(ImageTask::getErrorMsg, TIMEOUT_MESSAGE));
+                    .set(ImageTask::getErrorMsg, timeoutMessage));
             log.warn("[TaskReaper] 滞留图片任务已标记失败: count={}", updated);
         }
 
@@ -73,7 +93,7 @@ public class GenerationTaskReaper {
             int updated = videoTaskMapper.update(null, new LambdaUpdateWrapper<VideoTask>()
                     .in(VideoTask::getId, staleVideoIds)
                     .set(VideoTask::getStatus, FAILURE_STATUS)
-                    .set(VideoTask::getErrorMsg, TIMEOUT_MESSAGE));
+                    .set(VideoTask::getErrorMsg, timeoutMessage));
             log.warn("[TaskReaper] 滞留视频任务已标记失败: count={}", updated);
             failWaitingProductionRuns(staleVideoIds);
         }
@@ -102,7 +122,7 @@ public class GenerationTaskReaper {
                         (first, second) -> first));
         for (ProductionRun run : waitingRuns) {
             // 与 reconcile 的 markRunFailed 同构：先留修复谱系（幂等键防重），再落失败状态。
-            repairRouter.recordFailure(run, stepByRunId.get(run.getId()), RUN_FAILURE_CODE, TIMEOUT_MESSAGE);
+            repairRouter.recordFailure(run, stepByRunId.get(run.getId()), RUN_FAILURE_CODE, timeoutMessage);
         }
 
         productionStepMapper.update(null, new LambdaUpdateWrapper<ProductionStep>()
@@ -110,14 +130,14 @@ public class GenerationTaskReaper {
                         .map(run -> stepByRunId.get(run.getId()).getId()).toList())
                 .set(ProductionStep::getStatus, ProductionRunService.STEP_FAILED)
                 .set(ProductionStep::getErrorCode, RUN_FAILURE_CODE)
-                .set(ProductionStep::getErrorMessage, TIMEOUT_MESSAGE));
+                .set(ProductionStep::getErrorMessage, timeoutMessage));
 
         int updated = productionRunMapper.update(null, new LambdaUpdateWrapper<ProductionRun>()
                 .in(ProductionRun::getId, waitingRuns.stream().map(ProductionRun::getId).toList())
                 .eq(ProductionRun::getStatus, ProductionRunService.RUN_WAITING_GENERATION)
                 .set(ProductionRun::getStatus, ProductionRunService.RUN_FAILED)
                 .set(ProductionRun::getFailureCode, RUN_FAILURE_CODE)
-                .set(ProductionRun::getFailureMessage, TIMEOUT_MESSAGE));
+                .set(ProductionRun::getFailureMessage, timeoutMessage));
         log.warn("[TaskReaper] 滞留视频任务关联的生产运行已标记失败: count={}", updated);
     }
 }

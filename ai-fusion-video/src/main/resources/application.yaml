@@ -59,6 +59,13 @@ app:
     local-base-path: ./data/media
   agent-workspace:
     local-base-path: ${AGENT_WORKSPACE_LOCAL_PATH:./data/agent-workspace}
+  generation:
+    reaper:
+      # 滞留任务回收：排队/执行中超过该小时数的任务自动标记失败，并联动失败等待中的生产运行。
+      stale-hours: 2
+      # 回收器调度周期与首次启动延迟（毫秒）。
+      fixed-delay-ms: 600000
+      initial-delay-ms: 60000
 
 video:
   compose:
