@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -150,6 +151,48 @@ class AssetControllerRecycleBinTests {
         verify(assetService, never()).purge(12L);
     }
 
+    // ========== 无项目归属的历史软删行（孤儿行） ==========
+
+    @Test
+    void listOrphanRecycledReturnsAssetsOfCurrentUser() {
+        loginAs(USER_ID);
+        Asset orphan = orphanDeletedAsset(21L);
+        when(assetService.listDeletedOrphansAccessibleByUser(USER_ID)).thenReturn(List.of(orphan));
+
+        List<Asset> data = controller.listOrphanRecycled().getData();
+
+        assertThat(data).hasSize(1);
+        assertThat(data.get(0).getId()).isEqualTo(21L);
+    }
+
+    @Test
+    void listOrphanRecycledRequiresLogin() {
+        assertThatThrownBy(() -> controller.listOrphanRecycled())
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("用户未登录");
+        verify(assetService, never()).listDeletedOrphansAccessibleByUser(anyLong());
+    }
+
+    @Test
+    void purgeOrphanRecycledDelegatesIdsToService() {
+        loginAs(USER_ID);
+        when(assetService.purgeDeletedOrphans(USER_ID, List.of(21L, 22L))).thenReturn(2);
+
+        Integer purged = controller.purgeOrphanRecycled(List.of(21L, 22L)).getData();
+
+        assertThat(purged).isEqualTo(2);
+        // 孤儿行无项目归属，不走 assertProject，权限校验在 service 内按资产归属执行
+        verify(accessGuard, never()).assertProject(any());
+    }
+
+    @Test
+    void purgeOrphanRecycledRequiresLogin() {
+        assertThatThrownBy(() -> controller.purgeOrphanRecycled(List.of(21L)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("用户未登录");
+        verify(assetService, never()).purgeDeletedOrphans(anyLong(), anyList());
+    }
+
     // ========== 端点元信息（路由契约防回归） ==========
 
     @Test
@@ -157,6 +200,8 @@ class AssetControllerRecycleBinTests {
         var restore = AssetController.class.getMethod("restoreRecycled", Long.class);
         var purge = AssetController.class.getMethod("purgeRecycled", Long.class);
         var list = AssetController.class.getMethod("listRecycleBin", int.class, int.class);
+        var listOrphans = AssetController.class.getMethod("listOrphanRecycled");
+        var purgeOrphans = AssetController.class.getMethod("purgeOrphanRecycled", List.class);
 
         org.assertj.core.api.Assertions.assertThat(
                 restore.getAnnotation(org.springframework.web.bind.annotation.PutMapping.class).value())
@@ -167,6 +212,12 @@ class AssetControllerRecycleBinTests {
         org.assertj.core.api.Assertions.assertThat(
                 list.getAnnotation(org.springframework.web.bind.annotation.GetMapping.class).value())
                 .containsExactly("/recycle-bin");
+        org.assertj.core.api.Assertions.assertThat(
+                listOrphans.getAnnotation(org.springframework.web.bind.annotation.GetMapping.class).value())
+                .containsExactly("/recycle-bin/orphans");
+        org.assertj.core.api.Assertions.assertThat(
+                purgeOrphans.getAnnotation(org.springframework.web.bind.annotation.DeleteMapping.class).value())
+                .containsExactly("/recycle-bin/orphans");
     }
 
     @Test
@@ -178,6 +229,24 @@ class AssetControllerRecycleBinTests {
         var variable = parser.parse("/api/asset/{id}");
 
         org.assertj.core.api.Assertions.assertThat(literal.compareTo(variable)).isNegative();
+    }
+
+    @Test
+    void orphanLiteralPathWinsOverRecycleBinIdVariable() {
+        // DELETE /api/asset/recycle-bin/orphans 必须命中批量清理端点而非 /recycle-bin/{id}
+        var parser = org.springframework.web.util.pattern.PathPatternParser.defaultInstance;
+        var literal = parser.parse("/api/asset/recycle-bin/orphans");
+        var variable = parser.parse("/api/asset/recycle-bin/{id}");
+
+        org.assertj.core.api.Assertions.assertThat(literal.compareTo(variable)).isNegative();
+    }
+
+    private Asset orphanDeletedAsset(long id) {
+        Asset asset = Asset.builder().name("历史软删资产").type("image").ownerType(1).build();
+        asset.setId(id);
+        asset.setProjectId(null);
+        asset.setDeleted(true);
+        return asset;
     }
 
     private com.baomidou.mybatisplus.extension.plugins.pagination.Page<Asset> paged(

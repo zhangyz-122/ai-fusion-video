@@ -113,6 +113,40 @@ public class LocalStorageStrategy implements StorageStrategy {
         }
     }
 
+    /**
+     * 删除本策略持久化产出的 {@code /media/} 文件（回收站彻底删除等场景的文件清理）。
+     * <p>
+     * {@code /media/} 前缀 URL 是本策略独有的产物，故方法挂在本实现而非 StorageStrategy 接口。
+     * 与 {@link #resolveTargetDir} 同样的越界断言：规范化后必须仍在存储根目录内；
+     * URL 非本策略格式或文件不存在时返回 false（幂等，不视为错误），IO 失败时抛出运行时异常。
+     *
+     * @return 是否实际删除了文件
+     */
+    public boolean deleteByMediaUrl(String url, StorageConfig config) {
+        if (StrUtil.isBlank(url) || !url.startsWith(URL_PREFIX + "/")) {
+            return false;
+        }
+        String relativePath = url.substring(URL_PREFIX.length());
+        if (relativePath.startsWith("/")) {
+            relativePath = relativePath.substring(1);
+        }
+        Path root = Paths.get(resolveBasePath(config)).toAbsolutePath().normalize();
+        Path target = root.resolve(relativePath).normalize();
+        if (!target.startsWith(root)) {
+            log.warn("[LocalStorage] 拒绝删除存储根目录外的路径: {}", url);
+            return false;
+        }
+        try {
+            boolean removed = Files.deleteIfExists(target);
+            if (removed) {
+                log.info("[LocalStorage] 文件已删除: {}", target);
+            }
+            return removed;
+        } catch (IOException e) {
+            throw new RuntimeException("删除本地存储文件失败: " + e.getMessage(), e);
+        }
+    }
+
     private String resolveBasePath(StorageConfig config) {
         if (config != null && StrUtil.isNotBlank(config.getBasePath())) {
             return config.getBasePath();

@@ -104,4 +104,60 @@ class AssetRecycleBinMapperSqlTests {
                 .startsWith("DELETE FROM afv_asset_item")
                 .contains("asset_id =");
     }
+
+    // ========== 恢复子资产 / 子资产全量查询（含软删行） ==========
+
+    @Test
+    void restoreDeletedByAssetIdClearsDeletedFlagOnItemTable() throws Exception {
+        Method method = AssetItemMapper.class.getMethod("restoreDeletedByAssetId", Long.class);
+        String sql = String.join("", method.getAnnotation(Update.class).value());
+
+        BoundSql boundSql = bind(sql, Map.of("assetId", 12L));
+        assertThat(boundSql.getSql())
+                .startsWith("UPDATE afv_asset_item")
+                .contains("SET deleted = 0")
+                .contains("deleted = 1")
+                .contains("asset_id =");
+    }
+
+    @Test
+    void selectPhysicallyByAssetIdHitsDeletedRowsToo() throws Exception {
+        // 收集媒体文件地址必须能触达已软删子资产，@TableLogic 追加的 deleted = 0 会漏行
+        Method method = AssetItemMapper.class.getMethod("selectPhysicallyByAssetId", Long.class);
+        String sql = String.join("", method.getAnnotation(Select.class).value());
+
+        BoundSql boundSql = bind(sql, Map.of("assetId", 12L));
+        assertThat(boundSql.getSql())
+                .startsWith("SELECT * FROM afv_asset_item")
+                .contains("asset_id =")
+                .doesNotContain("deleted = 0");
+    }
+
+    // ========== 无项目归属的历史软删行（孤儿行） ==========
+
+    @Test
+    void selectDeletedWithoutProjectScopesToNullProjectDeletedRows() throws Exception {
+        Method method = AssetMapper.class.getMethod("selectDeletedWithoutProject");
+        String sql = String.join("", method.getAnnotation(Select.class).value());
+
+        BoundSql boundSql = bind(sql, Map.of());
+        assertThat(boundSql.getSql())
+                .contains("deleted = 1")
+                .contains("project_id IS NULL")
+                .doesNotContain("deleted = 0");
+    }
+
+    @Test
+    void selectDeletedByIdsScopesToNullProjectAndExpandsForeach() throws Exception {
+        String sql = selectSql("selectDeletedByIds", Collection.class);
+        assertThat(sql.trim()).startsWith("<script>").endsWith("</script>");
+
+        BoundSql boundSql = bind(sql, Map.of("ids", List.of(21L, 22L)));
+        assertThat(boundSql.getSql())
+                .contains("deleted = 1")
+                .contains("project_id IS NULL")
+                .contains("id IN")
+                .doesNotContain("deleted = 0");
+        assertThat(boundSql.getParameterMappings()).hasSize(2);
+    }
 }
