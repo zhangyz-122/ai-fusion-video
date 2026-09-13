@@ -40,6 +40,30 @@ class OpenAiCompatibleAiProviderTests {
     }
 
     @Test
+    void listRemoteModelsUsesOfficialVolcengineChatModelWithoutModelsEndpoint() {
+        OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
+
+        AiProviderContext context = AiProviderContext.builder()
+                .platform("openai_compatible")
+                .apiKey("test-key")
+                .baseUrl("https://ark.cn-beijing.volces.com")
+                .apiConfig(ApiConfig.builder()
+                        .platform("openai_compatible")
+                        .textProtocol("volcengine")
+                        .apiUrl("https://ark.cn-beijing.volces.com")
+                        .build())
+                .build();
+
+        assertThat(provider.listRemoteModels(context))
+                .singleElement()
+                .satisfies(model -> {
+                    assertThat(model.getId()).isEqualTo("doubao-seed-2-1-pro-260628");
+                    assertThat(model.getModelType()).isEqualTo(1);
+                    assertThat(model.getModelProtocol()).isEqualTo("volcengine");
+                });
+    }
+
+    @Test
     void createAgentScopeModelBuildsOfficialChatCompletionsWithOptionsAndProxy() throws Exception {
         OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
 

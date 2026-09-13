@@ -96,6 +96,12 @@ public class AiProviderContextFactory {
     }
 
     private String normalizePlatform(String platform) {
-        return "openai".equalsIgnoreCase(platform) ? "openai_compatible" : platform;
+        if ("openai".equalsIgnoreCase(platform)) {
+            return "openai_compatible";
+        }
+        if ("agent_plan".equalsIgnoreCase(platform)) {
+            return "volcengine_agent_plan";
+        }
+        return platform;
     }
 }

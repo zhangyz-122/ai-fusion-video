@@ -11,7 +11,9 @@ import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.GenerateOptions;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
+import okhttp3.MediaType;
 import okhttp3.Request;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 import java.io.IOException;
@@ -302,6 +304,30 @@ public abstract class AbstractAiProvider implements AiProvider {
             return response.body().string();
         } catch (IOException e) {
             log.error("[AiProvider] 请求异常: url={}", url, e);
+            throw new BusinessException("获取模型列表失败: " + e.getMessage());
+        }
+    }
+
+    protected String executePost(String url, String requestBody, Map<String, String> headers, ApiConfig apiConfig) {
+        Request.Builder builder = new Request.Builder()
+                .url(url)
+                .post(RequestBody.create(requestBody, MediaType.get("application/json; charset=utf-8")));
+        headers.forEach(builder::addHeader);
+        OkHttpClient client = AiProxySupport.okHttpClient(httpClient, apiConfig);
+
+        try (Response response = client.newCall(builder.build()).execute()) {
+            if (!response.isSuccessful()) {
+                String body = response.body() != null ? response.body().string() : "";
+                log.error("[AiProvider] POST 请求失败: url={}, code={}, message={}, body={}",
+                        url, response.code(), response.message(), body);
+                throw new BusinessException("获取模型列表失败: HTTP " + response.code() + " " + response.message());
+            }
+            if (response.body() == null) {
+                throw new BusinessException("获取模型列表失败: 响应体为空");
+            }
+            return response.body().string();
+        } catch (IOException e) {
+            log.error("[AiProvider] POST 请求异常: url={}", url, e);
             throw new BusinessException("获取模型列表失败: " + e.getMessage());
         }
     }

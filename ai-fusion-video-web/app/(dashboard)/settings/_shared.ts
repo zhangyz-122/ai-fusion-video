@@ -81,6 +81,25 @@ export function getPlatformFields(platform: string): PlatformField[] {
         { key: "apiUrl", label: "API 地址", placeholder: "https://ark.cn-beijing.volces.com", type: "text" },
         { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
       ];
+    case "volcengine_agent_plan":
+      return [
+        {
+          key: "apiUrl",
+          label: "Agent Plan Base URL",
+          placeholder: "https://ark.cn-beijing.volces.com/api/plan/v3",
+          type: "text",
+          required: true,
+          helperText: "使用 Agent Plan 专属 Base URL；不要填普通火山 API 的 /api/v3 地址。",
+        },
+        {
+          key: "apiKey",
+          label: "Agent Plan 专属 API Key",
+          placeholder: "请从 Agent Plan 开通管理获取",
+          type: "password",
+          required: true,
+          helperText: "Agent Plan API Key 与普通火山方舟 API Key 不同，请勿混用。",
+        },
+      ];
     case "newapi":
       return [
         {

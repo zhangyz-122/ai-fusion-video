@@ -101,14 +101,31 @@ public class ComfyUiNativeClient {
                                            String fileName,
                                            String contentType,
                                            String subfolder) {
+        return uploadMedia(apiConfig, bytes, fileName, contentType, subfolder, false);
+    }
+
+    public ComfyUiUploadResult uploadVideo(ApiConfig apiConfig,
+                                           byte[] bytes,
+                                           String fileName,
+                                           String contentType,
+                                           String subfolder) {
+        return uploadMedia(apiConfig, bytes, fileName, contentType, subfolder, true);
+    }
+
+    private ComfyUiUploadResult uploadMedia(ApiConfig apiConfig,
+                                             byte[] bytes,
+                                             String fileName,
+                                             String contentType,
+                                             String subfolder,
+                                             boolean video) {
         if (bytes == null || bytes.length == 0) {
-            throw new BusinessException(400, "上传到 ComfyUI 的图片不能为空");
+            throw new BusinessException(400, "上传到 ComfyUI 的输入文件不能为空");
         }
         String safeFileName = safeFileName(fileName);
         MultipartBody.Builder body = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("image", safeFileName,
-                        RequestBody.create(bytes, MediaType.get(normalizeContentType(contentType))))
+                        RequestBody.create(bytes, MediaType.get(normalizeContentType(contentType, video))))
                 .addFormDataPart("type", "input")
                 .addFormDataPart("overwrite", "false");
         if (StrUtil.isNotBlank(subfolder)) {
@@ -117,7 +134,8 @@ public class ComfyUiNativeClient {
         Request request = request(apiConfig, "/upload/image")
                 .post(body.build())
                 .build();
-        JsonNode response = executeJson(apiConfig, request, "上传输入图片", 200);
+        JsonNode response = executeJson(apiConfig, request,
+                video ? "上传输入视频" : "上传输入图片", 200);
         String name = requiredText(response, "name", "ComfyUI 上传响应缺少 name");
         String returnedSubfolder = requiredString(
                 response, "subfolder", "ComfyUI 上传响应缺少 subfolder");
@@ -424,13 +442,15 @@ public class ComfyUiNativeClient {
         return subfolder;
     }
 
-    private String normalizeContentType(String value) {
+    private String normalizeContentType(String value, boolean video) {
         if (StrUtil.isBlank(value)) {
-            throw new BusinessException(400, "ComfyUI 上传图片缺少 Content-Type");
+            throw new BusinessException(400, "ComfyUI 上传文件缺少 Content-Type");
         }
         String contentType = value.split(";", 2)[0].trim();
-        if (!contentType.startsWith("image/")) {
-            throw new BusinessException(400, "ComfyUI /upload/image 只接受图片");
+        if (!contentType.startsWith("image/")
+                && !(video && contentType.startsWith("video/"))) {
+            throw new BusinessException(400,
+                    video ? "ComfyUI 视频输入不是受支持的视频文件" : "ComfyUI 图片输入不是受支持的图片文件");
         }
         return contentType;
     }

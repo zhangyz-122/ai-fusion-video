@@ -102,7 +102,7 @@ public class ComfyUiGenerationExecutor {
                                               String taskKey,
                                               Map<String, Object> rawValues) {
         Map<String, Object> values = new LinkedHashMap<>(rawValues == null ? Map.of() : rawValues);
-        uploadBoundImages(context, taskKey, values);
+        uploadBoundMedia(context, taskKey, values);
         ObjectNode prompt = renderer.render(context.model().getModelType(), context.version(), values);
         return new ComfyUiPreparedSubmission(context, UUID.randomUUID().toString(), prompt);
     }
@@ -157,18 +157,17 @@ public class ComfyUiGenerationExecutor {
         return nativeClient.cancelJob(context.apiConfig(), promptId);
     }
 
-    private void uploadBoundImages(ComfyUiExecutionContext context,
-                                   String taskKey,
-                                   Map<String, Object> values) {
+    private void uploadBoundMedia(ComfyUiExecutionContext context,
+                                  String taskKey,
+                                  Map<String, Object> values) {
         List<ComfyUiInputBinding> bindings = documentService.parseInputBindings(
                 context.model().getModelType(), context.version().getApiWorkflowJson(),
                 context.version().getInputBindingsJson());
         Set<String> imageFields = new LinkedHashSet<>();
         for (ComfyUiInputBinding binding : bindings) {
-            if ("uploaded_video".equals(binding.valueType())
-                    || "uploaded_audio".equals(binding.valueType())) {
+            if ("uploaded_audio".equals(binding.valueType())) {
                 throw new BusinessException(400,
-                        "Native API 第一版不支持视频/音频文件上传绑定: " + binding.businessField());
+                        "Native API 第一版不支持音频文件上传绑定: " + binding.businessField());
             }
             if ("uploaded_image".equals(binding.valueType())) {
                 imageFields.add(binding.businessField());
@@ -180,6 +179,14 @@ public class ComfyUiGenerationExecutor {
             List<String> sources = toStringList(raw, field);
             values.put(field, inputResourceService.uploadImages(
                     context.apiConfig(), taskKey, field, sources));
+        }
+        for (ComfyUiInputBinding binding : bindings) {
+            if (!"uploaded_video".equals(binding.valueType())) continue;
+            String field = binding.businessField();
+            Object raw = values.get(field);
+            if (raw == null) continue;
+            values.put(field, inputResourceService.uploadVideos(
+                    context.apiConfig(), taskKey, field, toStringList(raw, field)));
         }
     }
 

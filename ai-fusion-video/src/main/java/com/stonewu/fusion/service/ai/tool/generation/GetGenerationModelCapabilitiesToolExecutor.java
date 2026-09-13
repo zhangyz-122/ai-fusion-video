@@ -24,6 +24,8 @@ public class GetGenerationModelCapabilitiesToolExecutor implements ToolExecutor 
 
     private static final int MODEL_TYPE_IMAGE = 2;
     private static final int MODEL_TYPE_VIDEO = 3;
+    private static final String REFERENCE_IMAGE_MODEL_CODE =
+            "minimax_h3_t8_donghua_edit_model";
 
     private final AiModelService aiModelService;
     private final GenerationModelCapabilityService generationModelCapabilityService;
@@ -171,6 +173,20 @@ public class GetGenerationModelCapabilitiesToolExecutor implements ToolExecutor 
 
     private ResolvedModel resolvePreferredModel(int modelType) {
         AiModel defaultModel = aiModelService.getDefaultByType(modelType);
+
+        // 图片生成存在独立的参考图模型时，把能力查询也指向该模型，
+        // 这样 Agent 会保留 imageUrls，GenerateImageToolExecutor 再按同一规则路由。
+        if (modelType == MODEL_TYPE_IMAGE && defaultModel != null
+                && defaultModel.getApiConfigId() != null) {
+            AiModel referenceModel = aiModelService.getByCodeAndApiConfig(
+                    REFERENCE_IMAGE_MODEL_CODE, defaultModel.getApiConfigId());
+            if (referenceModel != null
+                    && generationModelCapabilityService.resolveImageCapability(referenceModel)
+                    .supportsReferenceImages()) {
+                return new ResolvedModel(referenceModel, "reference_image_model");
+            }
+        }
+
         if (defaultModel != null) {
             return new ResolvedModel(defaultModel, "default_model");
         }

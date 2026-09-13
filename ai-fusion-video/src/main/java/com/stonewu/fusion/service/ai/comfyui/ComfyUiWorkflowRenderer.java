@@ -9,8 +9,11 @@ import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Applies explicit platform bindings to a deep copy of an immutable workflow version. */
 @Component
@@ -29,6 +32,7 @@ public class ComfyUiWorkflowRenderer {
         ObjectNode workflow = documentService.parseApiWorkflow(version.getApiWorkflowJson()).deepCopy();
         List<ComfyUiInputBinding> bindings = documentService.parseInputBindings(
                 modelType, version.getApiWorkflowJson(), version.getInputBindingsJson());
+        pruneUnusedReferenceImageBranches(workflow, bindings, values);
         for (ComfyUiInputBinding binding : bindings) {
             if (values == null || !values.containsKey(binding.businessField())) {
                 continue;
@@ -37,12 +41,95 @@ public class ComfyUiWorkflowRenderer {
             if (rawValue == null) {
                 continue;
             }
+            if (isUnusedReferenceImageSlot(rawValue, binding)) {
+                continue;
+            }
             Object selectedValue = selectIndexedValue(rawValue, binding);
             JsonNode renderedValue = convertValue(selectedValue, binding);
             ObjectNode node = (ObjectNode) workflow.get(binding.nodeId());
             ((ObjectNode) node.get("inputs")).set(binding.inputName(), renderedValue);
         }
         return workflow;
+    }
+
+    /**
+     * Indexed reference-image bindings are optional slots in H3 workflows.
+     * Disconnect unused branches instead of duplicating a supplied image or
+     * leaving a placeholder image connected to the conditioning node.
+     */
+    private void pruneUnusedReferenceImageBranches(ObjectNode workflow,
+                                                    List<ComfyUiInputBinding> bindings,
+                                                    Map<String, Object> values) {
+        int supplied = 0;
+        Object raw = values == null ? null : values.get("referenceImages");
+        if (raw instanceof List<?> list) {
+            supplied = list.size();
+        } else if (raw != null && !raw.toString().isBlank()) {
+            supplied = 1;
+        }
+        for (ComfyUiInputBinding binding : bindings) {
+            if (!"referenceImages".equals(binding.businessField())
+                    || !"uploaded_image".equals(binding.valueType())
+                    || binding.index() == null
+                    || binding.index() < supplied) {
+                continue;
+            }
+            removeLinkedBranch(workflow, binding.nodeId());
+        }
+    }
+
+    private boolean isUnusedReferenceImageSlot(Object rawValue, ComfyUiInputBinding binding) {
+        return "referenceImages".equals(binding.businessField())
+                && "uploaded_image".equals(binding.valueType())
+                && binding.index() != null
+                && rawValue instanceof List<?> list
+                && binding.index() >= list.size();
+    }
+
+    /** Remove the graph branch from a source LoadImage node to its consumer. */
+    private void removeLinkedBranch(ObjectNode workflow, String sourceNodeId) {
+        Set<String> disconnected = new HashSet<>();
+        disconnected.add(sourceNodeId);
+        boolean changed;
+        do {
+            changed = false;
+            Iterator<Map.Entry<String, JsonNode>> nodes = workflow.fields();
+            while (nodes.hasNext()) {
+                Map.Entry<String, JsonNode> entry = nodes.next();
+                if (!(entry.getValue() instanceof ObjectNode node)
+                        || !(node.get("inputs") instanceof ObjectNode inputs)) {
+                    continue;
+                }
+                boolean removed = false;
+                Iterator<Map.Entry<String, JsonNode>> inputFields = inputs.fields();
+                while (inputFields.hasNext()) {
+                    Map.Entry<String, JsonNode> input = inputFields.next();
+                    if (isLinkTo(input.getValue(), disconnected)) {
+                        inputFields.remove();
+                        removed = true;
+                    }
+                }
+                if (removed && !containsLink(inputs)) {
+                    changed |= disconnected.add(entry.getKey());
+                }
+            }
+        } while (changed);
+    }
+
+    private boolean isLinkTo(JsonNode value, Set<String> nodeIds) {
+        return value != null && value.isArray() && value.size() >= 1
+                && value.get(0).isTextual() && nodeIds.contains(value.get(0).asText());
+    }
+
+    private boolean containsLink(ObjectNode inputs) {
+        Iterator<JsonNode> values = inputs.elements();
+        while (values.hasNext()) {
+            JsonNode value = values.next();
+            if (value.isArray() && value.size() >= 1 && value.get(0).isTextual()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Object selectIndexedValue(Object rawValue, ComfyUiInputBinding binding) {

@@ -49,6 +49,7 @@ export const OPENAI_REASONING_PLATFORMS = new Set([
   "zhipu",
   "moonshot",
   "volcengine",
+  "volcengine_agent_plan",
   "siliconflow",
 ]);
 
@@ -125,6 +126,7 @@ export const MODEL_PROTOCOL_LABELS: Record<string, string> = {
   newapi: "New API 协议",
   dashscope: "DashScope 协议",
   volcengine: "火山引擎协议",
+  agent_plan: "火山 Agent Plan 协议",
   vertex_ai: "Vertex AI 协议",
   google_flow: "Flow 协议",
   agnes: "Agnes 协议",
@@ -140,6 +142,7 @@ export const TEXT_PROTOCOL_OPTIONS = [
   { value: "gemini", label: "Gemini 协议" },
   { value: "dashscope", label: "DashScope 协议" },
   { value: "volcengine", label: "火山引擎协议" },
+  { value: "agent_plan", label: "火山 Agent Plan 协议" },
   { value: "vertex_ai", label: "Vertex AI 协议" },
   { value: "ollama", label: "Ollama 协议" },
 ] as const;

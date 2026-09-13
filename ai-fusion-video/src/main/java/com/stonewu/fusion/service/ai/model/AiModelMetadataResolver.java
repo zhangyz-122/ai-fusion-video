@@ -95,6 +95,12 @@ public class AiModelMetadataResolver {
         if (currentType != null) {
             return currentType;
         }
+        // Ollama /api/tags 只返回本地模型名称和大小，没有能力元数据。
+        // 本地模型名可能包含组织名（例如 Sorawiz），不能把其中的 "sora"
+        // 子串误判为视频模型；交给远程模型对话框的默认类型选择处理。
+        if ("ollama".equals(platform)) {
+            return null;
+        }
         String corpus = corpus(modelId, ownedBy);
         if (containsAny(corpus, "t2v", "i2v", "r2v", "video", "sora", "jimeng", "即梦", "kling", "可灵",
                 "seedance", "veo", "pixverse", "hailuo", "wan2.7")) {

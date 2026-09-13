@@ -187,6 +187,7 @@ public class ApiConfigService {
             case "openai_compatible", "openai" -> "https://api.openai.com";
             case "newapi" -> "https://docs.newapi.ai";
             case "volcengine" -> "https://ark.cn-beijing.volces.com";
+            case "volcengine_agent_plan" -> "https://ark.cn-beijing.volces.com/api/plan/v3";
             case "vertex_ai" -> "us-central1";
             case "GoogleFlowReverseApi" -> "http://localhost:8000";
             case "dashscope" -> "https://dashscope.aliyuncs.com";
@@ -198,7 +199,20 @@ public class ApiConfigService {
     }
 
     private void applyPlatformDefaults(ApiConfig config) {
-        if (config == null || !"comfyui".equalsIgnoreCase(config.getPlatform())) {
+        if (config == null || StrUtil.isBlank(config.getPlatform())) {
+            return;
+        }
+        if ("ollama".equalsIgnoreCase(config.getPlatform())) {
+            if (StrUtil.isBlank(config.getTextProtocol())) {
+                config.setTextProtocol("ollama");
+            }
+            // Ollama 本身只负责本地文本/多模态对话，不应继承 ComfyUI 的图片/视频协议。
+            config.setImageProtocol(null);
+            config.setVideoProtocol(null);
+            config.setAutoAppendV1Path(false);
+            return;
+        }
+        if (!"comfyui".equalsIgnoreCase(config.getPlatform())) {
             return;
         }
         config.setTextProtocol(null);

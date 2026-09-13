@@ -68,10 +68,14 @@ public class ComfyUiOutputResolver {
         String key = outputKey.toLowerCase(Locale.ROOT);
         String format = item.path("format").asText("").toLowerCase(Locale.ROOT);
         String filename = item.path("filename").asText("").toLowerCase(Locale.ROOT);
-        if (key.contains("image") || format.startsWith("image/") || hasExtension(filename,
+        // ComfyUI's native SaveVideo may serialize video files under the
+        // generic "images" output key. Prefer the explicit media format or
+        // filename extension over that key so mp4/webm results stay videos.
+        if (format.startsWith("video/") || hasExtension(filename,
+                "mp4", "webm", "mov", "mkv")) return "video";
+        if (format.startsWith("image/") || key.contains("image") || hasExtension(filename,
                 "png", "jpg", "jpeg", "webp", "gif")) return "image";
-        if (key.contains("video") || key.equals("gifs") || format.startsWith("video/")
-                || hasExtension(filename, "mp4", "webm", "mov", "mkv")) return "video";
+        if (key.contains("video") || key.equals("gifs")) return "video";
         if (key.contains("audio") || format.startsWith("audio/")
                 || hasExtension(filename, "mp3", "wav", "flac", "m4a", "ogg")) return "audio";
         return "file";

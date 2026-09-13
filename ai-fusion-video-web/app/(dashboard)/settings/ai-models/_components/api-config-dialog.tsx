@@ -58,6 +58,7 @@ export const API_PROVIDER_PRESETS = [
   { id: "openai", platform: "openai_compatible", label: "OpenAI", url: "https://api.openai.com", textProtocol: "openai_compatible", imageProtocol: "openai", videoProtocol: "openai" },
   { id: "agnes", platform: "openai_compatible", label: "Agnes AI", url: "https://apihub.agnes-ai.com", textProtocol: "openai_compatible", imageProtocol: "agnes", videoProtocol: "agnes" },
   { id: "comfyui", platform: "comfyui", label: "ComfyUI", url: "http://localhost:8188", textProtocol: "", imageProtocol: "comfyui", videoProtocol: "comfyui" },
+  { id: "volcengine_agent_plan", platform: "volcengine_agent_plan", label: "火山 Agent Plan", url: "https://ark.cn-beijing.volces.com/api/plan/v3", textProtocol: "agent_plan", imageProtocol: "", videoProtocol: "" },
 ] as const;
 
 export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConfigDialogProps) {
@@ -152,6 +153,9 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
     || (!!form.proxyPassword && !form.proxyUsername?.trim())
   ));
   const comfyUiInvalid = form.platform === "comfyui" && !form.apiUrl?.trim();
+  const usesVolcengineProtocol = [form.platform, form.textProtocol, form.imageProtocol, form.videoProtocol]
+    .some(value => value === "volcengine");
+  const isAgentPlan = form.platform === "volcengine_agent_plan";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -192,6 +196,17 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                     imageProtocol: "comfyui",
                     videoProtocol: "comfyui",
                     apiUrl: "http://localhost:8188",
+                    autoAppendV1Path: false,
+                  }));
+                }
+                if (platform === "volcengine_agent_plan") {
+                  setForm(previous => ({
+                    ...previous,
+                    platform,
+                    apiUrl: "https://ark.cn-beijing.volces.com/api/plan/v3",
+                    textProtocol: "agent_plan",
+                    imageProtocol: "",
+                    videoProtocol: "",
                     autoAppendV1Path: false,
                   }));
                 }
@@ -365,6 +380,53 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
               )}
             </div>
           ))}
+
+          {usesVolcengineProtocol && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 space-y-3">
+              <div>
+                <p className="text-xs font-medium">火山引擎模型列表查询凭证（可选）</p>
+                <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                  Chat API 使用 API Key；查询当前账号已开通的模型需要火山引擎 Access Key ID 和 Secret Access Key。
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground">Access Key ID</Label>
+                  <Input
+                    placeholder="AK********"
+                    value={form.appId || ""}
+                    onChange={e => updateField("appId", e.target.value)}
+                    className="text-sm font-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-muted-foreground">Secret Access Key</Label>
+                  <div className="relative">
+                    <Input
+                      type={showSecrets.volcengineSecret ? "text" : "password"}
+                      placeholder="********"
+                      value={form.appSecret || ""}
+                      onChange={e => updateField("appSecret", e.target.value)}
+                      className="text-sm font-mono pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecrets(prev => ({ ...prev, volcengineSecret: !prev.volcengineSecret }))}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showSecrets.volcengineSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isAgentPlan && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+              Agent Plan 必须使用专属 API Key 和 <span className="font-mono">/api/plan/v3</span> Base URL，不能与普通火山 API Key 混用。请确认当前使用场景符合火山方舟套餐规则。
+            </div>
+          )}
 
           {form.platform === "openai_compatible" && (
             <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5">

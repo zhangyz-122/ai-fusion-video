@@ -34,6 +34,10 @@ public class GenerateImageToolExecutor implements ToolExecutor {
     /** 模型类型常量：图片生成 */
     private static final int MODEL_TYPE_IMAGE = 2;
 
+    /** 有参考图时优先使用的本地图生图模型。 */
+    private static final String REFERENCE_IMAGE_MODEL_CODE =
+            "minimax_h3_t8_donghua_edit_model";
+
     /** 同步等待超时时间（30 分钟） */
     private static final long WAIT_TIMEOUT_MS = 30 * 60 * 1000L;
 
@@ -78,9 +82,11 @@ public class GenerateImageToolExecutor implements ToolExecutor {
             GenerationModelCapabilityService.ImageModelCapability capability = model != null
                 ? generationModelCapabilityService.resolveImageCapability(model)
                 : null;
-            String imageUrlDescription = capability != null && !capability.supportsReferenceImages()
-                ? "当前默认模型不支持参考图，请不要传该字段"
-                : "参考图片 URL 列表（用于图生图，文生图时不传）";
+            String imageUrlDescription = resolveReferenceImageModel() != null
+                ? "参考图片 URL 列表（传入后自动切换到专用图生图模型，文生图时不传）"
+                : capability != null && !capability.supportsReferenceImages()
+                    ? "当前默认模型不支持参考图，请不要传该字段"
+                    : "参考图片 URL 列表（用于图生图，文生图时不传）";
 
             return JSONUtil.createObj()
                 .set("type", "object")
@@ -121,20 +127,38 @@ public class GenerateImageToolExecutor implements ToolExecutor {
             if (StrUtil.isBlank(prompt)) {
                 return errorResult("缺少 prompt");
             }
-
             int width = params.getInt("width", 0);
             int height = params.getInt("height", 0);
 
-            // 参考图片（图生图）
-            String refImageUrls = null;
+            // 参考图片（图生图）。先解析模型能力，再限制输入数量，避免首尾帧
+            // Agent 把镜头关联的多张资产图原样传给只支持单图的本地图生图模型。
+            List<String> imageUrls = List.of();
             if (params.containsKey("imageUrls")) {
-                List<String> imageUrls = params.getJSONArray("imageUrls").toList(String.class);
-                if (!imageUrls.isEmpty()) {
-                    refImageUrls = JSONUtil.toJsonStr(imageUrls);
-                }
+                List<String> requestedImages = params.getJSONArray("imageUrls").toList(String.class);
+                imageUrls = requestedImages.stream()
+                        .filter(StrUtil::isNotBlank)
+                        .toList();
             }
+            AiModel model = resolvePreferredModel(!imageUrls.isEmpty());
+            GenerationModelCapabilityService.ImageModelCapability capability =
+                    generationModelCapabilityService.resolveImageCapability(model);
+            if (!imageUrls.isEmpty() && !capability.supportsReferenceImages()) {
+                log.warn("[generate_image] 模型不支持参考图，已忽略 {} 张参考图: modelCode={}",
+                        imageUrls.size(), model.getCode());
+                imageUrls = List.of();
+                model = resolvePreferredModel(false);
+            } else if (capability.maxReferenceImages() != null
+                    && imageUrls.size() > capability.maxReferenceImages()) {
+                int allowed = Math.max(capability.maxReferenceImages(), 0);
+                log.warn("[generate_image] 参考图超出模型上限，自动保留前 {} 张（原 {} 张）: modelCode={}",
+                        allowed, imageUrls.size(), model.getCode());
+                imageUrls = imageUrls.subList(0, allowed);
+            }
+            String refImageUrls = imageUrls.isEmpty() ? null : JSONUtil.toJsonStr(imageUrls);
 
-                AiModel model = resolvePreferredModel();
+            // 参考图请求统一经过一次冲突清洗，避免子 Agent 把初始道具图的
+            // 白底产品图约束拼进屋内/屋外环境变体。
+            prompt = normalizeContextVariantPrompt(prompt, refImageUrls != null);
 
             // 构建生图任务
             ImageTask task = ImageTask.builder()
@@ -187,8 +211,17 @@ public class GenerateImageToolExecutor implements ToolExecutor {
     /**
      * 获取默认图片生成模型的 ID
      */
-    private AiModel resolvePreferredModel() {
+    private AiModel resolvePreferredModel(boolean hasReferenceImage) {
         AiModel defaultModel = aiModelService.getDefaultByType(MODEL_TYPE_IMAGE);
+
+        // 融光的通用图片工具只有一个模型选择入口。为了让初始资产继续走
+        // 文生图、让变体资产真正走图生图，这里按是否有参考图做一次明确路由。
+        // 两个模型应当挂在同一个 ComfyUI API 配置下。
+        if (hasReferenceImage) {
+            AiModel referenceModel = resolveReferenceImageModel();
+            if (referenceModel != null) return referenceModel;
+        }
+
         if (defaultModel != null) {
             return defaultModel;
         }
@@ -201,18 +234,92 @@ public class GenerateImageToolExecutor implements ToolExecutor {
 
     private AiModel resolvePreferredModelOrNull() {
         try {
-            return resolvePreferredModel();
+            return resolvePreferredModel(false);
         } catch (Exception ignored) {
             return null;
         }
     }
 
     private String describeCurrentModelCapability() {
-        AiModel model = resolvePreferredModelOrNull();
-        return generationModelCapabilityService.describeImageCapability(model);
+        AiModel defaultModel = resolvePreferredModelOrNull();
+        AiModel referenceModel = resolveReferenceImageModel();
+        if (referenceModel != null && defaultModel != null
+                && !referenceModel.getId().equals(defaultModel.getId())) {
+            return "无参考图时使用默认图片模型 " + defaultModel.getName()
+                    + "；传入 imageUrls 时自动切换到图生图模型 "
+                    + referenceModel.getName() + "，最多支持 1 张参考图。";
+        }
+        return generationModelCapabilityService.describeImageCapability(defaultModel);
+    }
+
+    private AiModel resolveReferenceImageModel() {
+        AiModel defaultModel = aiModelService.getDefaultByType(MODEL_TYPE_IMAGE);
+        if (defaultModel == null || defaultModel.getApiConfigId() == null) {
+            return null;
+        }
+        AiModel referenceModel = aiModelService.getByCodeAndApiConfig(
+                REFERENCE_IMAGE_MODEL_CODE, defaultModel.getApiConfigId());
+        if (referenceModel == null
+                || !generationModelCapabilityService.resolveImageCapability(referenceModel)
+                .supportsReferenceImages()) {
+            return null;
+        }
+        return referenceModel;
     }
 
     private String errorResult(String message) {
         return JSONUtil.createObj().set("status", "error").set("message", message).toString();
+    }
+
+    /**
+     * 环境变体不能同时携带初始道具的白底隔离规则。子 Agent 偶尔会把
+     * initial 模板的尾部约束拼进屋内/屋外变体，这里做一次确定性的冲突清洗，
+     * 避免已经明确要求室内场景却仍生成白底产品目录图。
+     */
+    private String normalizeContextVariantPrompt(String prompt, boolean hasReferenceImage) {
+        boolean environmentPrompt = prompt.contains("环境变体图生图")
+                || prompt.contains("单一连续室内场景")
+                || prompt.contains("单一连续的古代农村室内场景")
+                || prompt.contains("屋内")
+                || prompt.contains("屋外")
+                || prompt.contains("院落")
+                || prompt.contains("桌面")
+                || prompt.contains("室内场景")
+                || prompt.contains("室外场景");
+        if (!environmentPrompt) {
+            return prompt;
+        }
+        if (!hasReferenceImage && !prompt.contains("不是白底产品图")
+                && !prompt.contains("屋内")
+                && !prompt.contains("屋外")
+                && !prompt.contains("院落")
+                && !prompt.contains("桌面")) {
+            return prompt;
+        }
+
+        String normalized = prompt
+                .replace("产品目录式纯白背景", "单一连续环境场景")
+                .replace("纯白背景", "自然环境背景")
+                .replace("完全干净、无任何阴影和杂质的纯无瑕白色背景", "真实室内环境背景")
+                .replace("纯 solid white background", "")
+                .replace("isolated on white background", "")
+                .replace("no shadows", "")
+                .replace("no gradient", "")
+                .replace("画面只有目标道具本体", "画面呈现目标道具及其所在环境")
+                .replace("无房屋、无道路、无院落、无风景、", "")
+                .replace("无房屋、无道路、无院落、无风景", "")
+                .replace("无道路、无院落、无风景、", "")
+                .replace("无道路、无院落、无风景", "");
+
+        if (!normalized.contains("每件器物只出现一次")) {
+            normalized = normalized + " 单一连续室内场景，必须看到土墙、木桌或木窗等室内结构；每件目标器物只出现一次，禁止复制、重复排列、拼贴、分屏和产品目录式白底构图。";
+        }
+        if (hasReferenceImage) {
+            normalized = normalized
+                    .replace("纯白", "")
+                    .replace("白底", "")
+                    + " 这是环境变体图生图，不是白底产品设定图；参考图中的每种道具在室内场景中只出现一次，禁止白色背景、孤立摆拍、重复复制和多格拼贴。";
+        }
+        return normalized;
     }
 }

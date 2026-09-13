@@ -2,7 +2,6 @@ package com.stonewu.fusion.service.ai.comfyui;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ComfyUiWorkflowRendererTests {
 
@@ -58,7 +56,7 @@ class ComfyUiWorkflowRendererTests {
     }
 
     @Test
-    void renderRejectsMissingIndexedInput() {
+    void renderDisconnectsUnusedIndexedReferenceBranch() {
         ComfyUiWorkflowVersion version = version(
                 """
                         {
@@ -70,10 +68,11 @@ class ComfyUiWorkflowRendererTests {
                         {"referenceImages":[{"nodeId":"3","inputName":"image","valueType":"uploaded_image","index":1}]}
                         """);
 
-        assertThatThrownBy(() -> renderer.render(
-                2, version, Map.of("referenceImages", List.of("only.png"))))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("缺少索引 1");
+        ObjectNode result = renderer.render(
+                2, version, Map.of("referenceImages", List.of("only.png")));
+
+        assertThat(result.at("/3/inputs/image").asText()).isEqualTo("old.png");
+        assertThat(result.at("/9/inputs/images").isMissingNode()).isTrue();
     }
 
     private ComfyUiWorkflowVersion version(String apiJson, String inputBindingsJson) {

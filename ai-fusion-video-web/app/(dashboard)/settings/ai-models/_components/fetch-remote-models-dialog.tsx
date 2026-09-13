@@ -171,6 +171,17 @@ export function FetchRemoteModelsDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {(apiConfig.platform === "volcengine"
+          || apiConfig.platform === "volcengine_agent_plan"
+          || apiConfig.textProtocol === "volcengine"
+          || apiConfig.imageProtocol === "volcengine"
+          || apiConfig.videoProtocol === "volcengine") && (
+          <div className="shrink-0 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+            火山方舟的 Chat API 不提供通用的 /models 接口。填写 Access Key ID / Secret Access Key 后，系统会查询当前账号已开通的模型；未填写时仅显示官方文档示例。
+            如果你使用的是自定义 Endpoint，也可以关闭此窗口后用“添加模型”手动填入对应的模型 ID。
+          </div>
+        )}
+
         <div className="flex flex-col gap-3 min-h-0 overflow-y-auto px-1 pt-1 -mx-1">
           {/* 搜索框 + 模型类型选择 */}
           <div className="flex items-center gap-2 shrink-0">

@@ -34,7 +34,7 @@ public class ComfyUiWorkflowDocumentService {
     private static final int MAX_NODES = 500;
     private static final int MAX_BINDINGS = 128;
     private static final Set<String> COMMON_FIELDS = Set.of(
-            "prompt", "negativePrompt", "seed", "count");
+            "prompt", "negativePrompt", "seed", "count", "referenceImageCount");
     private static final Set<String> IMAGE_FIELDS = Set.of(
             "width", "height", "referenceImages");
     private static final Set<String> VIDEO_FIELDS = Set.of(

@@ -71,4 +71,16 @@ class AiModelMetadataResolverTests {
         assertEquals("openai_compatible", metadata.providerPlatform());
         assertEquals("Agnes Video", metadata.displayName());
     }
+
+    @Test
+    void ollamaDoesNotInferVideoFromAnOrganizationNameContainingSora() {
+        RemoteModelMetadata metadata = resolver.resolveRemoteModel(
+                "ollama",
+                "hf.co/Sorawiz/Qwen3-8B-Drama-Thinking-Q8_0-GGUF:Q8_0",
+                "ollama",
+                null);
+
+        assertNull(metadata.modelType());
+        assertEquals("ollama", metadata.providerPlatform());
+    }
 }
