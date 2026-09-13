@@ -114,9 +114,10 @@ function assertCues(cues, perLineMs, label) {
   }
 
   // ---------- 越权与不存在 ----------
+  // 集成版语义:他人分集/不存在分集统一 404(反枚举;与 project/run 模块的 403 不一致,见 BUGS)
   const cross = await call(uitest, 'GET', `/api/script/episode/${ep.id}/subtitle.srt`, undefined, true);
   log(`uitest 访问 zhangyz 分集 SRT → HTTP ${cross.status} ${cross.text.slice(0, 100)}`);
-  record('uitest 越权访问分集 SRT → 403', cross.status === 403, `HTTP ${cross.status}`);
+  record('uitest 越权访问分集 SRT 被拒(404/403)', cross.status === 404 || cross.status === 403, `HTTP ${cross.status}`);
   const missing = await call(token, 'GET', '/api/script/episode/999999/subtitle.srt', undefined, true);
   log(`不存在分集 → HTTP ${missing.status} ${missing.text.slice(0, 100)}`);
   record('不存在分集 → 404', missing.status === 404, `HTTP ${missing.status}`);

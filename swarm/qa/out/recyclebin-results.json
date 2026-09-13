@@ -1,0 +1,67 @@
+[
+  {
+    "name": "创建资产",
+    "pass": true,
+    "detail": "id=24"
+  },
+  {
+    "name": "软删除资产",
+    "pass": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "name": "删除后项目内不可见(404)",
+    "pass": true,
+    "detail": "HTTP 404 {\"code\":404,\"msg\":\"资产不存在: 24\",\"data\":null}"
+  },
+  {
+    "name": "回收站列表可见(deleted=true)",
+    "pass": true,
+    "detail": "total=11 命中=true"
+  },
+  {
+    "name": "回收站分页 size=1 生效",
+    "pass": true,
+    "detail": "records=1 total=11"
+  },
+  {
+    "name": "uitest 恢复他人资产被拒(403)",
+    "pass": true,
+    "detail": "HTTP 403 {\"code\":403,\"msg\":\"无权访问该项目内容\",\"data\":null}"
+  },
+  {
+    "name": "uitest 彻底删除他人资产被拒(403)",
+    "pass": true,
+    "detail": "HTTP 403 {\"code\":403,\"msg\":\"无权访问该项目内容\",\"data\":null}"
+  },
+  {
+    "name": "uitest 回收站不见他人资产",
+    "pass": true,
+    "detail": "uitest total=0 泄漏=false"
+  },
+  {
+    "name": "恢复成功(保留原 id)",
+    "pass": true,
+    "detail": "HTTP 200 id=24"
+  },
+  {
+    "name": "恢复后项目内可见",
+    "pass": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "name": "恢复后回收站不再列出",
+    "pass": true,
+    "detail": "total=10"
+  },
+  {
+    "name": "彻底删除(物理)",
+    "pass": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "name": "彻底删除后资产与回收站均不可见",
+    "pass": true,
+    "detail": "GET=404 bin total=10"
+  }
+]

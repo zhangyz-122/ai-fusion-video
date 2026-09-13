@@ -1,0 +1,110 @@
+[
+  {
+    "name": "uitest GET 他人项目详情",
+    "expect": 403,
+    "got": 403,
+    "pass": true
+  },
+  {
+    "name": "uitest GET 他人分集",
+    "expect": 403,
+    "got": 403,
+    "pass": true
+  },
+  {
+    "name": "uitest GET 他人 SRT",
+    "expect": 403,
+    "got": 403,
+    "pass": true
+  },
+  {
+    "name": "uitest GET 他人生产运行",
+    "expect": 403,
+    "got": 403,
+    "pass": true
+  },
+  {
+    "name": "uitest PUT 恢复他人回收站资产",
+    "expect": 403,
+    "got": 403,
+    "pass": true
+  },
+  {
+    "name": "GET 不存在项目",
+    "expect": 404,
+    "got": 500,
+    "pass": false
+  },
+  {
+    "name": "GET 不存在分集",
+    "expect": 404,
+    "got": 404,
+    "pass": true
+  },
+  {
+    "name": "GET 不存在 SRT",
+    "expect": 404,
+    "got": 404,
+    "pass": true
+  },
+  {
+    "name": "GET 不存在生产运行",
+    "expect": 404,
+    "got": 404,
+    "pass": true
+  },
+  {
+    "name": "GET 不存在资产",
+    "expect": 404,
+    "got": 404,
+    "pass": true
+  },
+  {
+    "name": "PUT 恢复不存在回收站资产",
+    "expect": 404,
+    "got": 500,
+    "pass": false
+  },
+  {
+    "name": "DELETE 彻底删除不存在回收站资产",
+    "expect": 404,
+    "got": 500,
+    "pass": false
+  },
+  {
+    "name": "SRT secondsPerLine=abc",
+    "expect": 400,
+    "got": 400,
+    "pass": true
+  },
+  {
+    "name": "分集 id 非数字(path)",
+    "expect": 400,
+    "got": 400,
+    "pass": true
+  },
+  {
+    "name": "分集 id 非数字(plain)",
+    "expect": 400,
+    "got": 400,
+    "pass": true
+  },
+  {
+    "name": "生产 runId 非数字",
+    "expect": 400,
+    "got": 400,
+    "pass": true
+  },
+  {
+    "name": "PUT 端点用 GET 访问(restore)",
+    "expect": 405,
+    "got": 500,
+    "pass": false
+  },
+  {
+    "name": "回收站列表用 POST 访问",
+    "expect": 405,
+    "got": 500,
+    "pass": false
+  }
+]

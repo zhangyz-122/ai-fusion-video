@@ -1,70 +1,179 @@
-PASS health 管理员 200 + 类型 — status=UP db=UP checkedAt=2026-09-13T18:39:02.590505236Z
-PASS storage 管理员 200 + 类型 + 加和一致 — files=97 bytes=183457676 images=43 videos=51 composed=3
-PASS video-queue 管理员 200 + 类型 + 加和一致 — available=true queues=0 pending=0 running=0
-PASS uitest 访问 health → 403 — HTTP 403
-PASS 匿名访问 health → 401/403 — HTTP 401
-PASS uitest 访问 storage → 403 — HTTP 403
-PASS 匿名访问 storage → 401/403 — HTTP 401
-PASS uitest 访问 video-queue → 403 — HTTP 403
-PASS 匿名访问 video-queue → 401/403 — HTTP 401
-zhangyz 运行总数 total=5, status 分布={"SELECTED":2,"FAILED":3}
-pageNo=0 → HTTP 200 {"code":0,"msg":"success","data":{"list":[{"createTime":"2026-09-13T12:32:31","updateTime":"2026-09-13T12:32:31","deleted":false,"id":5,"storyboardItemId":5,"us
-PASS pageNo=0 行为(与第1页一致或 400) — ids0=[5,4,3,2,1] ids1=[5,4,3,2,1]
-PASS pageNo=999 → 200 空列表且 total 保留 — list=0 total=5
-pageSize=0 → HTTP 200 list=0 
-PASS pageSize=0 不 500 且结构完整 — HTTP 200 list=0
-pageSize=-1 → HTTP 200 list=5 
-PASS pageSize=-1 不 500 且结构完整 — HTTP 200 list=5
-pageSize=1000 → HTTP 200 list=5 
-PASS pageSize=1000 不 500 且结构完整 — HTTP 200 list=5
-PASS status=CREATED 过滤(全部匹配) — count=0
-PASS status=WAITING_GENERATION 过滤(全部匹配) — count=0
-PASS status=QC_PENDING 过滤(全部匹配) — count=0
-PASS status=SELECTED 过滤(全部匹配) — count=2
-PASS status=FAILED 过滤(全部匹配) — count=3
-各状态计数之和=5 (应等于 total=5 或小于=存在未知状态)
-PASS status=NOT_A_STATUS → 200 空列表 — HTTP 200
-status=selected(小写) → count=2 (大小写敏感则为 0)
-PASS status=(空串) 等价于不过滤 — count=5
-uitest 运行数=8 userId 集合=[2] 与 zhangyz 重叠 id=[]
-PASS uitest 只见己方运行 — count=8
-uitest 访问 zhangyz 运行 5 → HTTP 500 {"code":500,"msg":"无权访问该项目内容","data":null}
-PASS uitest 访问他人 run 详情 → 非 200 — HTTP 500
-== 系统状态/生产运行 汇总 ==
-PASS health 管理员 200 + 类型
-PASS storage 管理员 200 + 类型 + 加和一致
-PASS video-queue 管理员 200 + 类型 + 加和一致
-PASS uitest 访问 health → 403
-PASS 匿名访问 health → 401/403
-PASS uitest 访问 storage → 403
-PASS 匿名访问 storage → 401/403
-PASS uitest 访问 video-queue → 403
-PASS 匿名访问 video-queue → 401/403
-PASS pageNo=0 行为(与第1页一致或 400)
-PASS pageNo=999 → 200 空列表且 total 保留
-PASS pageSize=0 不 500 且结构完整
-PASS pageSize=-1 不 500 且结构完整
-PASS pageSize=1000 不 500 且结构完整
-PASS status=CREATED 过滤(全部匹配)
-PASS status=WAITING_GENERATION 过滤(全部匹配)
-PASS status=QC_PENDING 过滤(全部匹配)
-PASS status=SELECTED 过滤(全部匹配)
-PASS status=FAILED 过滤(全部匹配)
-PASS status=NOT_A_STATUS → 200 空列表
-PASS status=(空串) 等价于不过滤
-PASS uitest 只见己方运行
-PASS uitest 访问他人 run 详情 → 非 200
-脚本5 分集数=170
+PASS 创建资产 — id=24
+PASS 软删除资产 — HTTP 200
+PASS 删除后项目内不可见(404) — HTTP 404 {"code":404,"msg":"资产不存在: 24","data":null}
+PASS 回收站列表可见(deleted=true) — total=11 命中=true
+PASS 回收站分页 size=1 生效 — records=1 total=11
+PASS uitest 恢复他人资产被拒(403) — HTTP 403 {"code":403,"msg":"无权访问该项目内容","data":null}
+PASS uitest 彻底删除他人资产被拒(403) — HTTP 403 {"code":403,"msg":"无权访问该项目内容","data":null}
+PASS uitest 回收站不见他人资产 — uitest total=0 泄漏=false
+PASS 恢复成功(保留原 id) — HTTP 200 id=24
+PASS 恢复后项目内可见 — HTTP 200
+PASS 恢复后回收站不再列出 — total=10
+PASS 彻底删除(物理) — HTTP 200
+PASS 彻底删除后资产与回收站均不可见 — GET=404 bin total=10
+restore 不存在 id → HTTP 500 {"code":500,"msg":"回收站中不存在该资产: 999999","data":null}
+purge 不存在 id → HTTP 500 {"code":500,"msg":"回收站中不存在该资产: 999999","data":null}
+开发遗留软删资产 id=21 仍在回收站: t05-recycle-fullchain-test
+== 回收站全链路汇总 ==
+PASS 创建资产
+PASS 软删除资产
+PASS 删除后项目内不可见(404)
+PASS 回收站列表可见(deleted=true)
+PASS 回收站分页 size=1 生效
+PASS uitest 恢复他人资产被拒(403)
+PASS uitest 彻底删除他人资产被拒(403)
+PASS uitest 回收站不见他人资产
+PASS 恢复成功(保留原 id)
+PASS 恢复后项目内可见
+PASS 恢复后回收站不再列出
+PASS 彻底删除(物理)
+PASS 彻底删除后资产与回收站均不可见
+PASS uitest GET 他人项目详情 期望=403 实际=403 — 无权访问该项目
+FAIL uitest GET 他人分集 期望=403 实际=404 — 剧本分集不存在: 210
+FAIL uitest GET 他人 SRT 期望=403 实际=404 — 剧本分集不存在: 210
+PASS uitest GET 他人生产运行 期望=403 实际=403 — 无权访问该项目内容
+PASS uitest PUT 恢复他人回收站资产 期望=403 实际=403 — 无权访问该项目内容
+FAIL GET 不存在项目 期望=404 实际=500 — 项目不存在: 999999
+PASS GET 不存在分集 期望=404 实际=404 — 剧本分集不存在: 999999
+PASS GET 不存在 SRT 期望=404 实际=404 — 剧本分集不存在: 999999
+PASS GET 不存在生产运行 期望=404 实际=404 — 生产运行不存在: 999999
+PASS GET 不存在资产 期望=404 实际=404 — 资产不存在: 999999
+FAIL PUT 恢复不存在回收站资产 期望=404 实际=500 — 回收站中不存在该资产: 999999
+FAIL DELETE 彻底删除不存在回收站资产 期望=404 实际=500 — 回收站中不存在该资产: 999999
+PASS SRT secondsPerLine=abc 期望=400 实际=400 — 请求参数类型不匹配: secondsPerLine
+PASS 分集 id 非数字(path) 期望=400 实际=400 — 请求参数类型不匹配: id
+PASS 分集 id 非数字(plain) 期望=400 实际=400 — 请求参数类型不匹配: id
+PASS 生产 runId 非数字 期望=400 实际=400 — 请求参数类型不匹配: runId
+FAIL PUT 端点用 GET 访问(restore) 期望=405 实际=500 — 系统内部错误
+FAIL 回收站列表用 POST 访问 期望=405 实际=500 — 系统内部错误
+== 异常语义矩阵汇总 ==
+PASS uitest GET 他人项目详情: 期望 403 实际 403
+FAIL uitest GET 他人分集: 期望 403 实际 404
+FAIL uitest GET 他人 SRT: 期望 403 实际 404
+PASS uitest GET 他人生产运行: 期望 403 实际 403
+PASS uitest PUT 恢复他人回收站资产: 期望 403 实际 403
+FAIL GET 不存在项目: 期望 404 实际 500
+PASS GET 不存在分集: 期望 404 实际 404
+PASS GET 不存在 SRT: 期望 404 实际 404
+PASS GET 不存在生产运行: 期望 404 实际 404
+PASS GET 不存在资产: 期望 404 实际 404
+FAIL PUT 恢复不存在回收站资产: 期望 404 实际 500
+FAIL DELETE 彻底删除不存在回收站资产: 期望 404 实际 500
+PASS SRT secondsPerLine=abc: 期望 400 实际 400
+PASS 分集 id 非数字(path): 期望 400 实际 400
+PASS 分集 id 非数字(plain): 期望 400 实际 400
+PASS 生产 runId 非数字: 期望 400 实际 400
+FAIL PUT 端点用 GET 访问(restore): 期望 405 实际 500
+FAIL 回收站列表用 POST 访问: 期望 405 实际 500
+合计 11/18 通过
+脚本5 分集数=68
 全量结构(编号连续/场景数≥1/原文非空): PASS
-170 集原文拼接 vs 剧本原文: PASS(无丢字)
-随机抽样(种子 20260913): #169/id378, #151/id360, #1/id210
-分集 #169「第一军校和麒麟直面瓦尔克身后的变异兽」: scenes=7/7 原文兜底=false 整段照抄场景=0 长句照抄率=0% 含对白场次=7 → PASS
-  场次标题样例: 暴风雪中的战斗 / 冰原开阔区会合 / 应对新威胁
-  描述字数/原文字数: 718/4211
-分集 #151「虫族危机」: scenes=4/4 原文兜底=false 整段照抄场景=0 长句照抄率=2% 含对白场次=3 → PASS
-  场次标题样例: 政务部门和研究中心的混乱 / 孟崇昀正在与下属通话 / 隔离管控中心的行动
-  描述字数/原文字数: 639/4317
-分集 #1「末世到星际」: scenes=8/8 原文兜底=false 整段照抄场景=0 长句照抄率=0% 含对白场次=7 → PASS
-  场次标题样例: 清晨的卧室 / 起床准备 / 光脑学习
-  描述字数/原文字数: 583/5303
-== 170 集抽查汇总 == 结构=PASS 无丢字=PASS 抽样=PASS,PASS,PASS
+170 集原文拼接 vs 剧本原文: FAIL
+  长度: joined=288967 raw=741747
+随机抽样(种子 20260913): #33/id423, #49/id439, #1/id391
+分集 #33「第66章 三人的秘密」: scenes=6/6 原文兜底=false 整段照抄场景=0 长句照抄率=0% 含对白场次=4 → PASS
+  场次标题样例: 休息室内的准备 / 准备区的交谈 / 比赛开始
+  描述字数/原文字数: 607/4385
+分集 #49「第98章 集体找茬？」: scenes=8/8 原文兜底=false 整段照抄场景=0 长句照抄率=0% 含对白场次=7 → PASS
+  场次标题样例: 黄晏被拉回休息室 / 房间布置完毕 / 休息室门被反锁
+  描述字数/原文字数: 842/4456
+分集 #1「第1章 末世到星际」: scenes=6/6 原文兜底=false 整段照抄场景=0 长句照抄率=0% 含对白场次=4 → PASS
+  场次标题样例: 清晨醒来 / 起床喝水 / 思考现状
+  描述字数/原文字数: 502/5303
+== 170 集抽查汇总 == 结构=PASS 无丢字=FAIL 抽样=PASS,PASS,PASS
+下载目标: 分集 id=391「第1章 末世到星际」 scenes=6
+HTTP 200 Content-Type=application/x-subrip Disposition=attachment; filename="=?UTF-8?Q?=E7=AC=AC1=E9=9B=86=5F=E7=AC=AC1=E7=AB=A0=5F=E6=
+  [secondsPerLine=2] 13 条 cue 校验 → PASS
+  内容溯源: 13/13 条 cue 文本可在场次数据中找到
+PASS 真实分集下载(序号/时间轴/时长) — ep=391 cues=13
+secondsPerLine=0 → HTTP 400 {"code":400,"msg":"每条对白展示时长需在 1-60 秒之间","data":null}
+PASS secondsPerLine=0 拒绝 — HTTP 400
+secondsPerLine=-5 → HTTP 400 {"code":400,"msg":"每条对白展示时长需在 1-60 秒之间","data":null}
+PASS secondsPerLine=-5 拒绝 — HTTP 400
+secondsPerLine=61 → HTTP 400 {"code":400,"msg":"每条对白展示时长需在 1-60 秒之间","data":null}
+PASS secondsPerLine=61 拒绝 — HTTP 400
+secondsPerLine=999999 → HTTP 400 {"code":400,"msg":"每条对白展示时长需在 1-60 秒之间","data":null}
+PASS secondsPerLine=999999 拒绝 — HTTP 400
+secondsPerLine=abc → HTTP 400 {"code":400,"msg":"请求参数类型不匹配: secondsPerLine","data":null}
+PASS secondsPerLine=abc 拒绝 — HTTP 400
+  [secondsPerLine=1] 13 条 cue 校验 → PASS
+PASS secondsPerLine=1 边界接受 — 13 cues
+  [secondsPerLine=60] 13 条 cue 校验 → PASS
+PASS secondsPerLine=60 边界接受 — 13 cues
+空对白分集 id=408「第36章 红发小熊」 → HTTP 400 {"code":400,"msg":"该分集暂无可导出的对白","data":null}
+PASS 空对白分集拒绝(400,不产空文件) — {"code":400,"msg":"该分集暂无可导出的对白","data":null}
+uitest 访问 zhangyz 分集 SRT → HTTP 403 {"code":403,"msg":"无权访问该项目内容","data":null}
+PASS uitest 越权访问分集 SRT 被拒(404/403) — HTTP 403
+不存在分集 → HTTP 404 {"code":404,"msg":"剧本分集不存在: 999999","data":null}
+PASS 不存在分集 → 404 — HTTP 404
+== 字幕导出汇总 ==
+PASS 真实分集下载(序号/时间轴/时长)
+PASS secondsPerLine=0 拒绝
+PASS secondsPerLine=-5 拒绝
+PASS secondsPerLine=61 拒绝
+PASS secondsPerLine=999999 拒绝
+PASS secondsPerLine=abc 拒绝
+PASS secondsPerLine=1 边界接受
+PASS secondsPerLine=60 边界接受
+PASS 空对白分集拒绝(400,不产空文件)
+PASS uitest 越权访问分集 SRT 被拒(404/403)
+PASS 不存在分集 → 404
+动态分集 id=391
+PASS uitest GET 他人项目详情 期望=403 实际=403 — 无权访问该项目
+PASS uitest GET 他人分集 期望=403 实际=403 — 无权访问该项目内容
+PASS uitest GET 他人 SRT 期望=403 实际=403 — 无权访问该项目内容
+PASS uitest GET 他人生产运行 期望=403 实际=403 — 无权访问该项目内容
+PASS uitest PUT 恢复他人回收站资产 期望=403 实际=403 — 无权访问该项目内容
+FAIL GET 不存在项目 期望=404 实际=500 — 项目不存在: 999999
+PASS GET 不存在分集 期望=404 实际=404 — 剧本分集不存在: 999999
+PASS GET 不存在 SRT 期望=404 实际=404 — 剧本分集不存在: 999999
+PASS GET 不存在生产运行 期望=404 实际=404 — 生产运行不存在: 999999
+PASS GET 不存在资产 期望=404 实际=404 — 资产不存在: 999999
+FAIL PUT 恢复不存在回收站资产 期望=404 实际=500 — 回收站中不存在该资产: 999999
+FAIL DELETE 彻底删除不存在回收站资产 期望=404 实际=500 — 回收站中不存在该资产: 999999
+PASS SRT secondsPerLine=abc 期望=400 实际=400 — 请求参数类型不匹配: secondsPerLine
+PASS 分集 id 非数字(path) 期望=400 实际=400 — 请求参数类型不匹配: id
+PASS 分集 id 非数字(plain) 期望=400 实际=400 — 请求参数类型不匹配: id
+PASS 生产 runId 非数字 期望=400 实际=400 — 请求参数类型不匹配: runId
+FAIL PUT 端点用 GET 访问(restore) 期望=405 实际=500 — 系统内部错误
+FAIL 回收站列表用 POST 访问 期望=405 实际=500 — 系统内部错误
+== 异常语义矩阵汇总 ==
+PASS uitest GET 他人项目详情: 期望 403 实际 403
+PASS uitest GET 他人分集: 期望 403 实际 403
+PASS uitest GET 他人 SRT: 期望 403 实际 403
+PASS uitest GET 他人生产运行: 期望 403 实际 403
+PASS uitest PUT 恢复他人回收站资产: 期望 403 实际 403
+FAIL GET 不存在项目: 期望 404 实际 500
+PASS GET 不存在分集: 期望 404 实际 404
+PASS GET 不存在 SRT: 期望 404 实际 404
+PASS GET 不存在生产运行: 期望 404 实际 404
+PASS GET 不存在资产: 期望 404 实际 404
+FAIL PUT 恢复不存在回收站资产: 期望 404 实际 500
+FAIL DELETE 彻底删除不存在回收站资产: 期望 404 实际 500
+PASS SRT secondsPerLine=abc: 期望 400 实际 400
+PASS 分集 id 非数字(path): 期望 400 实际 400
+PASS 分集 id 非数字(plain): 期望 400 实际 400
+PASS 生产 runId 非数字: 期望 400 实际 400
+FAIL PUT 端点用 GET 访问(restore): 期望 405 实际 500
+FAIL 回收站列表用 POST 访问: 期望 405 实际 500
+合计 13/18 通过
+原文长度: 4007 字 (8 段 × 500)
+临时项目 id=9
+临时剧本 id=9,原文已写入
+chunkChars="abc" → HTTP 500 {"code":500,"msg":"系统内部错误","data":null}
+>> A: chunkChars=999999(应钳12000,期望1集)
+  [A: chunkChars=999999(应钳12000,期望1集)] 终态: parsingStatus=2 progress=解析完成：共 1 集 (耗时 12s)
+  分集数=1 (期望 1-1) 无丢字=true 单场景集数=0
+  场次标题样例: 第1场 城市夜色·玻璃幕墙/第2场 旧怀表·齿轮声/第3场 长街·火车鸣笛/第4场 阁楼·无署名的信
+>> B: chunkChars=-1(应钳2000,期望2-3集)
+  [B: chunkChars=-1(应钳2000,期望2-3集)] 终态: parsingStatus=2 progress=解析完成：共 3 集 (耗时 52s)
+  分集数=3 (期望 2-3) 无丢字=true 单场景集数=0
+  场次标题样例: 夜·城市街头/夜·街边/夜·长街/夜·阁楼 | 第一场：长街·外景·夜/第二场：阁楼·内景·夜/第三场：城市高楼·外景·夜/第四场：昏暗房间·内景·夜/第五场：长街·外景·夜/第六场：阁楼·内景·夜/第七场：城市高楼·外景·夜/第八场：昏暗房间·内景·夜 | 夜·城市玻璃幕墙/夜·旧怀表/夜·长街与火车/夜·阁楼
+>> C: 默认模型(不传modelId,当前默认=Ollama qwen2.5:14b 已宕)
+  [C: 默认模型(不传modelId,当前默认=Ollama qwen2.5:14b 已宕)] 超时
+== Round2 分块边界 E2E 汇总 ==
+PASS A: chunkChars=999999(应钳12000,期望1集) 实际分集=1
+PASS B: chunkChars=-1(应钳2000,期望2-3集) 实际分集=3
+FAIL C: 默认模型(不传modelId,当前默认=Ollama qwen2.5:14b 已宕)
+FAIL D: chunkChars="abc" → 400
+清理临时项目 9: HTTP 200

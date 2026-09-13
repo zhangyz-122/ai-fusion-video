@@ -2,7 +2,7 @@
   {
     "name": "真实分集下载(序号/时间轴/时长)",
     "pass": true,
-    "detail": "ep=210 cues=16"
+    "detail": "ep=391 cues=13"
   },
   {
     "name": "secondsPerLine=0 拒绝",
@@ -26,18 +26,18 @@
   },
   {
     "name": "secondsPerLine=abc 拒绝",
-    "pass": false,
-    "detail": "HTTP 500"
+    "pass": true,
+    "detail": "HTTP 400"
   },
   {
     "name": "secondsPerLine=1 边界接受",
     "pass": true,
-    "detail": "16 cues"
+    "detail": "13 cues"
   },
   {
     "name": "secondsPerLine=60 边界接受",
     "pass": true,
-    "detail": "16 cues"
+    "detail": "13 cues"
   },
   {
     "name": "空对白分集拒绝(400,不产空文件)",
@@ -45,13 +45,13 @@
     "detail": "{\"code\":400,\"msg\":\"该分集暂无可导出的对白\",\"data\":null}"
   },
   {
-    "name": "uitest 越权访问分集 SRT → 403",
-    "pass": false,
-    "detail": "HTTP 500"
+    "name": "uitest 越权访问分集 SRT 被拒(404/403)",
+    "pass": true,
+    "detail": "HTTP 403"
   },
   {
     "name": "不存在分集 → 404",
-    "pass": false,
-    "detail": "HTTP 500"
+    "pass": true,
+    "detail": "HTTP 404"
   }
 ]

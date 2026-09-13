@@ -1,27 +1,27 @@
 {
   "structOk": true,
-  "noLoss": true,
+  "noLoss": false,
   "picks": [
     {
-      "ep": 378,
-      "no": 169,
-      "scenes": 7,
+      "ep": 423,
+      "no": 33,
+      "scenes": 6,
       "verbatimFallback": false,
       "copyRate": 0,
       "ok": true
     },
     {
-      "ep": 360,
-      "no": 151,
-      "scenes": 4,
+      "ep": 439,
+      "no": 49,
+      "scenes": 8,
       "verbatimFallback": false,
-      "copyRate": 0.01639344262295082,
+      "copyRate": 0,
       "ok": true
     },
     {
-      "ep": 210,
+      "ep": 391,
       "no": 1,
-      "scenes": 8,
+      "scenes": 6,
       "verbatimFallback": false,
       "copyRate": 0,
       "ok": true
