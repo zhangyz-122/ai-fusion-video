@@ -16,6 +16,7 @@ import {
   HardDrive,
   ImagePlus,
   Video,
+  Clapperboard,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -61,6 +62,7 @@ const generationItems: SidebarItem[] = [
   { key: "home", label: "创作总览", icon: LayoutDashboard, href: "/generate", iconColor: "text-primary" },
   { key: "images", label: "图像工坊", icon: Images, href: "/generate/images", iconColor: "text-primary" },
   { key: "image", label: "生图", icon: ImagePlus, href: "/generate/image", iconColor: "text-fuchsia-400" },
+  { key: "videos", label: "视频工坊", icon: Clapperboard, href: "/generate/videos", iconColor: "text-cyan-400" },
   { key: "video", label: "生视频", icon: Video, href: "/generate/video", iconColor: "text-cyan-400" },
 ];
 
