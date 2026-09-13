@@ -8,6 +8,24 @@
 - 历史记录报告 AgentRunMaintenanceScheduler 的 DataIntegrityViolationException，需复查。
 - 历史证据路径指向 C 盘；其原始采集含义应保留，新的工具和计划使用当前项目相对路径。
 
+## 2026-09-13 补充：WAN duration→帧数（已修）与 workflow_hash 规范化（待管理员操作）
+
+### duration→帧数（运行时修复，已上线）
+
+- 现状核查：WAN I2V 版本的输入绑定只有 prompt/负向/首帧/宽/高/fps/seed，**没有 num_frames 绑定**，提交后工作流永远用模板 `num_frames:17`（16fps 下 1 秒）——即所有 WAN 视频实际都是 1 秒。
+- 修复：`ComfyUiWorkflowRenderer` 渲染末尾自动派生——检测工作流中的数字型 `num_frames` 输入，按 `frames = round(duration × fps) + 1` 计算；fps 依次取 values.fps → 工作流内 `frame_rate`/`fps` 数字输入 → 默认 16；显式 `numFrames` 值优先；无 duration 或无 num_frames 输入（纯图片工作流）则完全不动。
+- 单测 4 例（派生/无时长保持/显式覆盖/链接型输入跳过）；渲染在哈希校验后的副本上进行，不影响发布哈希链。
+
+### workflow_hash 规范化（数据修复，需管理员执行）
+
+- 根因：历史注册脚本把**原文件哈希**写入 `workflow_hash`，而应用只在 `createVersion/updateVersion` 时按"规范化 graph + 输入/输出绑定"计算（`ComfyUiWorkflowDocumentService`，sha256(canonicalApi+canonicalInputs+canonicalOutputs)）。受影响：脚本注册的版本（含 WAN 三条 id=16/17/18）。
+- 影响面：提交链路不校验哈希（已核实 `ComfyUiGenerationExecutor.prepare` 不读 hash），因此不影响生成运行；影响的是后续版本漂移比对与发布审计的可信度。
+- 修复手册（需 ADMIN 登录，逐个工作流执行；勿再用脚本直写数据库）：
+  1. `POST /api/ai/comfyui/workflow/version/create`：上传同一份 UI/API 工作流 JSON（可在 input_bindings 中显式补 numFrames 绑定，valueType=integer 指向 num_frames 输入节点；不补也已被渲染器派生覆盖）。
+  2. `POST /version/validate` → 在线验证通过；`POST /version/test` → 目标 ComfyUI 试运行通过。
+  3. `POST /publish`：发布新版本（此时存储的 workflow_hash 即为应用规范化值）。
+- 建议顺带用真实 5 秒任务验收时长（`num_frames` 应为 81）。
+
 ## 2026-09-13：跨用户项目访问（对应总任务 M01）
 
 ### 已修复（本轮，48/48 测试通过 + API 实测验证）

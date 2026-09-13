@@ -9,6 +9,7 @@ import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -19,6 +20,9 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 public class ComfyUiWorkflowRenderer {
+
+    /** ComfyUI 视频工作流在缺少显式帧率输入时的默认帧率。 */
+    private static final double DEFAULT_FPS = 16d;
 
     private final ObjectMapper objectMapper;
     private final ComfyUiWorkflowDocumentService documentService;
@@ -49,7 +53,69 @@ public class ComfyUiWorkflowRenderer {
             ObjectNode node = (ObjectNode) workflow.get(binding.nodeId());
             ((ObjectNode) node.get("inputs")).set(binding.inputName(), renderedValue);
         }
+        applyDurationFrames(workflow, values);
         return workflow;
+    }
+
+    /**
+     * 视频时长以秒下发，而 ComfyUI 采样节点按帧数驱动：frames = duration × fps + 1。
+     * 显式 numFrames 输入优先；没有时长输入时保持模板值，避免影响纯图片工作流。
+     */
+    private void applyDurationFrames(ObjectNode workflow, Map<String, Object> values) {
+        List<ObjectNode> numFrameInputs = findNumericInputs(workflow, "num_frames");
+        if (numFrameInputs.isEmpty()) {
+            return;
+        }
+        long frames;
+        Object explicit = values == null ? null : values.get("numFrames");
+        if (explicit != null && !explicit.toString().isBlank()) {
+            frames = Math.max(1, Long.parseLong(explicit.toString()));
+        } else {
+            Object duration = values == null ? null : values.get("duration");
+            if (duration == null || duration.toString().isBlank()) {
+                return;
+            }
+            double fps = resolveFps(workflow, values);
+            double seconds = Double.parseDouble(duration.toString());
+            frames = Math.max(1, Math.round(seconds * fps) + 1);
+        }
+        for (ObjectNode inputs : numFrameInputs) {
+            inputs.set("num_frames", objectMapper.getNodeFactory().numberNode(frames));
+        }
+    }
+
+    private List<ObjectNode> findNumericInputs(ObjectNode workflow, String inputName) {
+        List<ObjectNode> result = new ArrayList<>();
+        Iterator<Map.Entry<String, JsonNode>> nodes = workflow.fields();
+        while (nodes.hasNext()) {
+            JsonNode node = nodes.next().getValue();
+            if (node instanceof ObjectNode objectNode
+                    && objectNode.get("inputs") instanceof ObjectNode inputs
+                    && inputs.get(inputName) != null
+                    && inputs.get(inputName).isNumber()) {
+                result.add(inputs);
+            }
+        }
+        return result;
+    }
+
+    private double resolveFps(ObjectNode workflow, Map<String, Object> values) {
+        Object fps = values == null ? null : values.get("fps");
+        if (fps instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (fps != null && !fps.toString().isBlank()) {
+            return Double.parseDouble(fps.toString());
+        }
+        for (String name : new String[] {"frame_rate", "fps"}) {
+            for (ObjectNode inputs : findNumericInputs(workflow, name)) {
+                JsonNode value = inputs.get(name);
+                if (value != null && value.isNumber() && value.doubleValue() > 0) {
+                    return value.doubleValue();
+                }
+            }
+        }
+        return DEFAULT_FPS;
     }
 
     /**

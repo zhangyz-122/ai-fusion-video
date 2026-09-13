@@ -75,6 +75,64 @@ class ComfyUiWorkflowRendererTests {
         assertThat(result.at("/9/inputs/images").isMissingNode()).isTrue();
     }
 
+    @Test
+    void renderDerivesNumFramesFromDurationAndWorkflowFps() {
+        ComfyUiWorkflowVersion version = version(
+                """
+                        {
+                          "212":{"class_type":"WanVideoImageToVideoEncode","inputs":{"num_frames":17}},
+                          "215":{"class_type":"VHS_VideoCombine","inputs":{"frame_rate":16}}
+                        }
+                        """,
+                "{}");
+
+        ObjectNode result = renderer.render(3, version, Map.of("duration", 5));
+
+        assertThat(result.at("/212/inputs/num_frames").asLong()).isEqualTo(81L);
+        assertThat(result.at("/215/inputs/frame_rate").asInt()).isEqualTo(16);
+    }
+
+    @Test
+    void renderKeepsTemplateFramesWithoutDuration() {
+        ComfyUiWorkflowVersion version = version(
+                """
+                        {"212":{"class_type":"WanVideoImageToVideoEncode","inputs":{"num_frames":17}}}
+                        """,
+                "{}");
+
+        ObjectNode result = renderer.render(3, version, Map.of("prompt", "only text"));
+
+        assertThat(result.at("/212/inputs/num_frames").asInt()).isEqualTo(17);
+    }
+
+    @Test
+    void renderPrefersExplicitNumFramesOverDuration() {
+        ComfyUiWorkflowVersion version = version(
+                """
+                        {"212":{"class_type":"WanVideoImageToVideoEncode","inputs":{"num_frames":17}}}
+                        """,
+                "{}");
+
+        ObjectNode result = renderer.render(
+                3, version, Map.of("duration", 5, "numFrames", 49));
+
+        assertThat(result.at("/212/inputs/num_frames").asLong()).isEqualTo(49L);
+    }
+
+    @Test
+    void renderIgnoresLinkedNumFramesInputs() {
+        ComfyUiWorkflowVersion version = version(
+                """
+                        {"212":{"class_type":"WanVideoImageToVideoEncode","inputs":{"num_frames":["8",0]}}}
+                        """,
+                "{}");
+
+        ObjectNode result = renderer.render(3, version, Map.of("duration", 5));
+
+        // 链接型输入不是模板帧数，交给工作流自身逻辑，渲染器不改写
+        assertThat(result.at("/212/inputs/num_frames").isArray()).isTrue();
+    }
+
     private ComfyUiWorkflowVersion version(String apiJson, String inputBindingsJson) {
         return ComfyUiWorkflowVersion.builder()
                 .apiWorkflowJson(apiJson)
