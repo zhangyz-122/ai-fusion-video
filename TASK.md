@@ -460,3 +460,42 @@ production-take-drawer 数据展示)、重新同步(reconcile)与重试(repair)�
 ### 验证结果
 - 后端:`./mvnw test-compile` 通过;SubtitleExportServiceTests(21)+ScriptControllerSubtitleExportTests(3) 全绿。
 - 前端:`tsc --noEmit` 通过;改动文件 eslint 0 error(scene-detail.tsx 的 hasLinkedAssets 未使用警告为 base 既有)。
+
+---
+
+## SW-T02 执行记录(Dev-B 前端追加,2026-09-13)
+
+T10 发现的六条 UI 缺陷逐一修复,每项单独提交(分支 `swarm/a3-dev-frontend`):
+
+| # | 缺陷 | 修复 | 提交 |
+|---|------|------|------|
+| 1 | 生图编辑器"← 图像工坊 / 能力目录"死链 | 根因:基线 87f8a6e 把 `/generate/images` 页替换成 `redirect("/generate/image")`,链接自引用成环。恢复图像工坊目录页(已启用生图模型卡片 + 待接入工作流),链接语义恢复;卡片经 `/generate/image?modelId=` 进编辑器 | f70d2a2 |
+| 2 | SeedVR2 高清视频放大(id=13,已启用)无入口 | 同根因:`/generate/videos` 被替换为 redirect,视频工坊目录消失。恢复目录页( capabilityApi.catalog(3) 渲染模型卡片);实测 API 已返回 id=13"SeedVR2 高清视频放大 1080P" enabled=true,卡片"使用此模型"直达 `/generate/video?modelId=13` | 26af7ff |
+| 3 | 分镜行内"生成视频"按钮 aria/hover/图标 | 卡片视图+表格视图:补 `aria-label`(含镜号);去掉 `opacity-0 group-hover:opacity-100` 纯 hover 依赖,改常显 + `focus-visible` 焦点环;图标 Video→Clapperboard,与资产侧栏"批量生视频"的 Video 区分、与生产抽屉"生产这一镜"动作呼应;`transition-all` 收窄为 `transition-colors` | acf85fe |
+| 4a | 生产抽屉文案不一致 | "三候选生产"/"3 个候选"/"生产这一镜"三种表述统一:标题"{镜头} · 生产这一镜",描述"生产这一镜会生成 3 个候选视频,逐个质检后选用",卡片"将生成 3 个候选视频",按钮保持"生产这一镜",失败 toast 改"启动生产失败" | 20faf89 |
+| 4b | 就绪度不足禁用无原因 | "生产这一镜"按钮下方新增 `role="status"` 原因行,拼接 `readiness.blockers[].message`("暂不能生产这一镜:…"),与禁用状态一一对应 | b718512 |
+| 5 | 登录页品牌文案 | 底部"短剧制造平台"→"融光" | 60d7723 |
+
+### 验证结果
+- `corepack pnpm exec tsc --noEmit`:0 错误;`corepack pnpm exec eslint`(6 个改动文件):0 问题。
+- dev server(3457,DEV_BACKEND_URL→8081)冒烟:`/generate/images` 编译渲染 200 无编译错误(其余改动文件均过 tsc/eslint)。
+- 平台 8081(合并前代码)复现诊断:`/generate/images` 服务端返回 NEXT_REDIRECT→`/generate/image`(死链确认);
+  `capabilityApi.catalog(3)` 实测返回 id=13 SeedVR2 enabled=true(缺陷 2 数据面确认)。
+- 浏览器级视觉验证未做(子代理不使用 Browser Use),建议合并后由 QA/集成者在浏览器复核缺陷 1/2/3。
+
+### 需要决策/遗留(不空等,记录如下)
+1. 【信息架构拍板】本分支基线(87f8a6e"用户 WIP")曾有意把 `/generate/images|videos` 收敛为 redirect;
+   本次按缺陷清单恢复为目录页(与 main 一致)。若产品确认"只留编辑器单入口"的 IA,应改为改 header
+   链接文案与指向,而非保留 redirect,否则死链复发。
+2. 【品牌统一范围】文件锁仅允许登录页:已改"融光"。仍为旧文案的:`app/layout.tsx` metadata
+   (title"短剧制造"/description"短剧制造平台")、`app-header.tsx`("短剧制造")、
+   `forgot-password/page.tsx`("短剧制造平台")、register/setup 页未逐一排查。需拍板后授权统一。
+3. 【"三候选"残留】`production/page.tsx`、`projects/[id]/production/page.tsx` 仍有 3 处"三候选"
+   文案,均在本次禁区(production 页)内,未动;如需与抽屉口径统一另行派发。
+4. 【blockers 双处展示】说明卡片内 blockers 列表(既有)与按钮下原因行(新增)并存,轻微重复;
+   保留是为了"禁用处必有原因",如嫌重复可移除卡片处列表。
+5. 【行内按钮常显的视觉取舍】行内生产按钮由 hover 显现改为常显,卡片/表格视觉密度略增;
+   相邻的删除按钮等 hover-only 控件未在缺陷范围内未动,如需统一可访问性标准另行派发。
+6. 【QA 知悉】行内按钮 Tooltip/aria 文案由"生产 3 个候选视频"改为"生产这一镜(3 个候选)";
+   e2e/ 现有用例未引用该文案,无影响。
+
