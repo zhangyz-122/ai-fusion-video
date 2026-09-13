@@ -16,13 +16,15 @@ import {
   parseConfigJson,
   isConfigRecord,
   normalizePlatform,
+  normalizeProtocol,
   isOpenAiReasoningPlatform,
   isAnthropicReasoningPlatform,
   isDashScopeReasoningPlatform,
   getPositiveNumberValue,
   getConfigBooleanValue,
   getConfigNumberValue,
-  getConfigStringArray,
+  getReferenceImageInputFormats,
+  withReferenceImageInputFormat,
   SizesMap,
   SupportedSizesEditor,
   AspectRatiosEditor,
@@ -30,16 +32,19 @@ import {
   ToggleSettingCard,
   CapabilityNumberField,
 } from "./model-config-support";
+import { GenerationCapabilityEditor } from "./generation-capability-editor";
 
 export function ModelConfigForm({
   modelType,
   platform,
+  modelProtocol,
   supportReasoning,
   configJson,
   onChange,
 }: {
   modelType: number;
   platform?: string | null;
+  modelProtocol?: string | null;
   supportReasoning: boolean;
   configJson: string | undefined;
   onChange: (json: string) => void;
@@ -128,34 +133,12 @@ export function ModelConfigForm({
 
   const supportsImageReferenceInputs = getConfigBooleanValue(configObj.supportReferenceImages);
   const supportsAsyncImageTaskMode = getConfigBooleanValue(configObj.asyncMode);
-  const supportsFirstFrame = getConfigBooleanValue(configObj.supportFirstFrame);
-  const supportsLastFrame = getConfigBooleanValue(configObj.supportLastFrame);
-  const supportsVideoReferenceImages = getConfigBooleanValue(configObj.supportReferenceImages);
-  const supportsReferenceVideos = getConfigBooleanValue(configObj.supportReferenceVideos);
-  const supportsReferenceAudios = getConfigBooleanValue(configObj.supportReferenceAudios);
-  const referenceImageInputFormats = getConfigStringArray(configObj.referenceImageInputFormats)
-    .map(value => value.toLowerCase())
-    .map(value => value === "base64" || value === "data-uri" ? "data_uri" : value)
-    .filter(value => value === "url" || value === "data_uri");
-  if (
-    getConfigBooleanValue(configObj.supportDataUriInput) &&
-    !referenceImageInputFormats.includes("data_uri")
-  ) {
-    referenceImageInputFormats.push("data_uri");
-  }
+  const referenceImageInputFormats = getReferenceImageInputFormats(configObj);
   const supportsReferenceImageUrlInput = referenceImageInputFormats.includes("url");
   const supportsReferenceImageDataUriInput = referenceImageInputFormats.includes("data_uri");
-  const supportsAnyVideoImageInput = supportsFirstFrame || supportsLastFrame || supportsVideoReferenceImages;
 
   const updateReferenceImageInputFormat = (format: "url" | "data_uri", enabled: boolean) => {
-    const nextFormats = new Set(referenceImageInputFormats.filter(value => value === "url" || value === "data_uri"));
-    if (enabled) nextFormats.add(format);
-    else nextFormats.delete(format);
-    emitChange({
-      ...configObj,
-      referenceImageInputFormats: Array.from(nextFormats),
-      ...(format === "data_uri" ? { supportDataUriInput: enabled } : {}),
-    });
+    emitChange(withReferenceImageInputFormat(configObj, format, enabled));
   };
 
   return (
@@ -381,142 +364,11 @@ export function ModelConfigForm({
               )}
 
               {modelType === 3 && (
-                <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">多模态输入能力</Label>
-                    <p className="text-[10px] text-muted-foreground/70 mt-1">控制 generate_video 是否允许首帧、尾帧、参考图、参考视频和参考音频，以及对应数量上限。</p>
-                  </div>
-
-                  <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
-                    <ToggleSettingCard
-                      checked={supportsFirstFrame}
-                      title="支持首帧图"
-                      description="允许传 firstFrameImageUrl 来锁定开场画面。"
-                      onToggle={() => updateComplexField("supportFirstFrame", !supportsFirstFrame)}
-                    />
-                    <ToggleSettingCard
-                      checked={supportsLastFrame}
-                      title="支持尾帧图"
-                      description="允许传 lastFrameImageUrl 来约束结尾画面。"
-                      onToggle={() => updateComplexField("supportLastFrame", !supportsLastFrame)}
-                    />
-                    <ToggleSettingCard
-                      checked={supportsVideoReferenceImages}
-                      title="支持参考图"
-                      description="允许传 referenceImageUrls；适合角色、场景或多图参考。"
-                      onToggle={() => {
-                        const nextEnabled = !supportsVideoReferenceImages;
-                        emitChange({
-                          ...configObj,
-                          supportReferenceImages: nextEnabled,
-                          maxReferenceImages: nextEnabled ? configObj.maxReferenceImages : 0,
-                        });
-                      }}
-                    />
-                    <ToggleSettingCard
-                      checked={supportsReferenceVideos}
-                      title="支持参考视频"
-                      description="允许传 referenceVideoUrls，用于动作或镜头风格参考。"
-                      onToggle={() => {
-                        const nextEnabled = !supportsReferenceVideos;
-                        emitChange({
-                          ...configObj,
-                          supportReferenceVideos: nextEnabled,
-                          maxReferenceVideos: nextEnabled ? configObj.maxReferenceVideos : 0,
-                        });
-                      }}
-                    />
-                    <ToggleSettingCard
-                      checked={supportsReferenceAudios}
-                      title="支持参考音频"
-                      description="允许传 referenceAudioUrls，用于节奏或音频条件参考。"
-                      onToggle={() => {
-                        const nextEnabled = !supportsReferenceAudios;
-                        emitChange({
-                          ...configObj,
-                          supportReferenceAudios: nextEnabled,
-                          maxReferenceAudios: nextEnabled ? configObj.maxReferenceAudios : 0,
-                        });
-                      }}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div>
-                      <Label className="text-[11px] text-muted-foreground">图片传递模式</Label>
-                      <p className="mt-1 text-[10px] text-muted-foreground/70">
-                        同时作用于首帧图、尾帧图和 referenceImageUrls；至少启用一种才能提交图片输入。
-                      </p>
-                    </div>
-                    <div className="grid gap-2.5 sm:grid-cols-2">
-                      <ToggleSettingCard
-                        checked={supportsReferenceImageUrlInput}
-                        title="允许 URL 传递"
-                        description="有公网对象存储或后端资源公网地址时，直接传递图片 URL。"
-                        disabled={!supportsAnyVideoImageInput}
-                        onToggle={() => updateReferenceImageInputFormat("url", !supportsReferenceImageUrlInput)}
-                      />
-                      <ToggleSettingCard
-                        checked={supportsReferenceImageDataUriInput}
-                        title="允许 base64 / Data URI"
-                        description="没有公网访问地址时，将图片转换为 Data URI 后再提交。"
-                        disabled={!supportsAnyVideoImageInput}
-                        onToggle={() => updateReferenceImageInputFormat("data_uri", !supportsReferenceImageDataUriInput)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
-                    <CapabilityNumberField
-                      label="最少图片输入数"
-                      value={getConfigNumberValue(configObj.minImageInputs)}
-                      onChange={value => updateSimpleField("minImageInputs", value)}
-                      min={0}
-                      step={1}
-                      placeholder="例如：1"
-                      hint="计数包含 firstFrameImageUrl、lastFrameImageUrl 和 referenceImageUrls。"
-                    />
-                    <CapabilityNumberField
-                      label="最多图片输入数"
-                      value={getConfigNumberValue(configObj.maxImageInputs)}
-                      onChange={value => updateSimpleField("maxImageInputs", value)}
-                      min={0}
-                      step={1}
-                      placeholder="例如：3"
-                      hint="用于限制图片类输入总数，避免首尾帧与参考图一起超限。"
-                    />
-                    <CapabilityNumberField
-                      label="最多参考图数量"
-                      value={getConfigNumberValue(configObj.maxReferenceImages)}
-                      onChange={value => updateSimpleField("maxReferenceImages", value)}
-                      min={0}
-                      step={1}
-                      disabled={!supportsVideoReferenceImages}
-                      placeholder="例如：3"
-                      hint="referenceImageUrls 的单独上限。"
-                    />
-                    <CapabilityNumberField
-                      label="最多参考视频数量"
-                      value={getConfigNumberValue(configObj.maxReferenceVideos)}
-                      onChange={value => updateSimpleField("maxReferenceVideos", value)}
-                      min={0}
-                      step={1}
-                      disabled={!supportsReferenceVideos}
-                      placeholder="例如：1"
-                      hint="referenceVideoUrls 的单独上限。"
-                    />
-                    <CapabilityNumberField
-                      label="最多参考音频数量"
-                      value={getConfigNumberValue(configObj.maxReferenceAudios)}
-                      onChange={value => updateSimpleField("maxReferenceAudios", value)}
-                      min={0}
-                      step={1}
-                      disabled={!supportsReferenceAudios}
-                      placeholder="例如：1"
-                      hint="referenceAudioUrls 的单独上限。"
-                    />
-                  </div>
-                </div>
+                <GenerationCapabilityEditor
+                  config={configObj}
+                  onChange={emitChange}
+                  showComfyUiTemplates={normalizeProtocol(modelProtocol) === "comfyui"}
+                />
               )}
 
               {showReasoningConfig && isOpenAiReasoningPlatform(normalizedPlatform) && (
