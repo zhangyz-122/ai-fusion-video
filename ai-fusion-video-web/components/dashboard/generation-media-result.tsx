@@ -87,8 +87,22 @@ export function ThumbImage({
 
 export function ImageGenerateResult({ data }: { data: unknown }) {
   const obj = data as Obj;
-  const resolved = resolveMediaUrl(obj.imageUrl as string);
+  const imageUrl = typeof obj.imageUrl === "string" ? obj.imageUrl.trim() : "";
+  const resolved = resolveMediaUrl(imageUrl);
   const prompt = obj.prompt as string | undefined;
+  if (!imageUrl || obj.status !== "success") {
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5 text-xs text-amber-600">
+          <X className="h-3.5 w-3.5" />
+          <span className="font-medium text-foreground">未收到生成图片结果</span>
+        </div>
+        {typeof obj.message === "string" && (
+          <p className="text-xs text-destructive">{obj.message}</p>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="space-y-2.5">
       <div className="flex items-center gap-1.5 text-xs">

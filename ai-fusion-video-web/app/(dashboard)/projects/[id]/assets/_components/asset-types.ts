@@ -18,8 +18,8 @@ export function getAssetType(value: string) {
 }
 
 export function getAppearance(item: AssetItem | null) {
-  if (!item?.properties) return "";
-  const value = item.properties.appearanceDescription ?? item.properties.appearance ?? item.properties.description;
+  const properties = parseProperties(item?.properties ?? null);
+  const value = properties.appearanceDescription ?? properties.appearance ?? properties.description;
   return typeof value === "string" ? value : "";
 }
 
@@ -33,6 +33,17 @@ export function getAppearanceHints(assetType: string) {
   return APPEARANCE_HINTS[assetType] || APPEARANCE_HINTS.prop;
 }
 
-export function parseProperties(properties: Record<string, unknown> | null) {
-  return properties || {};
+export function parseProperties(properties: Record<string, unknown> | string | null) {
+  if (!properties) return {};
+  if (typeof properties === "string") {
+    try {
+      const parsed = JSON.parse(properties);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return properties;
 }

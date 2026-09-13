@@ -18,7 +18,7 @@ export interface PipelineEventLifecycle {
   notifySettlement: (
     id: string,
     status: "done" | "error" | "cancelled",
-    onComplete?: () => void,
+    onComplete?: () => void | Promise<void>,
     onSettled?: (status: "done" | "error" | "cancelled") => void,
   ) => void;
   scheduleStatusSync: () => void;
@@ -249,7 +249,7 @@ export function createPipelineEventHandler(
   lifecycle: PipelineEventLifecycle,
   id: string,
   set: (fn: (s: PipelineStoreState) => Partial<PipelineStoreState>) => void,
-  onComplete?: () => void,
+  onComplete?: () => void | Promise<void>,
   onSettled?: (status: "done" | "error" | "cancelled") => void,
   contentMergeMode: ContentMergeMode = "stream",
   durableEvents = true

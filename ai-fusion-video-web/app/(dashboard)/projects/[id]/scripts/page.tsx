@@ -471,9 +471,13 @@ export default function ScriptTabPage() {
           projectId,
           context: { episodeId: episodeToParseId, scriptId: script.id },
         },
-        onComplete: () => {
-          // Pipeline 完成后重新加载该集场次
-          reloadEpisodeScenes(episodeToParseId);
+        onComplete: async () => {
+          // DONE 只代表模型结束输出；必须确认该集已经落库场次。
+          const scenes = await scriptApi.listScenes(episodeToParseId);
+          if (scenes.length === 0) {
+            throw new Error(`第 ${ep.episodeNumber} 集未生成有效场次`);
+          }
+          await reloadEpisodeScenes(episodeToParseId);
         },
       });
 

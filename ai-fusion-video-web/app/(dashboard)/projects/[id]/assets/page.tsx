@@ -18,12 +18,18 @@ function enqueueAssetGeneration(
   assetIds: number[],
   itemIds?: number[],
   label = "批量生成资产图",
+  onComplete?: () => void,
 ) {
   const { addPipeline, setNotificationOpen } = usePipelineStore.getState();
+  const scope = itemIds?.length
+    ? `本次只处理主资产ID ${assetIds.join(",")} 下的子资产ID ${itemIds.join(",")}，不得处理同一主资产的其他子资产。`
+    : `本次处理主资产ID ${assetIds.join(",")} 下的全部子资产。`;
   addPipeline({
     label,
     projectId,
     request: {
+      message:
+        `请执行资产图片生成任务。${scope} 必须实际调用 generate_asset_image 子Agent，等待它完成 generate_image 和 update_asset_image 后才能结束；禁止只查询后直接回复。凡是 selectedAssetIds 或 selectedAssetItemIds 指定的范围，均视为强制重新生成：即使子资产已有图片，也必须实际调用生图并把新图片回填到资产；只有未指定范围时才允许跳过已有图片。`,
       agentType: "asset_image_gen",
       toolExecutionMode: "FULL_ACCESS",
       projectId,
@@ -32,6 +38,7 @@ function enqueueAssetGeneration(
         ...(itemIds?.length ? { selectedAssetItemIds: itemIds } : {}),
       },
     },
+    onComplete,
   });
   setNotificationOpen(true);
 }
@@ -56,6 +63,7 @@ export default function ProjectAssetsPage() {
   const [error, setError] = useState("");
 
   const selectedAssetIdRef = useRef<number | null>(null);
+  const assetsInvalidation = usePipelineStore((state) => state.invalidation.assets);
 
   useEffect(() => {
     selectedAssetIdRef.current = selectedAssetId;
@@ -83,6 +91,13 @@ export default function ProjectAssetsPage() {
   }, [projectId]);
 
   useEffect(() => { void loadAssets(false); }, [loadAssets]);
+
+  // AI 任务完成后由全局 Pipeline Store 推送失效信号，资产页立即重新拉取，
+  // 不再要求用户手动刷新浏览器才能看到新图片。
+  useEffect(() => {
+    if (assetsInvalidation === 0) return;
+    void loadAssets(true);
+  }, [assetsInvalidation, loadAssets]);
 
   useEffect(() => {
     if (loading || !highlightId || assets.length === 0) return;
@@ -266,14 +281,15 @@ export default function ProjectAssetsPage() {
           onSearchChange={setSearch}
           onTypeFilterChange={setTypeFilter}
           onSelect={selectAsset}
-          onBatchGenerate={() =>
-            enqueueAssetGeneration(
-              projectId,
-              assets.map((asset) => asset.id),
-              undefined,
-              "批量生成全部资产图",
-            )
-          }
+        onBatchGenerate={() =>
+          enqueueAssetGeneration(
+            projectId,
+            assets.map((asset) => asset.id),
+            undefined,
+            "批量生成全部资产图",
+            () => void loadAssets(true),
+          )
+        }
           onRefresh={() => void loadAssets(true)}
         />
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[30px] border border-border/50 bg-card/75 shadow-[0_24px_70px_-42px_rgba(15,23,42,.45)]">
@@ -311,6 +327,7 @@ export default function ProjectAssetsPage() {
                     [selectedAsset.id],
                     selectedAsset.items.map((item) => item.id),
                     `批量生成 ${selectedAsset.name} 的子资产图`,
+                    () => void loadAssets(true),
                   )
                 }
               />
@@ -342,6 +359,7 @@ export default function ProjectAssetsPage() {
                         [selectedAsset.id],
                         [selectedItem.id],
                         `生成 ${selectedItem.name || "子资产"}`,
+                        () => void loadAssets(true),
                       );
                     }}
                   />

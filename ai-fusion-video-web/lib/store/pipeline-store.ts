@@ -81,6 +81,8 @@ export interface PipelineTask {
   finishedAt?: number;
 }
 
+type PipelineCompletionCallback = () => void | Promise<void>;
+
 // ========== Store ==========
 
 export interface PipelineStoreState {
@@ -101,20 +103,21 @@ export interface PipelineStoreState {
     label: string;
     projectId: number;
     request: AiChatReq;
-    onComplete?: () => void;
+    onComplete?: PipelineCompletionCallback;
   }) => string;
   addPipelineContinuation: (config: {
     label: string;
     projectId: number | null;
     conversationId: string;
     initialTimeline?: TimelineItem[];
+    onComplete?: PipelineCompletionCallback;
   }) => string;
   attachTaskStream: (config: {
     label: string;
     projectId: number;
     taskId: string;
     cancellable?: boolean;
-    onComplete?: () => void;
+    onComplete?: PipelineCompletionCallback;
     onSettled?: (status: "done" | "error" | "cancelled") => void;
   }) => string;
   /**
@@ -125,7 +128,7 @@ export interface PipelineStoreState {
     label: string;
     projectId: number;
     initialNote?: string;
-    onComplete?: () => void;
+    onComplete?: PipelineCompletionCallback;
   }) => string;
   /** 推进非 AI 任务的状态（追加结果文本/错误，标记完成或失败） */
   markSimpleTask: (
@@ -155,7 +158,7 @@ export interface PipelineStoreState {
 
 // 简单任务的完成回调（不放在 zustand state 里避免序列化问题）
 const simpleTaskCallbacks = new Map<string, () => void>();
-const pipelineCompleteCallbacks = new Map<string, () => void>();
+const pipelineCompleteCallbacks = new Map<string, PipelineCompletionCallback>();
 const notifiedPipelineSettlements = new Set<string>();
 
 // 存储 AbortController 的 map（不放在 zustand state 里避免序列化问题）
@@ -208,14 +211,45 @@ function bindPipelineRunId(
 function notifyPipelineSettlement(
   id: string,
   status: "done" | "error" | "cancelled",
-  onComplete?: () => void,
+  onComplete?: PipelineCompletionCallback,
   onSettled?: (status: "done" | "error" | "cancelled") => void,
 ): void {
   if (notifiedPipelineSettlements.has(id)) return;
   notifiedPipelineSettlements.add(id);
   clearPipelineReconnect(id);
   abortControllers.delete(id);
-  if (status === "done") onComplete?.();
+  if (status === "done" && onComplete) {
+    void Promise.resolve()
+      .then(() => onComplete())
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        usePipelineStore.setState((state) => {
+          const task = state.tasks.find((candidate) => candidate.id === id);
+          if (!task || task.status === "cancelled") return state;
+          return {
+            tasks: state.tasks.map((candidate) =>
+              candidate.id === id
+                ? {
+                    ...candidate,
+                    status: "error",
+                    finishedAt: Date.now(),
+                    state: {
+                      ...candidate.state,
+                      status: "error",
+                      error: `结果校验失败：${message || "任务没有产生有效结果"}`,
+                    },
+                  }
+                : candidate,
+            ),
+            invalidation: {
+              assets: (state.invalidation.assets || 0) + 1,
+              scripts: (state.invalidation.scripts || 0) + 1,
+              storyboards: (state.invalidation.storyboards || 0) + 1,
+            },
+          };
+        });
+      });
+  }
   onSettled?.(status);
 }
 
@@ -240,7 +274,7 @@ function settleTaskIfRunning(
   status: "done" | "error" | "cancelled",
   options?: {
     error?: string;
-    onComplete?: () => void;
+    onComplete?: PipelineCompletionCallback;
     onSettled?: (status: "done" | "error" | "cancelled") => void;
   }
 ) {
@@ -297,7 +331,7 @@ function startPipelineContinuationStream(
   conversationId: string,
   set: (fn: (state: PipelineStoreState) => Partial<PipelineStoreState>) => void,
   get: () => PipelineStoreState,
-  onComplete?: () => void,
+  onComplete?: PipelineCompletionCallback,
 ) {
   const handleEvent = createPipelineEventHandler(
     pipelineEventLifecycle,
@@ -510,6 +544,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     projectId,
     conversationId,
     initialTimeline = [],
+    onComplete,
   }) => {
     const id = generatePipelineTaskId();
     const task: PipelineTask = {
@@ -532,7 +567,14 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       continuable: true,
     };
     set((state) => ({ tasks: [...state.tasks, task] }));
-    startPipelineContinuationStream(id, conversationId, set, get);
+    if (onComplete) pipelineCompleteCallbacks.set(id, onComplete);
+    startPipelineContinuationStream(
+      id,
+      conversationId,
+      set,
+      get,
+      onComplete,
+    );
     return id;
   },
 

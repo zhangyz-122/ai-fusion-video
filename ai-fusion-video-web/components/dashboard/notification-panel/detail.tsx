@@ -30,6 +30,8 @@ import {
 } from "@/lib/api/ai-assistant";
 import { PIPELINE_AGENT_TYPES } from "@/lib/api/ai-pipeline";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { scriptApi } from "@/lib/api/script";
+import { storyboardApi } from "@/lib/api/storyboard";
 import { Button } from "@/components/ui/button";
 import {
   usePipelineStore,
@@ -59,6 +61,46 @@ import {
 
 const EMPTY_TIMELINE: PipelineTask["state"]["timeline"] = [];
 const EMPTY_MESSAGES: AgentMessage[] = [];
+
+function createPipelineRecovery(conversation: AgentConversation) {
+  if (!conversation.projectId) return undefined;
+
+  if (conversation.agentType === "script_full_parse") {
+    return async () => {
+      const script = await scriptApi.getByProject(conversation.projectId!);
+      if (!script) throw new Error("项目尚未找到剧本");
+      await scriptApi.fallbackParse(script.id);
+      const episodes = await scriptApi.listEpisodes(script.id);
+      const scenes = await Promise.all(
+        episodes.map((episode) => scriptApi.listScenes(episode.id)),
+      );
+      const sceneCount = scenes.reduce((total, items) => total + items.length, 0);
+      if (episodes.length === 0 || sceneCount === 0) {
+        throw new Error(`剧本仍未生成有效结构（分集 ${episodes.length}，场次 ${sceneCount}）`);
+      }
+    };
+  }
+
+  if (conversation.agentType === "script_to_storyboard") {
+    return async () => {
+      const storyboard = await storyboardApi.getByProject(conversation.projectId!);
+      if (!storyboard) throw new Error("项目尚未找到分镜脚本");
+      await storyboardApi.fallbackGenerate(storyboard.id);
+      const statistics = await storyboardApi.getStatistics(storyboard.id);
+      if (
+        statistics.episodeCount === 0 ||
+        statistics.sceneCount === 0 ||
+        statistics.itemCount === 0
+      ) {
+        throw new Error(
+          `分镜仍为空（分集 ${statistics.episodeCount}，场次 ${statistics.sceneCount}，镜头 ${statistics.itemCount}）`,
+        );
+      }
+    };
+  }
+
+  return undefined;
+}
 
 function PipelineContinueAction({ onContinue }: { onContinue: () => void }) {
   return (
@@ -725,6 +767,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
         projectId: conversation.projectId,
         conversationId: conversation.conversationId,
         initialTimeline: timeline,
+        onComplete: createPipelineRecovery(conversation),
       });
       usePipelineStore.getState().setExpandedTaskId(taskId);
       setSelected({ type: "pipeline", taskId });

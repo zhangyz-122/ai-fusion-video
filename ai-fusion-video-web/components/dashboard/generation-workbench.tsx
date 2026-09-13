@@ -41,6 +41,7 @@ import { useReferenceImageUploadAvailability } from "./generation/use-reference-
 
 interface GenerationWorkbenchProps {
   mode: WorkbenchMode;
+  initialModelId?: number;
 }
 
 function clean(values: string[]) {
@@ -49,7 +50,7 @@ function clean(values: string[]) {
 
 const MODE_TRANSITION_EASE = [0.25, 0.46, 0.45, 0.94] as const;
 
-export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) {
+export default function GenerationWorkbench({ mode, initialModelId }: GenerationWorkbenchProps) {
   const modelType = mode === "image" ? 2 : 3;
   const [composerMode, setComposerMode] = useState<ComposerMode>("simple");
   const [models, setModels] = useState<AiModel[]>([]);
@@ -84,7 +85,13 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
         const enabled = modelList.filter((model) => model.status === 1);
         setModels(enabled);
         setPresets(presetList);
-        setModelId(enabled.find((model) => model.defaultModel)?.id ?? enabled[0]?.id);
+        if (initialModelId !== undefined) {
+          const requested = enabled.find(model => model.id === initialModelId);
+          setModelId(requested?.id);
+          if (!requested) toast.error("所选模型当前不可用，请重新选择。");
+        } else {
+          setModelId(enabled.find((model) => model.defaultModel)?.id ?? enabled[0]?.id);
+        }
       })
       .catch((error) => {
         if (!cancelled) {
@@ -98,7 +105,7 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     return () => {
       cancelled = true;
     };
-  }, [modelType]);
+  }, [modelType, initialModelId]);
 
   const selectedModel = models.find((model) => model.id === modelId);
   const capabilities = useMemo(

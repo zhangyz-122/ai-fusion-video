@@ -11,7 +11,7 @@ export interface Asset {
   name: string;
   description: string | null;
   coverUrl: string | null;
-  properties: Record<string, unknown> | null;
+  properties: Record<string, unknown> | string | null;
   tags: string[] | null;
   sourceType: number;
   aiPrompt: string | null;
@@ -30,7 +30,7 @@ export interface AssetItem {
   name: string | null;
   imageUrl: string | null;
   thumbnailUrl: string | null;
-  properties: Record<string, unknown> | null;
+  properties: Record<string, unknown> | string | null;
   sortOrder: number;
   sourceType: number;
   aiPrompt: string | null;

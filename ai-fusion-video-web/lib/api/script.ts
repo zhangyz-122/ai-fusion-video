@@ -152,6 +152,10 @@ export const scriptApi = {
   replaceSource: (id: number, rawContent: string) =>
     http.put<never, Script>(`/api/script/${id}/source`, { rawContent }),
 
+  /** 本地模型未落库时，按原文标题兜底生成分集与场次 */
+  fallbackParse: (id: number) =>
+    http.post<never, Script>(`/api/script/${id}/fallback-parse`),
+
   // ========== 分集 ==========
 
   /** 获取分集列表 */

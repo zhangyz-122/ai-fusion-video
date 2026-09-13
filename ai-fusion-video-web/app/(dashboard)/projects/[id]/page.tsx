@@ -23,8 +23,8 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
-import type { Script } from "@/lib/api/script";
-import type { Storyboard, StoryboardStatistics } from "@/lib/api/storyboard";
+import { scriptApi, type Script } from "@/lib/api/script";
+import { storyboardApi, type Storyboard, type StoryboardStatistics } from "@/lib/api/storyboard";
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { artStyleApi, type ArtStylePreset } from "@/lib/api/art-style";
 import { projectApi } from "@/lib/api/project";
@@ -93,6 +93,7 @@ export default function ProjectOverviewPage() {
   const [scriptSceneCount, setScriptSceneCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showParseDialog, setShowParseDialog] = useState(false);
+  const [repairingScript, setRepairingScript] = useState(false);
 
   // 分镜状态
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
@@ -184,9 +185,24 @@ export default function ProjectOverviewPage() {
         projectId,
         context: { scriptId: script.id },
       },
-      onComplete: () => {
-        // pipeline 完成后刷新剧本数据
-        loadAllData();
+      onComplete: async () => {
+        // DONE 只代表模型结束输出；必须确认数据库已经产生结构化分集和场次。
+        let fallbackError = "";
+        try {
+          await scriptApi.fallbackParse(script.id);
+        } catch (error) {
+          fallbackError = error instanceof Error ? error.message : String(error);
+        }
+        const episodes = await scriptApi.listEpisodes(script.id);
+        const sceneCount = (await Promise.all(
+          episodes.map((episode) => scriptApi.listScenes(episode.id)),
+        )).reduce((total, scenes) => total + scenes.length, 0);
+        if (episodes.length === 0 || sceneCount === 0) {
+          throw new Error(
+            fallbackError || `剧本仍未生成有效结构（分集 ${episodes.length}，场次 ${sceneCount}）`,
+          );
+        }
+        await loadAllData();
       },
     });
 
@@ -196,6 +212,21 @@ export default function ProjectOverviewPage() {
 
     // 跳转到剧本页
     router.push(`/projects/${projectId}/scripts`);
+  };
+
+  const handleRepairScript = async () => {
+    if (!script || repairingScript) return;
+    try {
+      setRepairingScript(true);
+      await scriptApi.fallbackParse(script.id);
+      await loadAllData();
+      toast.success("剧本结构已恢复");
+    } catch (error) {
+      console.error("恢复剧本结构失败:", error);
+      toastApiError(error, "恢复剧本结构失败");
+    } finally {
+      setRepairingScript(false);
+    }
   };
 
   // AI 生成分镜：启动 pipeline
@@ -222,9 +253,21 @@ export default function ProjectOverviewPage() {
           projectId,
           context: { scriptId: script.id, storyboardId: targetStoryboard.id },
         },
-        onComplete: () => {
-          // pipeline 完成后刷新数据
-          loadAllData();
+        onComplete: async () => {
+          // DONE 只代表模型结束输出；必须确认数据库已经产生分镜内容。
+          let fallbackError = "";
+          try {
+            await storyboardApi.fallbackGenerate(targetStoryboard.id);
+          } catch (error) {
+            fallbackError = error instanceof Error ? error.message : String(error);
+          }
+          const statistics = await storyboardApi.getStatistics(targetStoryboard.id);
+          if (statistics.episodeCount === 0 || statistics.sceneCount === 0 || statistics.itemCount === 0) {
+            throw new Error(
+              fallbackError || `分镜仍为空（分集 ${statistics.episodeCount}，场次 ${statistics.sceneCount}，镜头 ${statistics.itemCount}）`,
+            );
+          }
+          await loadAllData();
         },
       });
 
@@ -391,7 +434,7 @@ export default function ProjectOverviewPage() {
                     {project?.name || "未命名项目"}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                    {script.storySynopsis || script.genre || (scriptHasContent ? "剧本内容待完善" : "尚未添加剧本内容")}
+                    {script.storySynopsis || script.genre || (scriptHasContent ? "剧本原文已解析，可在剧本页继续编辑" : "尚未添加剧本内容")}
                   </p>
                 </div>
               </div>
@@ -425,6 +468,16 @@ export default function ProjectOverviewPage() {
                 <RefreshCw className="h-4 w-4" />
                 {scriptHasContent ? "重新解析内容" : "AI 解析"}
               </Button>
+              {scriptHasContent && (scriptEpisodeCount === 0 || scriptSceneCount === 0) && (
+                <Button
+                  variant="outline"
+                  onClick={handleRepairScript}
+                  disabled={repairingScript}
+                >
+                  <Wrench className={cn("h-4 w-4", repairingScript && "animate-spin")} />
+                  {repairingScript ? "正在恢复" : "修复剧本结构"}
+                </Button>
+              )}
             </div>
           </div>
         ) : (

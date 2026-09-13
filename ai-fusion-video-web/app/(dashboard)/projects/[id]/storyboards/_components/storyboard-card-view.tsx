@@ -278,7 +278,7 @@ const CardItemUI = memo(
                   "opacity-0 group-hover:opacity-100 transition-all z-20",
                   "hover:bg-purple-500/60 text-white/90"
                 )}
-                title="生成视频"
+                  title="生产 3 个候选视频"
               >
                 <Video className="h-3.5 w-3.5" />
               </button>

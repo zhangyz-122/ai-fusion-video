@@ -761,8 +761,8 @@ export function StoryboardTableView({
                           </button>
                         }
                       />
-                      <TooltipContent className={TOOLTIP_CONTENT_CLASS}>
-                        生成视频
+                        <TooltipContent className={TOOLTIP_CONTENT_CLASS}>
+                          生产 3 个候选视频
                       </TooltipContent>
                     </Tooltip>
                   )}

@@ -313,7 +313,7 @@
  */
 body[data-assistant-layer="true"] > [data-base-ui-portal] {
   position: relative;
-  z-index: 80;
+  z-index: 12000;
 }
 
 .assistant-wide-only {

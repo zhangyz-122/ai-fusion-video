@@ -81,6 +81,7 @@ export const UserAvatarDropdown = React.forwardRef<
 >(({ user, menuItems, logoutItem, className }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
   const isClient = useSyncExternalStore(
     () => () => {},
@@ -103,9 +104,33 @@ export const UserAvatarDropdown = React.forwardRef<
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      updateDropdownPos();
-    }
+    if (!isOpen) return;
+
+    updateDropdownPos();
+
+    // Do not place a full-screen element above the page while the menu is open.
+    // That layer used to swallow the first click on every other dropdown.
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !triggerRef.current?.contains(target) &&
+        !dropdownRef.current?.contains(target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updateDropdownPos);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updateDropdownPos);
+    };
   }, [isOpen, updateDropdownPos]);
 
   // 点击菜单项后关闭菜单
@@ -120,6 +145,7 @@ export const UserAvatarDropdown = React.forwardRef<
       <button
         ref={triggerRef}
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
         className={cn(
           "flex items-center gap-2 p-1.5 pr-3 rounded-xl transition-colors",
           "hover:bg-white/5",
@@ -149,14 +175,8 @@ export const UserAvatarDropdown = React.forwardRef<
         createPortal(
           <AnimatePresence>
             {isOpen && (
-              <>
-                {/* 遮罩层：点击外部关闭 */}
-                <div
-                  className="fixed inset-0 z-60"
-                  onClick={() => setIsOpen(false)}
-                />
-                {/* 下拉面板 */}
                 <motion.div
+                  ref={dropdownRef}
                   initial="hidden"
                   animate="visible"
                   exit="exit"
@@ -239,7 +259,6 @@ export const UserAvatarDropdown = React.forwardRef<
                     </motion.button>
                   </div>
                 </motion.div>
-              </>
             )}
           </AnimatePresence>,
           document.body

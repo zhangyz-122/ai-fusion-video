@@ -58,6 +58,8 @@ const assetItems: SidebarItem[] = [
 ];
 
 const generationItems: SidebarItem[] = [
+  { key: "home", label: "创作总览", icon: LayoutDashboard, href: "/generate", iconColor: "text-primary" },
+  { key: "images", label: "图像工坊", icon: Images, href: "/generate/images", iconColor: "text-primary" },
   { key: "image", label: "生图", icon: ImagePlus, href: "/generate/image", iconColor: "text-fuchsia-400" },
   { key: "video", label: "生视频", icon: Video, href: "/generate/video", iconColor: "text-cyan-400" },
 ];
@@ -159,7 +161,7 @@ export function SidebarNav({
     sectionTitle = "资产";
     items = assetItems;
   } else if (pathname.startsWith("/generate")) {
-    sectionTitle = "工具";
+    sectionTitle = "创作工作台";
     items = generationItems;
   } else if (pathname.startsWith("/settings")) {
     sectionTitle = "系统设置";
