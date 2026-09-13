@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Clapperboard, Layers } from "lucide-react";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import { cn } from "@/lib/utils";
 import type { EditingEpisodeTree, ShotFilter } from "./editing-types";
+import { EpisodeSubtitleExportButton } from "./episode-subtitle-export-button";
 
 interface EditingSidebarProps {
   tree: EditingEpisodeTree[];
@@ -83,29 +84,45 @@ export function EditingSidebar({
 
           {tree.map((episodeNode) => {
             const collapsed = collapsedIds.has(episodeNode.episode.id);
+            const episodeActive = isEpisodeActive(episodeNode.episode.id);
             return (
               <div key={episodeNode.episode.id} className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={() => handleEpisodeSelect(episodeNode.episode.id)}
-                  aria-expanded={!collapsed}
+                <div
                   className={cn(
-                    "flex w-full items-center gap-1.5 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors motion-reduce:transition-none",
-                    isEpisodeActive(episodeNode.episode.id)
-                      ? "border-border/40 bg-muted/70 font-medium text-foreground"
-                      : "border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    "flex w-full items-center rounded-lg border pr-1 transition-colors motion-reduce:transition-none",
+                    episodeActive
+                      ? "border-border/40 bg-muted/70"
+                      : "border-transparent hover:bg-muted/40"
                   )}
                 >
-                  {collapsed ? (
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                  )}
-                  <span className="truncate">{episodeNode.episodeLabel}</span>
-                  <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/70">
-                    {episodeNode.shotCount} 镜
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => handleEpisodeSelect(episodeNode.episode.id)}
+                    aria-expanded={!collapsed}
+                    className={cn(
+                      "flex min-w-0 flex-1 items-center gap-1.5 px-2.5 py-2 text-left text-sm rounded-lg",
+                      episodeActive
+                        ? "font-medium text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {collapsed ? (
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                    )}
+                    <span className="truncate">{episodeNode.episodeLabel}</span>
+                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/70">
+                      {episodeNode.shotCount} 镜
+                    </span>
+                  </button>
+                  <EpisodeSubtitleExportButton
+                    scriptEpisodeId={
+                      episodeNode.episode.scriptEpisodeId ?? null
+                    }
+                    episodeLabel={episodeNode.episodeLabel}
+                  />
+                </div>
 
                 {!collapsed && (
                   <div className="ml-4 flex flex-col gap-0.5 border-l border-border/20 pl-2">
