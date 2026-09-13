@@ -119,3 +119,23 @@
 - 三个控制器全部内容端点接入守卫（剧本 15、分镜 30、资产 13 处）；批量排序逐条校验；创建类端点按 VO 中的归属 ID 校验。
 - 新增 `ProjectAccessGuardTests`（5 例，链路解析+拒绝/放行）；`ProjectControllerAccessGuardTests`（7 例）保留。
 - 遗留说明：守卫加在控制器层而非服务层，Agent 工具与内部流水线（无 HTTP 安全上下文）不受影响，其自身已有 ownership 校验（如 PR-006、项目工具的 canAccessProject）。
+
+## 2026-09-13 S2 收口：L02/L03 系统性实测（全部通过）
+
+### 合成闭环（N02 最后一环，通过）
+
+- Run 12（已选片）→ `POST /production/runs/12/compose` → 分集 8 `compose_status=2`，成片 `/media/videos/composed/c5bda792...mp4`（ffprobe 5.0625s）。
+- 过程中修复测试夹具：场次 37 的 episode_id 指向了不存在的分集（自建夹具笔误），已直接修正。
+- **新缺陷记录**：`PUT /api/storyboard/scene` 对 `episodeId` 变更静默忽略（updateById 不生效，响应与库值均为旧值）——分镜场次无法通过接口移动分集。疑似 MapStruct 转换未映射或刻意限制但未提示，待修复（属 C03 范围）。
+
+### L02 幂等与并发（通过）
+
+- 幂等启动：同 idempotencyKey 重复 POST 返回同一 run，无重复 VideoTask（Run 7/8/12 三次复验）。
+- 并发选片：两路同时 select 均返回 success，最终 `selected_take_id` 单真相、以最后写入者为准（Take 3），无双重状态。是否改为"首写胜+冲突报错"属产品决策，当前语义安全。
+- QC 门禁：未 PASS 的候选 select 被正确拒绝（"只有 QC PASS 的候选视频才能被选中"）。
+
+### L03 恢复（通过）
+
+- Redis 重启恢复：Run 13 三候选已提交 ComfyUI 后重启 fusion-redis，消费端轮询存活，run 自动恢复至 QC_PENDING，三候选 ffprobe 均 5.0625s。
+- ComfyUI 宕机：Run 10/11 在 ComfyUI 进程崩溃时同步失败并给出明确原因（进程经 sage 启动器重启后恢复）。
+- 语义说明：Redis 用于任务分发；若重启发生在分发前且未开持久化，队列消息会丢失——此时由 2 小时滞留回收器兜底标记失败，生产运行可经 reconcile 手动重试。Redis 持久化配置（AOF/RDB）建议在部署文档中固化。
