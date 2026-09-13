@@ -86,6 +86,9 @@ public class UpdateStoryboardItemVideoToolExecutor implements ToolExecutor {
             if (itemId == null) {
                 return errorResult("缺少 storyboardItemId");
             }
+            if (params.containsKey("selectedTakeId")) {
+                return errorResult("selectedTakeId 仅允许由 Production 选择接口更新");
+            }
 
             StoryboardItem item = accessGuard.requireStoryboardItem(itemId, context.getUserId());
 

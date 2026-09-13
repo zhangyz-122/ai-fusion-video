@@ -75,6 +75,9 @@ public class StoryboardItem extends BaseEntity {
     /** AI生成的视频URL */
     private String generatedVideoUrl;
 
+    /** Production 层唯一选中的视频 Take ID；为空时保留 Legacy 字段解析行为 */
+    private Long selectedTakeId;
+
     /** AI生成视频时使用的提示词（保存以便复用和手动调整） */
     private String videoPrompt;
 

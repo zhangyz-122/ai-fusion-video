@@ -85,6 +85,9 @@ public class UpdateStoryboardItemToolExecutor implements ToolExecutor {
             Long itemId = params.getLong("storyboardItemId");
             if (itemId == null) return error("缺少 storyboardItemId");
             if (params.size() == 1) return error("至少提供一个需要更新的字段");
+            if (params.containsKey("selectedTakeId")) {
+                return error("selectedTakeId 仅允许由 Production 选择接口更新");
+            }
 
             StoryboardItem existing = storyboardService.getItemById(itemId);
             Storyboard storyboard = storyboardService.getById(existing.getStoryboardId());

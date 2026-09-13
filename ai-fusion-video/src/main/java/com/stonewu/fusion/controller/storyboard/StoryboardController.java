@@ -71,6 +71,12 @@ public class StoryboardController {
         return CommonResult.success(true);
     }
 
+    @Operation(summary = "使用剧本原文兜底生成分镜结构")
+    @PostMapping("/{id}/fallback-generate")
+    public CommonResult<StoryboardStatistics> fallbackGenerate(@PathVariable Long id) {
+        return CommonResult.success(storyboardService.fallbackGenerateFromScript(id));
+    }
+
     @Operation(summary = "获取分镜概览统计")
     @GetMapping("/{storyboardId}/statistics")
     public CommonResult<StoryboardStatistics> getStatistics(@PathVariable Long storyboardId) {

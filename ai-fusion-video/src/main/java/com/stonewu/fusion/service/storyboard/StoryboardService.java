@@ -8,19 +8,21 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
+import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.script.ScriptMapper;
+import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardItemMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardSceneMapper;
 import com.stonewu.fusion.service.storyboard.dto.StoryboardItemAssetsPatch;
 import com.stonewu.fusion.service.storyboard.dto.StoryboardStatistics;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -28,12 +30,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.math.BigDecimal;
+import java.util.Objects;
 
 /**
  * 分镜脚本服务（含分镜集、分镜场次、分镜条目管理）
  */
 @Service
-@RequiredArgsConstructor
 public class StoryboardService {
 
     private static final String[] IGNORE_FIELDS = {
@@ -47,6 +50,37 @@ public class StoryboardService {
     private final StoryboardItemMapper itemMapper;
     private final ScriptMapper scriptMapper;
     private final ScriptEpisodeMapper scriptEpisodeMapper;
+    private final ScriptSceneItemMapper scriptSceneItemMapper;
+
+    @Autowired
+    public StoryboardService(
+            StoryboardMapper storyboardMapper,
+            StoryboardEpisodeMapper episodeMapper,
+            StoryboardSceneMapper sceneMapper,
+            StoryboardItemMapper itemMapper,
+            ScriptMapper scriptMapper,
+            ScriptEpisodeMapper scriptEpisodeMapper,
+            ScriptSceneItemMapper scriptSceneItemMapper) {
+        this.storyboardMapper = storyboardMapper;
+        this.episodeMapper = episodeMapper;
+        this.sceneMapper = sceneMapper;
+        this.itemMapper = itemMapper;
+        this.scriptMapper = scriptMapper;
+        this.scriptEpisodeMapper = scriptEpisodeMapper;
+        this.scriptSceneItemMapper = scriptSceneItemMapper;
+    }
+
+    /** Backward-compatible constructor used by existing unit tests. */
+    public StoryboardService(
+            StoryboardMapper storyboardMapper,
+            StoryboardEpisodeMapper episodeMapper,
+            StoryboardSceneMapper sceneMapper,
+            StoryboardItemMapper itemMapper,
+            ScriptMapper scriptMapper,
+            ScriptEpisodeMapper scriptEpisodeMapper) {
+        this(storyboardMapper, episodeMapper, sceneMapper, itemMapper,
+                scriptMapper, scriptEpisodeMapper, null);
+    }
 
     // ========== 分镜脚本 ==========
 
@@ -108,6 +142,98 @@ public class StoryboardService {
         long itemCount = itemMapper.selectCount(new LambdaQueryWrapper<StoryboardItem>()
                 .eq(StoryboardItem::getStoryboardId, storyboardId));
         return new StoryboardStatistics(episodeCount, sceneCount, itemCount);
+    }
+
+    /**
+     * 本地模型未调用分镜写入工具时的确定性兜底生成。
+     * 每个剧本场次至少生成一个可编辑镜头，所有画面描述均来自剧本原文。
+     */
+    @CacheEvict(value = {
+            "storyboard", "storyboardEpisode", "storyboardScene",
+            "storyboardItem", "storyboardStatistics"
+    }, allEntries = true, beforeInvocation = true)
+    @Transactional
+    public StoryboardStatistics fallbackGenerateFromScript(Long storyboardId) {
+        Storyboard storyboard = getById(storyboardId);
+        if (storyboard.getScriptId() == null) {
+            throw new BusinessException("分镜尚未关联剧本");
+        }
+        List<ScriptEpisode> scriptEpisodes = scriptEpisodeMapper.selectList(
+                new LambdaQueryWrapper<ScriptEpisode>()
+                        .eq(ScriptEpisode::getScriptId, storyboard.getScriptId())
+                        .orderByAsc(ScriptEpisode::getSortOrder)
+                        .orderByAsc(ScriptEpisode::getEpisodeNumber));
+        if (scriptEpisodes.isEmpty()) {
+            throw new BusinessException("剧本尚未生成结构化分集");
+        }
+
+        for (ScriptEpisode scriptEpisode : scriptEpisodes) {
+            StoryboardEpisode storyboardEpisode = saveEpisodeForScript(
+                    storyboardId,
+                    scriptEpisode.getId(),
+                    scriptEpisode.getEpisodeNumber(),
+                    scriptEpisode.getTitle(),
+                    scriptEpisode.getSynopsis());
+            List<StoryboardScene> existingScenes = sceneMapper.selectList(
+                    new LambdaQueryWrapper<StoryboardScene>()
+                            .eq(StoryboardScene::getEpisodeId, storyboardEpisode.getId()));
+            if (!existingScenes.isEmpty()) {
+                continue;
+            }
+
+            List<ScriptSceneItem> scriptScenes = scriptSceneItemMapper.selectList(
+                    new LambdaQueryWrapper<ScriptSceneItem>()
+                            .eq(ScriptSceneItem::getEpisodeId, scriptEpisode.getId())
+                            .orderByAsc(ScriptSceneItem::getSortOrder));
+            int fallbackIndex = 0;
+            for (ScriptSceneItem scriptScene : scriptScenes) {
+                String content = scriptScene.getSceneDescription();
+                if (content == null || content.isBlank()) {
+                    content = scriptScene.getSceneHeading();
+                }
+                if (content == null || content.isBlank()) {
+                    content = "根据剧本场次生成的基础镜头";
+                }
+                StoryboardScene scene = StoryboardScene.builder()
+                        .episodeId(storyboardEpisode.getId())
+                        .storyboardId(storyboardId)
+                        .sceneNumber(scriptScene.getSceneNumber())
+                        .sceneHeading(scriptScene.getSceneHeading())
+                        .location(scriptScene.getLocation())
+                        .timeOfDay(scriptScene.getTimeOfDay())
+                        .intExt(scriptScene.getIntExt())
+                        .sortOrder(fallbackIndex)
+                        .status(1)
+                        .build();
+                StoryboardItem item = StoryboardItem.builder()
+                        .sortOrder(0)
+                        .shotNumber("1")
+                        .shotType("中景")
+                        .duration(BigDecimal.valueOf(5))
+                        .content(content.trim())
+                        .sceneExpectation(content.trim())
+                        .cameraMovement("固定")
+                        .cameraAngle("平视")
+                        .transition("切")
+                        .aiGenerated(true)
+                        .status(1)
+                        .build();
+                createSceneWithItems(scene, List.of(item));
+                fallbackIndex++;
+            }
+        }
+
+        Storyboard update = new Storyboard();
+        update.setId(storyboardId);
+        update.setStatus(1);
+        storyboardMapper.updateById(update);
+        return new StoryboardStatistics(
+                episodeMapper.selectCount(new LambdaQueryWrapper<StoryboardEpisode>()
+                        .eq(StoryboardEpisode::getStoryboardId, storyboardId)),
+                sceneMapper.selectCount(new LambdaQueryWrapper<StoryboardScene>()
+                        .eq(StoryboardScene::getStoryboardId, storyboardId)),
+                itemMapper.selectCount(new LambdaQueryWrapper<StoryboardItem>()
+                        .eq(StoryboardItem::getStoryboardId, storyboardId)));
     }
 
     // ========== 分镜集 ==========
@@ -444,9 +570,28 @@ public class StoryboardService {
     @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardItem updateItem(StoryboardItem item) {
-        getItemById(item.getId());
+        StoryboardItem existing = getItemById(item.getId());
+        guardProductionOwnedFields(item, existing);
         itemMapper.updateById(item);
         return itemMapper.selectById(item.getId());
+    }
+
+    /**
+     * 保护由 Production 流程独占的字段。
+     *
+     * <p>普通 Storyboard CRUD 使用 null 表示“未提交该字段”，因此会继承数据库中的值；
+     * 如果调用方确实提交了不同的 selectedTakeId，则显式拒绝，避免 stale entity 或未来新增
+     * 的入口绕过 ProductionRunService.selectTake。</p>
+     */
+    public void guardProductionOwnedFields(StoryboardItem incoming, StoryboardItem existing) {
+        if (incoming == null || existing == null) {
+            return;
+        }
+        if (incoming.getSelectedTakeId() != null
+                && !Objects.equals(incoming.getSelectedTakeId(), existing.getSelectedTakeId())) {
+            throw new BusinessException("selectedTakeId 仅允许由 Production 选择接口更新");
+        }
+        incoming.setSelectedTakeId(existing.getSelectedTakeId());
     }
 
     /**

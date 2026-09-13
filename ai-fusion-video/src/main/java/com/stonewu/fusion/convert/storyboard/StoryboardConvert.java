@@ -72,6 +72,7 @@ public interface StoryboardConvert {
     @Mapping(target = "aiGenerated", ignore = true)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "status", ignore = true)
+    @Mapping(target = "selectedTakeId", ignore = true)
     StoryboardItem convert(StoryboardItemCreateReqVO reqVO);
 
     @Mapping(target = "aiGenerated", ignore = true)
@@ -79,6 +80,7 @@ public interface StoryboardConvert {
     @Mapping(target = "characterIds", ignore = true)
     @Mapping(target = "sceneAssetItemId", ignore = true)
     @Mapping(target = "propIds", ignore = true)
+    @Mapping(target = "selectedTakeId", ignore = true)
     StoryboardItem convert(StoryboardItemUpdateReqVO reqVO);
 
     List<StoryboardItem> convertCreateList(List<StoryboardItemCreateReqVO> list);

@@ -353,4 +353,34 @@ class StoryboardServiceTests {
                 .doesNotContain("scene_asset_item_id", "prop_ids");
         assertThat(update.getParamNameValuePairs().values()).contains("[7,8]");
     }
+
+    @Test
+    void ordinaryUpdatePreservesSelectedTakeAndRejectsDifferentProductionSelection() {
+        StoryboardItem existing = StoryboardItem.builder()
+                .id(51L)
+                .selectedTakeId(701L)
+                .build();
+        when(itemMapper.selectById(51L)).thenReturn(existing, null, existing);
+
+        StoryboardItem patch = StoryboardItem.builder()
+                .id(51L)
+                .videoPrompt("new prompt")
+                .build();
+        StoryboardItem saved = storyboardService.updateItem(patch);
+
+        assertThat(patch.getSelectedTakeId()).isEqualTo(701L);
+        assertThat(saved).isNull();
+        verify(itemMapper).updateById(patch);
+
+        StoryboardItem conflictingPatch = StoryboardItem.builder()
+                .id(51L)
+                .selectedTakeId(702L)
+                .videoPrompt("stale update")
+                .build();
+
+        assertThatThrownBy(() -> storyboardService.updateItem(conflictingPatch))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("selectedTakeId 仅允许由 Production 选择接口更新");
+        verify(itemMapper, never()).updateById(conflictingPatch);
+    }
 }

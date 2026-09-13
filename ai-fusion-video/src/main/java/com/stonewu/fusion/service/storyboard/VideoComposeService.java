@@ -3,11 +3,16 @@ package com.stonewu.fusion.service.storyboard;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.storage.StorageConfig;
+import com.stonewu.fusion.entity.generation.VideoItem;
+import com.stonewu.fusion.entity.production.ProductionTake;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
+import com.stonewu.fusion.mapper.generation.VideoItemMapper;
+import com.stonewu.fusion.mapper.production.ProductionTakeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.task.TaskStreamService;
@@ -70,6 +75,8 @@ public class VideoComposeService {
     private final StorageConfigService storageConfigService;
     private final TaskStreamService taskStreamService;
     private final Executor videoComposeExecutor;
+    private final ProductionTakeMapper productionTakeMapper;
+    private final VideoItemMapper videoItemMapper;
 
     @Value("${app.storage.local-base-path:./data/media}")
     private String mediaLocalPath;
@@ -86,18 +93,36 @@ public class VideoComposeService {
     @Value("${video.compose.ffprobe-path:ffprobe}")
     private String ffprobePath;
 
+    @Autowired
     public VideoComposeService(StoryboardService storyboardService,
                                StoryboardEpisodeMapper episodeMapper,
                                MediaStorageService mediaStorageService,
                                StorageConfigService storageConfigService,
                                TaskStreamService taskStreamService,
-                               @Qualifier("videoComposeExecutor") Executor videoComposeExecutor) {
+                               @Qualifier("videoComposeExecutor") Executor videoComposeExecutor,
+                               ProductionTakeMapper productionTakeMapper,
+                               VideoItemMapper videoItemMapper) {
         this.storyboardService = storyboardService;
         this.episodeMapper = episodeMapper;
         this.mediaStorageService = mediaStorageService;
         this.storageConfigService = storageConfigService;
         this.taskStreamService = taskStreamService;
         this.videoComposeExecutor = videoComposeExecutor;
+        this.productionTakeMapper = productionTakeMapper;
+        this.videoItemMapper = videoItemMapper;
+    }
+
+    /**
+     * 保留旧测试和旧调用方使用的构造方式；生产 Spring Bean 使用完整依赖构造器。
+     */
+    public VideoComposeService(StoryboardService storyboardService,
+                               StoryboardEpisodeMapper episodeMapper,
+                               MediaStorageService mediaStorageService,
+                               StorageConfigService storageConfigService,
+                               TaskStreamService taskStreamService,
+                               @Qualifier("videoComposeExecutor") Executor videoComposeExecutor) {
+        this(storyboardService, episodeMapper, mediaStorageService, storageConfigService,
+                taskStreamService, videoComposeExecutor, null, null);
     }
 
     /**
@@ -251,15 +276,35 @@ public class VideoComposeService {
             List<StoryboardItem> items = new ArrayList<>(storyboardService.listItemsByScene(scene.getId()));
             items.sort(Comparator.comparing(i -> Optional.ofNullable(i.getSortOrder()).orElse(0)));
             for (StoryboardItem item : items) {
-                String url = StringUtils.hasText(item.getVideoUrl())
-                        ? item.getVideoUrl()
-                        : item.getGeneratedVideoUrl();
+                String url = resolveVideoUrl(item);
                 if (StringUtils.hasText(url)) {
                     urls.add(url);
                 }
             }
         }
         return urls;
+    }
+
+    /**
+     * Production 选择结果优先；没有 Production 选择时保留 Legacy 字段行为。
+     */
+    private String resolveVideoUrl(StoryboardItem item) {
+        if (item.getSelectedTakeId() != null) {
+            if (productionTakeMapper == null || videoItemMapper == null) {
+                throw new BusinessException("Production 选择结果无法解析：合成服务缺少候选视频依赖");
+            }
+            ProductionTake take = productionTakeMapper.selectById(item.getSelectedTakeId());
+            if (take == null || !item.getId().equals(take.getStoryboardItemId())) {
+                throw new BusinessException("分镜条目选中的候选视频不存在: " + item.getSelectedTakeId());
+            }
+            VideoItem videoItem = videoItemMapper.selectById(take.getVideoItemId());
+            if (videoItem == null || !Integer.valueOf(1).equals(videoItem.getStatus())
+                    || !StringUtils.hasText(videoItem.getVideoUrl())) {
+                throw new BusinessException("分镜条目选中的候选视频尚未准备完成: " + item.getSelectedTakeId());
+            }
+            return videoItem.getVideoUrl();
+        }
+        return StringUtils.hasText(item.getVideoUrl()) ? item.getVideoUrl() : item.getGeneratedVideoUrl();
     }
 
     private boolean runFfmpegConcatDemuxer(Path listFile, Path output) throws Exception {

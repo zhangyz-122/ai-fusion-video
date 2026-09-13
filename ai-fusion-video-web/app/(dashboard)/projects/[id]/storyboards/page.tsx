@@ -44,6 +44,7 @@ import {
   StoryboardFrameReferenceDialog,
   buildDefaultBatchFramePrompt,
 } from "./_components/storyboard-frame-reference-dialog";
+import { ProductionTakeDrawer } from "./_components/production-take-drawer";
 import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
 import { assetApi } from "@/lib/api/asset";
 import { useProject } from "../project-context";
@@ -140,6 +141,7 @@ export default function StoryboardTabPage() {
     );
   }, []);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [productionItem, setProductionItem] = useState<StoryboardItem | null>(null);
   const [frameDialogItemId, setFrameDialogItemId] = useState<number | null>(null);
   const [frameDialogInitialType, setFrameDialogInitialType] =
     useState<StoryboardFrameType>("first");
@@ -291,8 +293,26 @@ export default function StoryboardTabPage() {
             storyboardId: storyboard.id,
           },
         },
-        onComplete: () => {
-          loadStoryboard();
+        onComplete: async () => {
+          // DONE 只代表模型结束输出；必须确认数据库已经产生分镜内容。
+          let fallbackError = "";
+          try {
+            await storyboardApi.fallbackGenerate(storyboard.id);
+          } catch (error) {
+            fallbackError = error instanceof Error ? error.message : String(error);
+          }
+          const statistics = await storyboardApi.getStatistics(storyboard.id);
+          if (
+            statistics.episodeCount === 0 ||
+            statistics.sceneCount === 0 ||
+            statistics.itemCount === 0
+          ) {
+            throw new Error(
+              fallbackError ||
+                `分镜仍为空（分集 ${statistics.episodeCount}，场次 ${statistics.sceneCount}，镜头 ${statistics.itemCount}）`,
+            );
+          }
+          await loadStoryboard();
         },
       });
 
@@ -1015,27 +1035,32 @@ export default function StoryboardTabPage() {
   /** 单个镜头生成视频 */
   const handleVideoGen = useCallback(
     (itemId: number) => {
-      if (!storyboard) return;
-      const addPipeline = usePipelineStore.getState().addPipeline;
-      const setNotificationOpen =
-        usePipelineStore.getState().setNotificationOpen;
+      const item = sceneGroups
+        .flatMap((group) => group.items)
+        .find((candidate) => candidate.id === itemId);
+      if (!item) return;
+      setSelectedItemId(item.id);
+      setProductionItem(item);
+    },
+    [sceneGroups]
+  );
 
-      addPipeline({
-        label: `生成视频 (镜头 #${itemId})`,
+  const handleProductionComposeSubmitted = useCallback(
+    (taskId: string) => {
+      if (!productionItem) return;
+      const shotLabel = productionItem.shotNumber || productionItem.autoShotNumber || productionItem.id;
+      setNotificationOpen(true);
+      attachTaskStream({
+        label: `合成镜头 ${shotLabel} 所在分集`,
         projectId,
-        request: {
-          agentType: "storyboard_video_gen",
-          toolExecutionMode: "FULL_ACCESS",
-          projectId,
-          context: {
-            selectedStoryboardItemIds: [itemId],
-            storyboardId: storyboard.id,
-          },
+        taskId,
+        cancellable: false,
+        onSettled: () => {
+          void refreshCurrentEpisode();
         },
       });
-      setNotificationOpen(true);
     },
-    [projectId, storyboard]
+    [attachTaskStream, projectId, productionItem, refreshCurrentEpisode, setNotificationOpen]
   );
 
   // ========== 渲染 ==========
@@ -1453,12 +1478,21 @@ export default function StoryboardTabPage() {
       />
       </motion.div>
 
-      <VideoPreviewDialog
-        open={!!composedPreviewUrl}
-        title="本集合成视频"
-        videoUrl={composedPreviewUrl}
-        onClose={() => setComposedPreviewUrl(null)}
-      />
+        <VideoPreviewDialog
+          open={!!composedPreviewUrl}
+          title="本集合成视频"
+          videoUrl={composedPreviewUrl}
+          onClose={() => setComposedPreviewUrl(null)}
+        />
+
+        <ProductionTakeDrawer
+          open={!!productionItem}
+          item={productionItem}
+          onOpenChange={(open) => {
+            if (!open) setProductionItem(null);
+          }}
+          onComposeSubmitted={handleProductionComposeSubmitted}
+        />
 
       <StoryboardFrameReferenceDialog
         key={`${frameDialogItemId ?? "closed"}-${frameDialogInitialType}`}

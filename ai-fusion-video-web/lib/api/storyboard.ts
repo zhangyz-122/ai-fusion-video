@@ -81,6 +81,7 @@ export interface StoryboardItem {
   firstFramePrompt: string | null;
   lastFramePrompt: string | null;
   generatedVideoUrl: string | null;
+  selectedTakeId: number | null;
   videoPrompt: string | null;
   shotType: string | null;
   duration: number | null;
@@ -247,6 +248,10 @@ export const storyboardApi = {
   /** 清空分镜内部的分集、场次与镜头 */
   clearContent: (id: number) =>
     http.post<never, boolean>(`/api/storyboard/${id}/clearContent`),
+
+  /** 本地模型未落库时，按剧本场次兜底生成可编辑分镜结构 */
+  fallbackGenerate: (id: number) =>
+    http.post<never, StoryboardStatistics>(`/api/storyboard/${id}/fallback-generate`),
 
   /** 获取分镜概览统计 */
   getStatistics: (storyboardId: number) =>

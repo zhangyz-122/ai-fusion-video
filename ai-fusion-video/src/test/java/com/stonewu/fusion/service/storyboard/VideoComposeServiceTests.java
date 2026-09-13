@@ -2,8 +2,13 @@ package com.stonewu.fusion.service.storyboard;
 
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.entity.storage.StorageConfig;
+import com.stonewu.fusion.entity.generation.VideoItem;
+import com.stonewu.fusion.entity.production.ProductionTake;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
+import com.stonewu.fusion.entity.storyboard.StoryboardItem;
+import com.stonewu.fusion.mapper.generation.VideoItemMapper;
+import com.stonewu.fusion.mapper.production.ProductionTakeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
@@ -52,6 +57,12 @@ class VideoComposeServiceTests {
     @Mock
     private Executor videoComposeExecutor;
 
+    @Mock
+    private ProductionTakeMapper productionTakeMapper;
+
+    @Mock
+    private VideoItemMapper videoItemMapper;
+
     private VideoComposeService videoComposeService;
 
     @BeforeEach
@@ -62,7 +73,9 @@ class VideoComposeServiceTests {
                 mediaStorageService,
                 storageConfigService,
                 taskStreamService,
-                videoComposeExecutor
+                videoComposeExecutor,
+                productionTakeMapper,
+                videoItemMapper
         );
         ReflectionTestUtils.setField(videoComposeService, "mediaLocalPath", "D:/media-root");
         ReflectionTestUtils.setField(videoComposeService, "allowedHostsConfig", "");
@@ -139,6 +152,28 @@ class VideoComposeServiceTests {
         assertThat(captor.getValue().getComposedVideoUrl()).isNull();
         assertThat(captor.getValue().getComposedAt()).isNull();
         verify(taskStreamService).fail("task-1", "合成队列繁忙，请稍后重试");
+    }
+
+    @Test
+    void selectedProductionTakeOverridesLegacyVideoUrl() throws Throwable {
+        when(productionTakeMapper.selectById(900L)).thenReturn(ProductionTake.builder()
+                .id(900L)
+                .storyboardItemId(201L)
+                .videoItemId(901L)
+                .build());
+        when(videoItemMapper.selectById(901L)).thenReturn(VideoItem.builder()
+                .id(901L)
+                .status(1)
+                .videoUrl("/media/videos/selected-take.mp4")
+                .build());
+
+        Object resolved = invokePrivate("resolveVideoUrl", StoryboardItem.builder()
+                .id(201L)
+                .selectedTakeId(900L)
+                .videoUrl("/media/videos/legacy.mp4")
+                .build());
+
+        assertThat(resolved).isEqualTo("/media/videos/selected-take.mp4");
     }
 
     @Test

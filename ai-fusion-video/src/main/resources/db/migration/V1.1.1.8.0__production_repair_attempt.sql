@@ -1,0 +1,20 @@
+CREATE TABLE `afv_production_repair_attempt` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `run_id` bigint NOT NULL COMMENT '生产运行标识',
+  `source_step_id` bigint NOT NULL COMMENT '产生失败的父步骤标识',
+  `parent_attempt_id` bigint DEFAULT NULL COMMENT '上一条修复尝试标识',
+  `attempt_no` int NOT NULL COMMENT '本次修复尝试序号',
+  `route` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '修复路由',
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '修复计划状态',
+  `failure_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '失败编码',
+  `reason` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '可解释原因',
+  `retry_budget` int NOT NULL DEFAULT 0 COMMENT '允许的最大重试次数',
+  `idempotency_key` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '修复计划幂等键',
+  `deleted` tinyint NOT NULL DEFAULT 0 COMMENT '逻辑删除标志',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_production_repair_idempotency` (`run_id`, `idempotency_key`),
+  KEY `idx_production_repair_run` (`run_id`, `attempt_no`),
+  KEY `idx_production_repair_step` (`source_step_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Production 修复路由与重试谱系';

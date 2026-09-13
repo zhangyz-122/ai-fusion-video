@@ -1,0 +1,16 @@
+{
+  "streams": [
+    {
+      "codec_type": "video",
+      "codec_name": "h264",
+      "width": 736,
+      "height": 416,
+      "pix_fmt": "yuv420p",
+      "avg_frame_rate": "24/1"
+    }
+  ],
+  "format": {
+    "format_name": "mp4",
+    "duration": "1.625000"
+  }
+}
