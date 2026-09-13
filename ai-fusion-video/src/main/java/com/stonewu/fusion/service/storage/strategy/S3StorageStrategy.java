@@ -44,7 +44,9 @@ public class S3StorageStrategy implements StorageStrategy {
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(120, TimeUnit.SECONDS)
-            .followRedirects(true)
+            // SSRF 防护：关闭自动跟随重定向，首跳已由 MediaStorageService 校验公网地址
+            .followRedirects(false)
+            .followSslRedirects(false)
             .build();
 
     @Override

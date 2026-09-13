@@ -2,12 +2,13 @@ package com.stonewu.fusion.service.storage.strategy;
 
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.storage.StorageConfig;
+import com.stonewu.fusion.security.http.SafeHttpDownloader;
 import com.stonewu.fusion.service.storage.StorageStrategy;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -35,7 +36,6 @@ public class LocalStorageStrategy implements StorageStrategy {
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(60, TimeUnit.SECONDS)
-            .followRedirects(true)
             .build();
 
     @Override
@@ -47,27 +47,30 @@ public class LocalStorageStrategy implements StorageStrategy {
     public String store(String remoteUrl, String subDir, StorageConfig config) {
         String basePath = resolveBasePath(config);
 
-        Request request = new Request.Builder().url(remoteUrl).build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new RuntimeException("下载文件失败: HTTP " + response.code() + " url=" + remoteUrl);
-            }
+        try {
+            return SafeHttpDownloader.fetch(httpClient, remoteUrl, "远程文件 URL",
+                    url -> new Request.Builder().url(url).get().build(),
+                    response -> {
+                        if (!response.isSuccessful() || response.body() == null) {
+                            throw new BusinessException(502,
+                                    "下载文件失败: HTTP " + response.code() + " url=" + remoteUrl);
+                        }
+                        String extension = guessExtension(remoteUrl, response.header("Content-Type"));
+                        String filename = IdUtil.fastSimpleUUID() + "." + extension;
 
-            String extension = guessExtension(remoteUrl, response.header("Content-Type"));
-            String filename = IdUtil.fastSimpleUUID() + "." + extension;
+                        Path dir = Paths.get(basePath, subDir);
+                        Files.createDirectories(dir);
+                        Path target = dir.resolve(filename);
 
-            Path dir = Paths.get(basePath, subDir);
-            Files.createDirectories(dir);
-            Path target = dir.resolve(filename);
+                        try (InputStream is = response.body().byteStream()) {
+                            Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
+                        }
 
-            try (InputStream is = response.body().byteStream()) {
-                Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
-            }
+                        long fileSize = Files.size(target);
+                        log.info("[LocalStorage] 文件已保存: {} ({} bytes)", target, fileSize);
 
-            long fileSize = Files.size(target);
-            log.info("[LocalStorage] 文件已保存: {} ({} bytes)", target, fileSize);
-
-            return URL_PREFIX + "/" + subDir + "/" + filename;
+                        return URL_PREFIX + "/" + subDir + "/" + filename;
+                    });
         } catch (IOException e) {
             throw new RuntimeException("本地存储文件失败: " + e.getMessage(), e);
         }

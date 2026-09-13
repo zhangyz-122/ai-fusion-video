@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.comfyui;
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.security.http.SafeHttpDownloader;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiNativeClient;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiUploadResult;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
@@ -33,6 +34,9 @@ public class ComfyUiInputResourceService {
     private final OkHttpClient baseClient = new OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(2, TimeUnit.MINUTES)
+            // SSRF 防护：关闭自动跟随重定向，避免首跳校验后 302 跳向内网（红队 S-1/S-3）
+            .followRedirects(false)
+            .followSslRedirects(false)
             .build();
 
     public ComfyUiInputResourceService(ComfyUiNativeClient nativeClient) {
@@ -124,6 +128,8 @@ public class ComfyUiInputResourceService {
     }
 
     private ImageBytes downloadHttp(ApiConfig apiConfig, String value) {
+        // SSRF 防护：入口处强制校验公网地址（红队 S-3 旁路 A）
+        SafeHttpDownloader.requirePublicUrl(value, "ComfyUI 图片 URL");
         URI uri;
         try {
             uri = URI.create(value);
@@ -198,6 +204,8 @@ public class ComfyUiInputResourceService {
     }
 
     private MediaBytes downloadVideoHttp(ApiConfig apiConfig, String value) {
+        // SSRF 防护：入口处强制校验公网地址（红队 S-3 旁路 A）
+        SafeHttpDownloader.requirePublicUrl(value, "ComfyUI 视频 URL");
         URI uri;
         try {
             uri = URI.create(value);

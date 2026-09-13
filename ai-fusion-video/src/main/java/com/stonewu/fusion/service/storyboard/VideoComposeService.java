@@ -12,6 +12,7 @@ import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.generation.VideoItemMapper;
 import com.stonewu.fusion.mapper.production.ProductionTakeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
+import com.stonewu.fusion.security.http.PublicHttpUrlValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
@@ -29,7 +30,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.IDN;
 import java.net.HttpURLConnection;
-import java.net.InetAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -652,15 +652,10 @@ public class VideoComposeService {
             return;
         }
 
-        InetAddress[] addresses = InetAddress.getAllByName(normalizedHost);
-        for (InetAddress address : addresses) {
-            if (address.isAnyLocalAddress()
-                    || address.isLoopbackAddress()
-                    || address.isLinkLocalAddress()
-                    || address.isSiteLocalAddress()
-                    || address.isMulticastAddress()) {
-                throw new IOException("拒绝访问内网或本地地址: " + normalizedHost);
-            }
+        // 统一使用 PublicHttpUrlValidator（红队 S-4：旧内网判定放行 fd00::/8 ULA、
+        // IPv4-compatible IPv6 与 6to4/NAT64 隧道地址），与其它出站链路保持同一套规则
+        if (!PublicHttpUrlValidator.isAllowedPublicHttpUrl(uri.toString())) {
+            throw new IOException("拒绝访问内网或本地地址: " + normalizedHost);
         }
     }
 
