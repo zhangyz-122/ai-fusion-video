@@ -42,7 +42,13 @@
 3. **批次 C(待 SW-T05 合并后)**:#3 asset-detail-sheet、#1、#2(同属 storyboards 页面族,一次冲刺内顺序完成)、#4。
 4. 每批次完成更新本文清单行数;目标:前端 >1000 行文件数归零,Java main >700 行文件数减半。
 
-## 架构守护(配套,见 BACKLOG SW-T14)
+## 架构守护(配套,见 BACKLOG SW-T14)——R2 已落地
 
-- CI 增加`行数预算`检查:前端 >1000 行 fail,500–1000 行新文件 warn;Java main >700 行 warn。
-- ArchUnit(或等价)固化 ARCHITECTURE.md 依赖规则:controller 不触 mapper、run↔agentscope 单向、策略互不依赖。
+- 守护测试已实现并可运行(2026-09-14,Architect R2):
+  - 后端 `ai-fusion-video/src/test/java/com/stonewu/fusion/arch/BackendArchitectureGuardTests.java`(纯源码扫描,`./mvnw -Dtest=BackendArchitectureGuardTests test`,无需 DB/Redis):
+    B1 行数预算(main ≤800,白名单钉当前值 3 文件)、R1 controller→mapper(豁免 1 边)、R2 run→agentscope 单向(豁免 61 边/26 文件,治理=SW-T17)、R3 策略互不依赖(零违例)、R4 service 类级循环(Tarjan,豁免 1 组,清零=SW-T20)。
+  - 前端 `ai-fusion-video-web/tests/architecture/line-budget.test.mjs`(`node --test "tests/architecture/*.test.mjs"`):行数预算 ≤1000,白名单钉当前值 5 文件。
+- 棘轮语义(先红后拆):白名单外新违例=红;白名单文件恶化=红;债务清零后白名单残留=红(强制收缩白名单,owner=Architect,清零期限=SW-T17~T22)。
+- 双向已验证:临时探针(827 行 controller 直查 mapper / 前端 1001 行文件)精确触发预期失败;移除后 5+1 用例全绿。
+- 观察档(不拦截):前端 500–1000 行 19 个;后端 700–800 行 4 个(StoryboardService 730、OpenAiCompatibleVideoProtocolSupport 717、VideoComposeService 709、AgentSkillImportService 703)。
+- 待办:接入 CI(建议流水线=上述两条命令;当前仓库无测试工作流)。

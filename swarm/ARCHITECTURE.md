@@ -75,11 +75,12 @@ infrastructure/queue/RedisTaskQueue(多实例安全:LPOP/RPUSH + INCR/DECR 并�
   key 前缀 fv:taskqueue:,注册表 registered_queues,默认并发 1)
 ```
 
-依赖规则(评审基线):
-1. controller 不直接访问 mapper;跨域只能走 service。
-2. `service/ai/run` 不 import AgentScope 内核类型以外的 `io.agentscope` 运行时(通过 Port/Adapter 反转);`agentscope/` 依赖 `run/`,反向禁止。
-3. 生成策略之间互不依赖;共享逻辑下沉 `strategy/support`,协议机制下沉 `provider/`。
+依赖规则(评审基线;机器守护见 BackendArchitectureGuardTests,存量违例以豁免清单棘轮管理,白名单只减不增):
+1. controller 不直接访问 mapper;跨域只能走 service。【存量豁免 1 条:TeamController→TeamMemberMapper,清零=BACKLOG SW-T18】
+2. `service/ai/run` 不 import AgentScope 内核类型以外的 `io.agentscope` 运行时(通过 Port/Adapter 反转);`agentscope/` 依赖 `run/`,反向禁止。【run→agentscope 实测 61 边/26 文件双向耦合,已逐边棘轮豁免,治理=BACKLOG SW-T17】
+3. 生成策略之间互不依赖;共享逻辑下沉 `strategy/support`,协议机制下沉 `provider/`。【守护实测零违例】
 4. production 只编排既有 VideoTask/RedisTaskQueue,禁止建第二套视频执行链(类注释明确)。
+5. service 类之间禁止循环依赖。【存量豁免 1 组:AgentScopeToolAdapter↔AgentToolPermissionPolicy,清零=SW-T20】
 
 ---
 
@@ -199,8 +200,11 @@ Step 状态机:`CREATED → SUBMITTED → SUCCEEDED | FAILED`.
 
 ## 6. 已知架构债务(详见 TECH_DEBT_PLAN)
 
-1. 前端 6 个文件超 1000 行红线(storyboard-ref-panel 1637、storyboards/page 1541、asset-detail-sheet 1465、pipeline-store 1140、notification detail 1028)。
-2. 后端 OpenAiCompatibleImageProtocolSupport 1132 行,协议机制类过大;Agent run 层 DurableAgentWaitingStateService/DefaultRunExecutionSupervisor 接近 900 行。
-3. Production 状态机用散落 String 常量,无 enum/合法迁移表。
+1. 前端 5 个文件超 1000 行红线(storyboard-ref-panel 1637、storyboards/page 1541、asset-detail-sheet 1465、pipeline-store 1140、notification detail 1028)——行数预算守护已落地(`ai-fusion-video-web/tests/architecture/line-budget.test.mjs`)。
+2. 后端 OpenAiCompatibleImageProtocolSupport 1132 行,协议机制类过大;Agent run 层 DurableAgentWaitingStateService/DefaultRunExecutionSupervisor 接近 900 行——行数预算守护已落地(`BackendArchitectureGuardTests`)。
+3. Production 状态机用散落 String 常量,无 enum/合法迁移表——设计稿 swarm/DESIGN-production-state-machine.md(SW-T16)。
 4. `AiAgentRegistry` 691 行集中注册 17 个 builtin Agent 定义,新增 Agent 单点拥挤。
 5. tool/ 子域直接写各域 service,权限模式(ToolExecutionMode)与审计散落多处。
+6. `service/ai/run`↔`service/ai/agentscope` 双向耦合:run 侧 26 文件 61 条 import 边(SW-T17;守护 R2 豁免棘轮)。
+7. 29 个 service 文件直接 import `controller/**/vo` Web 层类型(RemoteModelVO×10、AiChatStreamRespVO×4 等),第一批治理=SW-T21。
+8. StoryboardService 730 行注入 7 个 mapper,含跨 script 域直查 4 处(SW-T22);VideoComposeService 合成状态为 int 魔法值(SW-T19)。

@@ -63,6 +63,7 @@ SW-T14|P2|QA|架构守护 CI(TECH_DEBT_PLAN 配套):前端行数预算(>1000 fai
   COST: S-M(0.5-1 天)。
   RISK: 豁免清单过宽沦为摆设——清单须有 owner 与期限。
   DEPENDENCIES: SW-T07(本计划);建议在批次 A 拆分开始前落地,先红后拆。
+  NOTE(R2): Architect 已实现守护测试本体(后端 BackendArchitectureGuardTests 5 用例 + 前端 line-budget.test.mjs,豁免清单与运行方式见 TECH_DEBT_PLAN「架构守护」)。QA 剩余工作=把两条命令接进 CI 流水线,并在拆分任务合入后核对豁免收缩。
 
 SW-T15|P3|Dev-B|pipeline-store 拆分(TECH_DEBT #4):连接编排/失效广播抽独立模块,store 保留聚合门面|lib/store/pipeline-store.ts、新增 pipeline-connection.ts、pipeline-invalidation.ts|store 消费方零改动(导出签名不变);现有单测+e2e 全绿
   VALUE: SSE 重连/恢复是最脆链路,分模块后可对连接编排单独测试。
@@ -75,3 +76,40 @@ SW-T16|P3|Dev-A|Production 状态机 enum 化:RUN/STEP/QC 的 String 常量集�
   COST: S-M(0.5-1 天;注意 API 出入参仍序列化为原字符串)。
   RISK: 低;enum name 与存量 DB 值逐一核对。
   DEPENDENCIES: 无;与 SW-T08 性能扫描结论互不阻塞。
+  NOTE(R2): 设计稿已落盘 swarm/DESIGN-production-state-machine.md(现状盘点/迁移表/五步迁移/风险),实现按稿执行。
+
+SW-T17|P2|Dev-A|run↔agentscope 双向耦合治理:run 侧引用的契约类型(context/kernel 快照/调度闸门/state slot)下沉中立包,恢复 agentscope→run 单向|service/ai/run/**、service/ai/agentscope/{context,kernel,state,runtime}/**、BackendArchitectureGuardTests R2 豁免清单收缩|R2 豁免 61 边/26 文件清零(或留档"只读 DTO 子集"边数较基线减半)
+  VALUE: 全仓最大结构性耦合;守护测试已钉棘轮,每治理一条边白名单缩一条。
+  COST: L(2-3 天;26 文件触点)。
+  RISK: 共享类型双侧引用,须先定义接口契约再移实现;禁止"为移包而移包"——只下沉 run 实际引用的类型。
+  DEPENDENCIES: SW-T14(守护已落地,本条即其 R2 豁免的治理出口);与 TECH_DEBT 批次 A(run 层两巨文件拆分)同文件域,排同批或先后,避免二次冲突。
+
+SW-T18|P2|Dev-B|TeamController 直连 mapper 消除:memberCount 统计下沉 TeamService.enrich|controller/team/TeamController.java、service/team/TeamService.java+tests|BackendArchitectureGuardTests R1 豁免清零(测试仍绿)
+  VALUE: 半小时内清零守护规则 R1 唯一违例(enrichTeamVO 绕过 service 直查 TeamMemberMapper)。
+  COST: S(0.5h)。
+  RISK: 无(纯搬移,行为不变;注意 TeamService 补 @Cacheable 语义评估)。
+  DEPENDENCIES: 无;建议在守护测试进 CI 硬门禁前合入。
+
+SW-T19|P3|Dev-B|合成状态机 enum 化:VideoComposeService STATUS_IDLE/RUNNING/DONE/FAILED int 魔法值收编 enum+守卫(套路同 SW-T16 设计稿)|service/storyboard/VideoComposeService.java、entity/storyboard/StoryboardEpisode.java+tests|合成状态读写全走 enum;DB int 值与 API 行为不变;前端合成状态渲染回归绿
+  VALUE: DESIGN-production-state-machine.md §1.6 相邻发现;合成是六路径收口,显式状态机防非法状态写入。
+  COST: S(0.5 天)。
+  RISK: 低;enum 序数与存量 int 值逐一核对。
+  DEPENDENCIES: 设计参照 swarm/DESIGN-production-state-machine.md;与 SW-T16 不同状态机,互不阻塞。
+
+SW-T20|P3|Dev-A|AgentScopeToolAdapter↔AgentToolPermissionPolicy 解环:权限策略反转出接口或抽取共享上下文|service/ai/agentscope/AgentScopeToolAdapter.java、service/ai/agentscope/permission/*+tests|BackendArchitectureGuardTests R4 豁免清零
+  VALUE: 清除 service 层唯一类级循环依赖(import 图 Tarjan 实测 1 组)。
+  COST: S-M(0.5 天)。
+  RISK: 中低;注意工具注册时序对 Policy 构造的影响。
+  DEPENDENCIES: 无。
+
+SW-T21|P3|Dev-B|service 层 controller.vo 渗透治理第一批:system/dashboard 小域改自有 DTO|service/system/**、service/dashboard/**、controller/system/vo、controller/dashboard/vo|第一批 VersionInfoRespVO/VideoQueueStatusRespVO 等 4 文件渗透清零;全量渗透清单(29 文件)登记 TECH_DEBT_PLAN
+  VALUE: 29 个 service 文件直接 import web 层 VO(RemoteModelVO×10、AiChatStreamRespVO×4…),服务层与 HTTP 契约耦合;小域先行立范式。
+  COST: M(第一批 1 天;全域另计)。
+  RISK: SSE 信封 AiChatStreamRespVO 是跨层流式契约,第一批禁碰、单独评估;转换层不得引入行为差异。
+  DEPENDENCIES: 无;扩至 ai 域前需 Architect 评审。
+
+SW-T22|P3|Dev-A|StoryboardService 跨域直连 Script mapper 收拢:改经 ScriptService 读接口|service/storyboard/StoryboardService.java、service/script/ScriptService.java|script 三 mapper 直连 4 处(96/161/184/453 行)清零;跨域 mapper 规则纳入守护并留豁免清单
+  VALUE: StoryboardService 注入 7 个 mapper 跨 script 域直查,绕过缓存与校验;与其 730 行拆分峰值(TECH_DEBT_PLAN 第二梯队)同文件域,顺批处理。
+  COST: M(1 天;ScriptService 补只读方法+缓存语义)。
+  RISK: ScriptService 新增读方法需评估 @Cacheable/@CacheEvict(AGENTS.md 规则);VideoComposeService 对 productionTake/videoItem 的跨域读属 ARCHITECTURE 规则4 已认可编排,不在本条范围。
+  DEPENDENCIES: 建议与 storyboard 页面族后端收尾同批(SW-T12 前端部分之后)。
