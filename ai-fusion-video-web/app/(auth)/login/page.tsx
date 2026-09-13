@@ -205,7 +205,7 @@ function LoginContent() {
 
       {/* 底部信息 */}
       <p className="text-xs text-white/30 pt-8">
-        短剧制造平台
+        融光
       </p>
     </AuthLayout>
   );
