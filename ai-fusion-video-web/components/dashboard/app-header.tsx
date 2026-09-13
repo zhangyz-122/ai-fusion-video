@@ -10,6 +10,7 @@ import {
   Settings,
   Bell,
   Github,
+  Clapperboard,
   LogOut,
   Menu,
   X,
@@ -51,6 +52,14 @@ const menuItems = [
     iconColor: "text-orange-500",
   },
   {
+    icon: Clapperboard,
+    label: "生产中心",
+    href: "/production",
+    gradient:
+      "radial-gradient(circle, rgba(139,92,246,0.15) 0%, rgba(124,58,237,0.06) 50%, rgba(109,40,217,0) 85%, rgba(109,40,217,0) 100%)",
+    iconColor: "text-violet-500",
+  },
+  {
     icon: Wrench,
     label: "创作工作台",
     href: "/generate",
@@ -73,6 +82,7 @@ const routeToLabel: Record<string, string> = {
   "/dashboard": "仪表盘",
   "/projects": "项目",
   "/assets": "资产",
+  "/production": "生产中心",
   "/generate": "创作工作台",
   "/settings": "系统设置",
 };

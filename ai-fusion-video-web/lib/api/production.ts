@@ -90,6 +90,11 @@ export interface ProductionRunDetail {
   repairAttempts?: ProductionRepairAttempt[];
 }
 
+export interface ProductionRunPage {
+  list: ProductionRun[];
+  total: number;
+}
+
 export interface ProductionStartReq {
   storyboardItemId: number;
   idempotencyKey: string;
@@ -106,6 +111,14 @@ export interface ProductionStartReq {
 }
 
 export const productionApi = {
+  /** 当前用户的生产运行分页列表，可按状态过滤 */
+  list: (params?: { status?: ProductionRunStatus; pageNo?: number; pageSize?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status", params.status);
+    query.set("pageNo", String(params?.pageNo ?? 1));
+    query.set("pageSize", String(params?.pageSize ?? 10));
+    return http.get<never, ProductionRunPage>(`/api/production/runs?${query.toString()}`);
+  },
   start: (data: ProductionStartReq) =>
     http.post<never, ProductionRunDetail>("/api/production/runs", data),
   detail: (runId: number) =>

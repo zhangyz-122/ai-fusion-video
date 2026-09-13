@@ -1,9 +1,12 @@
 package com.stonewu.fusion.service.production;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.controller.production.vo.ProductionStartReqVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.generation.VideoItem;
@@ -227,9 +230,19 @@ public class ProductionRunService {
         return model;
     }
 
+    /**
+     * 当前用户的生产运行分页列表，可按状态过滤。
+     */
+    public PageResult<ProductionRun> list(Long userId, String status, int pageNo, int pageSize) {
+        LambdaQueryWrapper<ProductionRun> query = new LambdaQueryWrapper<ProductionRun>()
+                .eq(ProductionRun::getUserId, userId)
+                .eq(StrUtil.isNotBlank(status), ProductionRun::getStatus, status)
+                .orderByDesc(ProductionRun::getCreateTime);
+        return PageResult.of(runMapper.selectPage(new Page<>(pageNo, pageSize), query));
+    }
+
     public ProductionRunDetail detail(Long runId, Long userId) {
-        ProductionRun run = requireRun(runId, userId);
-        ProductionStep step = stepMapper.selectOne(new LambdaQueryWrapper<ProductionStep>()
+        ProductionRun run = requireRun(runId, userId);        ProductionStep step = stepMapper.selectOne(new LambdaQueryWrapper<ProductionStep>()
                 .eq(ProductionStep::getRunId, runId)
                 .eq(ProductionStep::getStepType, STEP_GENERATE_VIDEO));
         VideoTask task = step != null && step.getVideoTaskId() != null

@@ -1,11 +1,14 @@
 package com.stonewu.fusion.controller.production;
 
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.controller.production.vo.ProductionQcUpdateReqVO;
 import com.stonewu.fusion.controller.production.vo.ProductionStartReqVO;
+import com.stonewu.fusion.entity.production.ProductionRun;
 import com.stonewu.fusion.service.production.ProductionRunDetail;
 import com.stonewu.fusion.service.production.ProductionRunService;
 import com.stonewu.fusion.service.project.ProjectAccessGuard;
+import com.stonewu.fusion.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,6 +28,16 @@ public class ProductionController {
 
     private final ProductionRunService productionRunService;
     private final ProjectAccessGuard accessGuard;
+
+    @Operation(summary = "当前用户的生产运行分页列表")
+    @GetMapping("/runs")
+    public CommonResult<PageResult<ProductionRun>> list(
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "pageNo", defaultValue = "1") long pageNo,
+            @RequestParam(value = "pageSize", defaultValue = "10") long pageSize) {
+        return CommonResult.success(productionRunService.list(
+                SecurityUtils.requireCurrentUserId(), status, (int) pageNo, (int) pageSize));
+    }
 
     @Operation(summary = "启动分镜条目生产（固定生成3个候选）")
     @PostMapping("/runs")
