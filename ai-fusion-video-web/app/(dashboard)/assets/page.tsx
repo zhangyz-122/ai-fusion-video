@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { projectApi, type Project } from "@/lib/api/project";
 import { toastApiError } from "@/lib/api/toast-api-error";
-import { useAuthStore } from "@/lib/store/auth-store";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { AssetTypeCards } from "./_components/asset-type-cards";
@@ -27,12 +26,6 @@ import { UploadPanel } from "./_components/upload-panel";
 import { RecycleBinView } from "./_components/recycle-bin-view";
 import { useAssetUpload } from "./_components/use-asset-upload";
 import {
-  listDeletedAssets,
-  recordDeletedAsset,
-  removeDeletedAsset,
-  type DeletedAssetRecord,
-} from "./_components/recycle-bin-store";
-import {
   FETCH_PAGE_SIZE,
   MAX_LOADED_ASSETS,
   VIEW_MODE_STORAGE_KEY,
@@ -41,7 +34,6 @@ import {
   buildTagCloud,
   matchesKeyword,
   parseAssetTags,
-  buildRestoreReq,
 } from "./_components/utils";
 
 type PageTab = "assets" | "recycle";
@@ -66,12 +58,11 @@ export default function AssetsPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<AssetsViewMode>("grid");
 
-  // 回收站
+  // 回收站（服务端已删除资产）
   const [tab, setTab] = useState<PageTab>("assets");
-  const [binRecords, setBinRecords] = useState<DeletedAssetRecord[]>([]);
+  const [binRecords, setBinRecords] = useState<Asset[]>([]);
+  const [binLoading, setBinLoading] = useState(true);
   const [restoringId, setRestoringId] = useState<number | null>(null);
-  const user = useAuthStore((s) => s.user);
-  const userId = user?.id ?? null;
 
   // 搜索防抖
   useEffect(() => {
@@ -122,17 +113,33 @@ export default function AssetsPage() {
     }
   }, []);
 
+  // 加载回收站（已删除资产，分页循环，上限 MAX_LOADED_ASSETS）
+  const loadBin = useCallback(async () => {
+    setBinLoading(true);
+    try {
+      const collected: Asset[] = [];
+      for (let page = 1; collected.length < MAX_LOADED_ASSETS; page++) {
+        const resp = await assetApi.listRecycleBin({ page, size: FETCH_PAGE_SIZE });
+        const records = resp.records || [];
+        collected.push(...records);
+        if (records.length === 0 || collected.length >= (resp.total ?? 0)) break;
+      }
+      setBinRecords(collected);
+    } catch (error) {
+      toastApiError(error, "加载回收站失败");
+      setBinRecords([]);
+    } finally {
+      setBinLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadAssets();
   }, [loadAssets]);
 
-  const refreshBin = useCallback(() => {
-    setBinRecords(userId != null ? listDeletedAssets(userId) : []);
-  }, [userId]);
-
   useEffect(() => {
-    refreshBin();
-  }, [refreshBin]);
+    loadBin();
+  }, [loadBin]);
 
   // ===== 派生数据 =====
 
@@ -192,7 +199,7 @@ export default function AssetsPage() {
     );
   };
 
-  // 删除：确认后软删并快照进回收站
+  // 删除：确认后软删，资产进入服务端回收站
   const handleDelete = useCallback(async (asset: Asset) => {
     const ok = await confirm({
       title: "删除资产",
@@ -203,37 +210,37 @@ export default function AssetsPage() {
     if (!ok) return;
     try {
       await assetApi.delete(asset.id);
-      if (userId != null) recordDeletedAsset(userId, asset);
       toast.success(`已移入回收站「${asset.name}」`);
-      refreshBin();
-      await loadAssets();
+      await Promise.all([loadAssets(), loadBin()]);
     } catch (error) {
       toastApiError(error, "删除资产失败");
     }
-  }, [confirm, userId, refreshBin, loadAssets]);
+  }, [confirm, loadAssets, loadBin]);
 
-  // 恢复：通过创建接口重建（获得新 id）
-  const handleRestore = useCallback(async (record: DeletedAssetRecord) => {
-    setRestoringId(record.assetId);
+  // 恢复：置 deleted = 0，保留原 id 与子资产
+  const handleRestore = useCallback(async (record: Asset) => {
+    setRestoringId(record.id);
     try {
-      const created = await assetApi.create(buildRestoreReq(record.snapshot));
-      if (userId != null) removeDeletedAsset(userId, record.assetId);
-      refreshBin();
-      await loadAssets();
-      toast.success(`已恢复为资产「${created.name}」（新 id：${created.id}）`);
+      const restored = await assetApi.restoreRecycled(record.id);
+      toast.success(`已恢复「${restored.name}」`);
+      await Promise.all([loadAssets(), loadBin()]);
     } catch (error) {
       toastApiError(error, "恢复失败，请稍后重试");
     } finally {
       setRestoringId(null);
     }
-  }, [userId, refreshBin, loadAssets]);
+  }, [loadAssets, loadBin]);
 
-  // 彻底删除：仅移除本地快照（二次确认在回收站视图内完成）
-  const handlePurge = useCallback((record: DeletedAssetRecord) => {
-    if (userId != null) removeDeletedAsset(userId, record.assetId);
-    refreshBin();
-    toast.success(`已彻底删除「${record.snapshot.name}」`);
-  }, [userId, refreshBin]);
+  // 彻底删除：物理删除（二次确认在回收站视图内完成）
+  const handlePurge = useCallback(async (record: Asset) => {
+    try {
+      await assetApi.purgeRecycled(record.id);
+      toast.success(`已彻底删除「${record.name}」`);
+      await loadBin();
+    } catch (error) {
+      toastApiError(error, "彻底删除失败");
+    }
+  }, [loadBin]);
 
   return (
     <motion.div
@@ -291,9 +298,11 @@ export default function AssetsPage() {
       {tab === "recycle" ? (
         <RecycleBinView
           records={binRecords}
+          loading={binLoading}
           restoringId={restoringId}
           onRestore={(record) => void handleRestore(record)}
-          onPurge={handlePurge}
+          onPurge={(record) => void handlePurge(record)}
+          onRetry={() => void loadBin()}
         />
       ) : (
         <>

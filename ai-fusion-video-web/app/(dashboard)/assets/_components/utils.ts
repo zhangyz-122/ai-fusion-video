@@ -1,4 +1,4 @@
-import type { Asset, AssetCreateReq } from "@/lib/api/asset";
+import type { Asset } from "@/lib/api/asset";
 
 // ============================================================
 // 标签与属性解析
@@ -49,41 +49,6 @@ export function matchesKeyword(asset: Asset, keyword: string): boolean {
   if (!kw) return true;
   if (asset.name?.toLowerCase().includes(kw)) return true;
   return parseAssetTags(asset.tags).some((t) => t.toLowerCase().includes(kw));
-}
-
-/**
- * 将资产的 properties 负载规整为创建接口需要的 JSON 字符串。
- * 恢复回收站资产时使用。
- */
-export function propertiesToCreatePayload(
-  raw: Asset["properties"],
-): string | undefined {
-  if (raw == null) return undefined;
-  if (typeof raw === "string") return raw.trim() ? raw : undefined;
-  try {
-    return JSON.stringify(raw);
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * 由回收站快照构造恢复（重新创建）请求。
- * 注意：后端 AssetCreateReqVO.tags 实际为 JSON 字符串（与 asset.ts 既有
- * `tags?: string[]` 声明不一致；既有导出按约定不可修改），此处按后端真实契约序列化。
- */
-export function buildRestoreReq(snapshot: Asset): AssetCreateReq {
-  const tags = parseAssetTags(snapshot.tags);
-  const req = {
-    projectId: snapshot.projectId,
-    type: snapshot.type,
-    name: snapshot.name,
-    description: snapshot.description ?? undefined,
-    coverUrl: snapshot.coverUrl ?? undefined,
-    properties: propertiesToCreatePayload(snapshot.properties),
-    tags: tags.length ? JSON.stringify(tags) : undefined,
-  };
-  return req as AssetCreateReq;
 }
 
 // ============================================================
