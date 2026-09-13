@@ -15,6 +15,7 @@ import { toastApiError } from "@/lib/api/toast-api-error";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { GenerationAdvancedPanel } from "./generation/generation-advanced-panel";
+import { ImageStudioHeader } from "./generation/image-studio-header";
 import { GenerationAssetDialog } from "./generation/generation-asset-dialog";
 import { GenerationHistory } from "./generation/generation-history";
 import { GenerationSimpleComposer } from "./generation/generation-simple-composer";
@@ -42,6 +43,8 @@ import { useReferenceImageUploadAvailability } from "./generation/use-reference-
 interface GenerationWorkbenchProps {
   mode: WorkbenchMode;
   initialModelId?: number;
+  /** 视频主入口使用管理员配置的默认底座，避免用户在模型之间来回切换。 */
+  unified?: boolean;
 }
 
 function clean(values: string[]) {
@@ -50,9 +53,17 @@ function clean(values: string[]) {
 
 const MODE_TRANSITION_EASE = [0.25, 0.46, 0.45, 0.94] as const;
 
-export default function GenerationWorkbench({ mode, initialModelId }: GenerationWorkbenchProps) {
+function resolveUnifiedVideoModel(models: AiModel[]) {
+  return models.find((model) => model.defaultModel) ?? models[0];
+}
+
+export default function GenerationWorkbench({
+  mode,
+  initialModelId,
+  unified = false,
+}: GenerationWorkbenchProps) {
   const modelType = mode === "image" ? 2 : 3;
-  const [composerMode, setComposerMode] = useState<ComposerMode>("simple");
+  const [composerMode, setComposerMode] = useState<ComposerMode>(mode === "image" ? "advanced" : "simple");
   const [models, setModels] = useState<AiModel[]>([]);
   const [presets, setPresets] = useState<ModelPreset[]>([]);
   const [modelId, setModelId] = useState<number | undefined>();
@@ -85,7 +96,9 @@ export default function GenerationWorkbench({ mode, initialModelId }: Generation
         const enabled = modelList.filter((model) => model.status === 1);
         setModels(enabled);
         setPresets(presetList);
-        if (initialModelId !== undefined) {
+        if (unified && modelType === 3) {
+          setModelId(resolveUnifiedVideoModel(enabled)?.id);
+        } else if (initialModelId !== undefined) {
           const requested = enabled.find(model => model.id === initialModelId);
           setModelId(requested?.id);
           if (!requested) toast.error("所选模型当前不可用，请重新选择。");
@@ -105,7 +118,7 @@ export default function GenerationWorkbench({ mode, initialModelId }: Generation
     return () => {
       cancelled = true;
     };
-  }, [modelType, initialModelId]);
+  }, [modelType, initialModelId, unified]);
 
   const selectedModel = models.find((model) => model.id === modelId);
   const capabilities = useMemo(
@@ -735,7 +748,7 @@ export default function GenerationWorkbench({ mode, initialModelId }: Generation
     focusComposer();
   };
 
-  const title = mode === "image" ? "生图" : "生视频";
+  const title = mode === "image" ? "生图" : unified ? "万能导演台" : "生视频";
   const PageIcon = mode === "image" ? ImageIcon : Video;
   const advancedMode = composerMode === "advanced";
   const historyBottomInset = advancedMode ? 0 : composerHeight + 16;
@@ -743,7 +756,13 @@ export default function GenerationWorkbench({ mode, initialModelId }: Generation
   return (
     <div className="relative flex min-h-0 w-full grow basis-0 flex-col overflow-hidden pb-20 lg:pb-3">
       <div className="w-full shrink-0 px-5 lg:px-8">
-        <motion.header
+        {mode === "image" ? (
+          <ImageStudioHeader
+            modelName={selectedModel?.name}
+            advanced={advancedMode}
+            onModeChange={() => setComposerMode(advancedMode ? "simple" : "advanced")}
+          />
+        ) : <motion.header
           layout
           transition={{
             layout: reduceMotion
@@ -762,7 +781,9 @@ export default function GenerationWorkbench({ mode, initialModelId }: Generation
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {mode === "image" ? "描述想法，生成画面" : "描述场景、动作和镜头"}
+                {unified
+                    ? "一条流程集中处理角色、场景、动作、参考素材与视频输出"
+                    : "描述场景、动作和镜头"}
               </p>
             </div>
           </motion.div>
@@ -774,7 +795,7 @@ export default function GenerationWorkbench({ mode, initialModelId }: Generation
             <Settings2 className="h-3.5 w-3.5" />
             模型配置
           </motion.a>
-        </motion.header>
+        </motion.header>}
       </div>
 
       <div
@@ -827,6 +848,7 @@ export default function GenerationWorkbench({ mode, initialModelId }: Generation
                     onFormChange={updateForm}
                     onSubmit={() => void submit()}
                     onSimple={() => setComposerMode("simple")}
+                    modelLocked={unified && mode === "video"}
                     referenceImageUploadAvailability={
                       referenceImageUploadAvailability
                     }
@@ -942,6 +964,7 @@ export default function GenerationWorkbench({ mode, initialModelId }: Generation
                   }
                   submitting={submitting}
                   onModelChange={setModelId}
+                  modelLocked={unified && mode === "video"}
                   onFormChange={updateForm}
                   onAddAttachments={addSimpleAttachments}
                   onRemoveAttachment={removeSimpleAttachment}

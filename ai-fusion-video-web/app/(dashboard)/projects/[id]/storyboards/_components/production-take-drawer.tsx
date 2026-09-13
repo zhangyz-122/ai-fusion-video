@@ -28,8 +28,10 @@ import {
   productionApi,
   type ProductionQcStatus,
   type ProductionRunDetail,
+  type ShotReadiness,
 } from "@/lib/api/production";
 import type { StoryboardItem } from "@/lib/api/storyboard";
+import { useAuthStore } from "@/lib/store/auth-store";
 import {
   Select,
   SelectContent,
@@ -79,6 +81,8 @@ export function ProductionTakeDrawer({
   const [profiles, setProfiles] = useState<VideoProfileOption[]>([]);
   const [modelId, setModelId] = useState<string>("");
   const [profileId, setProfileId] = useState<string>("");
+  const [readiness, setReadiness] = useState<ShotReadiness | null>(null);
+  const isAdmin = useAuthStore((s) => s.user?.roles?.includes("admin") ?? false);
 
   useEffect(() => {
     if (!open) return;
@@ -129,6 +133,24 @@ export function ProductionTakeDrawer({
     }, 5000);
     return () => window.clearInterval(timer);
   }, [detail?.run.id, detail?.run.status, open, refresh]);
+
+  useEffect(() => {
+    if (!open || !item?.id) {
+      setReadiness(null);
+      return;
+    }
+    let active = true;
+    productionApi.readiness(item.id)
+      .then((next) => {
+        if (active) setReadiness(next);
+      })
+      .catch(() => {
+        if (active) setReadiness(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, item?.id]);
 
   const start = async () => {
     if (!item) return;
@@ -240,8 +262,17 @@ export function ProductionTakeDrawer({
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   这会创建一个可恢复的 ProductionRun，不会覆盖现有 Legacy 视频字段。
                 </p>
+                {readiness && !readiness.ready && (
+                  <ul className="space-y-1 text-xs text-amber-700 dark:text-amber-300">
+                    {readiness.blockers.map((blocker) => (
+                      <li key={blocker.code}>· {blocker.message}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="space-y-3">
+                {isAdmin && (
+                  <>
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground" htmlFor="prod-video-model">视频模型</label>
                   <Select value={modelId} onValueChange={v => setModelId(v ?? "")} items={videoModels.map(m => ({ value: String(m.id), label: m.name }))}>
@@ -273,9 +304,11 @@ export function ProductionTakeDrawer({
                     </SelectContent>
                   </Select>
                 </div>
-                <Button variant="video" className="w-full" onClick={() => void start()} disabled={loading || !item || !modelId}>
+                  </>
+                )}
+                <Button variant="video" className="w-full" onClick={() => void start()} disabled={loading || !item || !modelId || readiness?.ready === false}>
                   {loading ? <Loader2 className="animate-spin" /> : <Clapperboard />}
-                  启动三候选生产
+                  生产这一镜
                 </Button>
               </div>
             </div>

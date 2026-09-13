@@ -12,6 +12,7 @@ import {
   type AgentWorkspaceConfig,
   type AgentStateCleanupPolicy,
 } from "@/lib/api/agent-config";
+import { getAssistantReferenceOptions, type AssistantSkillReferenceOption } from "@/lib/api/ai-assistant";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { McpServersSection } from "./_components/mcp-servers-section";
@@ -32,6 +33,7 @@ export default function AgentSettingsPage() {
   const [workspace, setWorkspace] = useState<AgentWorkspaceConfig | null>(null);
   const [statePolicy, setStatePolicy] = useState<AgentStateCleanupPolicy | null>(null);
   const [skills, setSkills] = useState<AgentUserSkill[]>([]);
+  const [bundledSkills, setBundledSkills] = useState<AssistantSkillReferenceOption[]>([]);
   const [mcpServers, setMcpServers] = useState<AgentMcpServer[]>([]);
   const [storageConfigs, setStorageConfigs] = useState<StorageConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,16 +43,18 @@ export default function AgentSettingsPage() {
   }, []);
 
   const loadAll = useCallback(async () => {
-    const [workspaceConfig, cleanupPolicy, skillList, mcpList, storageList] = await Promise.all([
+    const [workspaceConfig, cleanupPolicy, skillList, mcpList, storageList, referenceOptions] = await Promise.all([
       agentConfigApi.workspace(),
       agentConfigApi.stateCleanupPolicy(),
       agentConfigApi.skills(),
       agentConfigApi.mcpServers(),
       isAdmin ? storageConfigApi.list() : Promise.resolve([]),
+      getAssistantReferenceOptions(),
     ]);
     setWorkspace(workspaceConfig);
     setStatePolicy(cleanupPolicy);
     setSkills(skillList);
+    setBundledSkills(referenceOptions.skills.filter((skill) => skill.source !== "workspace:user"));
     setMcpServers(mcpList);
     setStorageConfigs(storageList);
   }, [isAdmin]);
@@ -82,7 +86,14 @@ export default function AgentSettingsPage() {
     return () => window.clearInterval(timer);
   }, [loadWorkspace, workspace]);
 
-  const refreshSkills = useCallback(async () => setSkills(await agentConfigApi.skills()), []);
+  const refreshSkills = useCallback(async () => {
+    const [skillList, referenceOptions] = await Promise.all([
+      agentConfigApi.skills(),
+      getAssistantReferenceOptions(),
+    ]);
+    setSkills(skillList);
+    setBundledSkills(referenceOptions.skills.filter((skill) => skill.source !== "workspace:user"));
+  }, []);
   const refreshMcp = useCallback(async () => setMcpServers(await agentConfigApi.mcpServers()), []);
 
   return (
@@ -97,7 +108,7 @@ export default function AgentSettingsPage() {
         {workspace && (
           <div className="flex flex-wrap items-center gap-2" aria-label="智能体配置摘要">
             <Badge variant="outline">{WORKSPACE_LABELS[workspace.backendType]}</Badge>
-            <Badge variant="secondary">{skills.length} 个 Skill</Badge>
+            <Badge variant="secondary">{bundledSkills.length} 个内置 · {skills.length} 个自定义 Skill</Badge>
             <Badge variant="secondary">{mcpServers.length} 个 MCP</Badge>
           </div>
         )}
@@ -121,7 +132,7 @@ export default function AgentSettingsPage() {
             onSaved={setStatePolicy}
           />
           <div className="grid items-start gap-6 xl:grid-cols-2">
-            <SkillsSection skills={skills} onRefresh={refreshSkills} />
+            <SkillsSection skills={skills} bundledSkills={bundledSkills} onRefresh={refreshSkills} />
             <McpServersSection servers={mcpServers} onRefresh={refreshMcp} />
           </div>
         </div>

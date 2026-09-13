@@ -126,7 +126,7 @@ export function AssistantTitleBar({
       )}
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">融光助手</p>
+        <p className="truncate text-sm font-semibold">助手</p>
         <p
           className="truncate text-[11px] text-muted-foreground"
           title={title || "新对话"}

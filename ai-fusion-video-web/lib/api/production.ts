@@ -110,7 +110,19 @@ export interface ProductionStartReq {
   seed?: number;
 }
 
+export interface ShotReadinessBlocker {
+  code: string;
+  message: string;
+}
+
+export interface ShotReadiness {
+  ready: boolean;
+  blockers: ShotReadinessBlocker[];
+}
+
 export const productionApi = {
+  readiness: (storyboardItemId: number) =>
+    http.get<never, ShotReadiness>(`/api/production/shots/${storyboardItemId}/readiness`),
   /** 当前用户的生产运行分页列表，可按状态过滤 */
   list: (params?: { status?: ProductionRunStatus; pageNo?: number; pageSize?: number }) => {
     const query = new URLSearchParams();

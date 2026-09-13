@@ -89,6 +89,7 @@ public class ProductionRunService {
     private final AiModelService aiModelService;
     private final GenerationModelCapabilityService generationModelCapabilityService;
     private final WorkflowProfileService workflowProfileService;
+    private final ShotReadinessService shotReadinessService;
 
     /**
      * 幂等启动一个分镜条目的三候选生产运行。
@@ -102,6 +103,7 @@ public class ProductionRunService {
         }
 
         StoryboardItem item = storyboardService.getItemById(request.getStoryboardItemId());
+        shotReadinessService.requireReady(item, request);
         Storyboard storyboard = storyboardService.getById(item.getStoryboardId());
         if (storyboard == null) {
             throw new BusinessException(404, "分镜不存在: " + item.getStoryboardId());
@@ -228,6 +230,10 @@ public class ProductionRunService {
             throw new BusinessException("没有可用的视频生成模型");
         }
         return model;
+    }
+
+    public ShotReadiness readiness(Long storyboardItemId) {
+        return shotReadinessService.evaluate(storyboardService.getItemById(storyboardItemId));
     }
 
     /**

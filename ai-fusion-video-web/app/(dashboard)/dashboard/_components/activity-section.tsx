@@ -13,10 +13,16 @@ const kindLabels: Record<string, string> = {
 };
 
 function itemHref(item: DashboardActivityItem): string {
+  if (item.kind === "PRODUCTION_RUN" && item.projectId) {
+    return `/projects/${item.projectId}/production`;
+  }
   if (item.kind === "IMAGE_TASK") return "/generate/image";
+  if (item.kind === "VIDEO_TASK" && item.projectId) {
+    return `/projects/${item.projectId}/storyboards`;
+  }
   if (item.kind === "VIDEO_TASK") return "/generate/video";
   if (item.projectId) return `/projects/${item.projectId}`;
-  return "/generate";
+  return "/projects";
 }
 
 function ActivityList({ items, emptyText }: { items: DashboardActivityItem[]; emptyText: string }) {

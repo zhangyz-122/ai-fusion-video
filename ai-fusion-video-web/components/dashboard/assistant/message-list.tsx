@@ -242,7 +242,7 @@ export function AssistantMessageList({
               <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                 <AssistantBrandIcon className="size-7" />
               </span>
-              <p className="text-sm">告诉融光助手你想完成什么</p>
+              <p className="text-sm">告诉助手你想完成什么</p>
               <p className="max-w-xs text-xs text-muted-foreground/70">可以询问剧本、分镜或视频创作问题。</p>
             </div>
           ) : null}

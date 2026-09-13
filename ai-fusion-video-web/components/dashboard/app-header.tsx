@@ -5,12 +5,9 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   FolderKanban,
-  Images,
-  Wrench,
+  Clapperboard,
   Settings,
   Bell,
-  Github,
-  Clapperboard,
   LogOut,
   Menu,
   X,
@@ -20,6 +17,7 @@ import type { MenuDisplayMode } from "@/components/ui/glow-menu";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { UserAvatarDropdown } from "@/components/ui/menu";
 import { NotificationPanel } from "@/components/dashboard/notification-panel";
+import { TaskActivityBadge } from "@/components/dashboard/task-activity-badge";
 import { ClientErrorBoundary } from "@/components/client-error-boundary";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
@@ -29,11 +27,11 @@ import { cn } from "@/lib/utils";
 const menuItems = [
   {
     icon: LayoutDashboard,
-    label: "仪表盘",
+    label: "工作台",
     href: "/dashboard",
     gradient:
       "radial-gradient(circle, rgba(59,130,246,0.15) 0%, rgba(37,99,235,0.06) 50%, rgba(29,78,216,0) 85%, rgba(29,78,216,0) 100%)",
-    iconColor: "text-blue-500",
+    iconColor: "text-primary",
   },
   {
     icon: FolderKanban,
@@ -41,51 +39,34 @@ const menuItems = [
     href: "/projects",
     gradient:
       "radial-gradient(circle, rgba(168,85,247,0.15) 0%, rgba(147,51,234,0.06) 50%, rgba(126,34,206,0) 85%, rgba(126,34,206,0) 100%)",
-    iconColor: "text-purple-500",
-  },
-  {
-    icon: Images,
-    label: "资产",
-    href: "/assets",
-    gradient:
-      "radial-gradient(circle, rgba(249,115,22,0.15) 0%, rgba(234,88,12,0.06) 50%, rgba(194,65,12,0) 85%, rgba(194,65,12,0) 100%)",
-    iconColor: "text-orange-500",
+    iconColor: "text-primary",
   },
   {
     icon: Clapperboard,
-    label: "生产中心",
-    href: "/production",
-    gradient:
-      "radial-gradient(circle, rgba(139,92,246,0.15) 0%, rgba(124,58,237,0.06) 50%, rgba(109,40,217,0) 85%, rgba(109,40,217,0) 100%)",
-    iconColor: "text-violet-500",
-  },
-  {
-    icon: Wrench,
-    label: "创作工作台",
+    label: "工坊",
     href: "/generate",
     gradient:
       "radial-gradient(circle, rgba(6,182,212,0.15) 0%, rgba(8,145,178,0.06) 50%, rgba(14,116,144,0) 85%, rgba(14,116,144,0) 100%)",
-    iconColor: "text-cyan-500",
+    iconColor: "text-primary",
   },
   {
     icon: Settings,
-    label: "系统设置",
+    label: "设置",
     href: "/settings",
     gradient:
       "radial-gradient(circle, rgba(34,197,94,0.15) 0%, rgba(22,163,74,0.06) 50%, rgba(21,128,61,0) 85%, rgba(21,128,61,0) 100%)",
-    iconColor: "text-green-500",
+    iconColor: "text-primary",
   },
 ];
 
 // 路由与菜单标签的映射关系
-const routeToLabel: Record<string, string> = {
-  "/dashboard": "仪表盘",
-  "/projects": "项目",
-  "/assets": "资产",
-  "/production": "生产中心",
-  "/generate": "创作工作台",
-  "/settings": "系统设置",
-};
+function labelForPath(pathname: string): string {
+  if (pathname.startsWith("/settings")) return "设置";
+  if (pathname.startsWith("/generate")) return "工坊";
+  if (pathname.startsWith("/projects") || pathname.startsWith("/assets")) return "项目";
+  if (pathname.startsWith("/production") || pathname.startsWith("/dashboard")) return "工作台";
+  return "工作台";
+}
 
 /**
  * 顶部浮动导航栏组件
@@ -120,10 +101,7 @@ export function AppHeader() {
   const hasAnyTasks = tasks.length > 0;
 
   // 根据当前路由确定高亮菜单项
-  const activeLabel =
-    Object.entries(routeToLabel).find(([route]) =>
-      pathname.startsWith(route)
-    )?.[1] || "仪表盘";
+  const activeLabel = labelForPath(pathname);
 
   // 页面加载时只恢复 running Pipeline 列表；SSE 由面板选中态管理。
   useEffect(() => {
@@ -208,18 +186,13 @@ export function AppHeader() {
         onDisplayModeChange={handleDisplayModeChange}
         className="w-full"
         leftContent={
-          <div
-            className="flex items-center cursor-pointer shrink-0"
+          <button
+            type="button"
+            className="flex items-center cursor-pointer shrink-0 px-2"
             onClick={() => router.push("/dashboard")}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="融光"
-              className="h-8 w-auto ml-2 rounded-lg"
-            />
-            <span className="ml-2 text-lg font-bold text-foreground">融光</span>
-          </div>
+            <span className="text-sm font-semibold tracking-tight">短剧制造</span>
+          </button>
         }
         mobileControls={
           <button
@@ -242,6 +215,9 @@ export function AppHeader() {
         }
         rightContent={
           <div className="flex items-center gap-2 justify-end">
+            {/* 全局任务指示器：跨页面显示进行中任务 */}
+            <TaskActivityBadge />
+
             {/* 主题切换按钮 */}
             <AnimatedThemeToggler className="rounded-xl text-violet-500 hover:text-violet-600 hover:bg-violet-500/10 dark:text-violet-300 dark:hover:text-violet-200 dark:hover:bg-violet-400/10 transition-colors" />
 
@@ -294,20 +270,6 @@ export function AppHeader() {
             >
               <NotificationPanel anchorRef={bellRef} />
             </ClientErrorBoundary>
-
-            <a
-              href="https://github.com/Stonewuu/ai-fusion-video"
-              target="_blank"
-              rel="noreferrer"
-              className={cn(
-                "p-2 rounded-xl transition-colors",
-                "text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 dark:text-sky-300 dark:hover:text-sky-200 dark:hover:bg-sky-400/10"
-              )}
-              aria-label="打开 GitHub 仓库"
-              title="GitHub"
-            >
-              <Github className="h-5 w-5" />
-            </a>
 
             {/* 用户头像下拉菜单 */}
             <UserAvatarDropdown

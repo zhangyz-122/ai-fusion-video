@@ -88,6 +88,9 @@ class ProductionRunServiceTests {
     @Mock
     private WorkflowProfileService workflowProfileService;
 
+    @Mock
+    private ShotReadinessService shotReadinessService;
+
     @Test
     void startRequiresIdempotencyKey() {
         ProductionRunService service = service();
@@ -121,6 +124,24 @@ class ProductionRunServiceTests {
 
         org.assertj.core.api.Assertions.assertThat(detail.getRun().getId()).isEqualTo(7L);
         verifyNoInteractions(storyboardService, videoGenerationConsumer, videoGenerationService);
+    }
+
+    @Test
+    void startRejectsShotThatIsNotReady() {
+        when(runMapper.selectOne(any())).thenReturn(null);
+        StoryboardItem item = StoryboardItem.builder().id(11L).storyboardId(2L).build();
+        when(storyboardService.getItemById(11L)).thenReturn(item);
+        org.mockito.Mockito.doThrow(new BusinessException(400, "镜头未就绪：缺少锁定首帧"))
+                .when(shotReadinessService).requireReady(eq(item), any());
+
+        ProductionStartReqVO request = new ProductionStartReqVO();
+        request.setStoryboardItemId(11L);
+        request.setIdempotencyKey("shot-11");
+
+        assertThatThrownBy(() -> service().start(request, 99L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("镜头未就绪：缺少锁定首帧");
+        verifyNoInteractions(videoGenerationConsumer, videoGenerationService);
     }
 
     @Test
@@ -310,7 +331,8 @@ class ProductionRunServiceTests {
                 videoComposeService,
                 aiModelService,
                 generationModelCapabilityService,
-                workflowProfileService
+                workflowProfileService,
+                shotReadinessService
         );
     }
 

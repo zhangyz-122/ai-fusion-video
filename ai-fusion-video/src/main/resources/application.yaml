@@ -89,7 +89,12 @@ fusion:
       skills:
         enabled: true
         fail-fast: true
-        display-names: {}
+        display-names:
+          universal-director: 万能导演
+          character-scene-bible: 角色与场景圣经
+          storyboard-prompt-compiler: 分镜提示词编译器
+          reference-consistency: 参考一致性
+          video-qc-repair: 视频质检与修复
         repositories:
           bundled:
             location: classpath:agentscope/skills

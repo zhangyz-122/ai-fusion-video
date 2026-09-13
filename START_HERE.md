@@ -7,6 +7,8 @@
 - 后端：`ai-fusion-video/`
 - 前端：`ai-fusion-video-web/`
 - 全平台目标与任务总账：`dev-docs/1-todo/2026-09-13-自有综合创作平台开发总任务.md`（融光作为底座，功能扩展及页面重做；不是完成报告）
+- 页面整改与短剧产线 IA（B01 草案）：`dev-docs/1-todo/2026-09-13-页面整改与短剧制造平台IA.md`
+- 外部优点吸收台账（J006）：`dev-docs/1-todo/2026-09-13-外部优点吸收台账.md`
 - 近期执行计划：`dev-docs/2-in-progress/20260913-platform-handoff/development-plan.md`
 - 当前进度：`dev-docs/2-in-progress/20260913-platform-handoff/progress-tracking.md`
 - 历史 Production 计划：`ai-fusion-video/dev-docs/2-in-progress/20260913-production-run-take-selection/`

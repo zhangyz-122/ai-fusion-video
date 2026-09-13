@@ -15,6 +15,7 @@ interface GenerationQuickSettingsProps {
   loadingModels: boolean;
   capabilities: GenerationCapabilities | null;
   form: GenerationFormState;
+  showModelPicker?: boolean;
   onModelChange: (modelId: number) => void;
   onFormChange: (patch: Partial<GenerationFormState>) => void;
 }
@@ -26,19 +27,22 @@ export function GenerationQuickSettings({
   loadingModels,
   capabilities,
   form,
+  showModelPicker = true,
   onModelChange,
   onFormChange,
 }: GenerationQuickSettingsProps) {
   const outputLimit = parseLimit(capabilities?.maxCount || 0, 4);
   return (
     <>
-      <GenerationModelPicker
-        compact
-        models={models}
-        modelId={modelId}
-        loading={loadingModels}
-        onChange={onModelChange}
-      />
+      {showModelPicker && (
+        <GenerationModelPicker
+          compact
+          models={models}
+          modelId={modelId}
+          loading={loadingModels}
+          onChange={onModelChange}
+        />
+      )}
 
       <GenerationQuickSelect
         value={form.ratio}

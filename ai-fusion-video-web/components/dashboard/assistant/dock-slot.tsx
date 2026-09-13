@@ -341,7 +341,7 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
     previousModeRef.current = mode;
     if (mode !== "collapsed" || previousMode === "collapsed") return;
     const frame = requestAnimationFrame(() => {
-      document.querySelector<HTMLButtonElement>('[aria-label="打开融光助手"]')?.focus({ preventScroll: true });
+      document.querySelector<HTMLButtonElement>('[aria-label="打开助手"]')?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
   }, [mode]);

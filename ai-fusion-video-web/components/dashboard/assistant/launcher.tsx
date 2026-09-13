@@ -143,7 +143,7 @@ export function AssistantLauncher({
           render={
             <button
               type="button"
-              aria-label="打开融光助手"
+              aria-label="打开助手"
               tabIndex={collapsed ? 0 : -1}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
@@ -169,7 +169,7 @@ export function AssistantLauncher({
             </button>
           }
         />
-        <TooltipContent>融光助手</TooltipContent>
+        <TooltipContent>助手</TooltipContent>
       </Tooltip>
     </motion.div>
   );

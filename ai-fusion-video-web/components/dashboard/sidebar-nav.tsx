@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  BarChart3,
   FolderKanban,
   BookOpen,
   Film,
@@ -14,11 +13,11 @@ import {
   ArrowLeft,
   Bot,
   HardDrive,
-  ImagePlus,
   Video,
   Clapperboard,
   PanelLeftClose,
   PanelLeftOpen,
+  ScrollText,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -37,33 +36,33 @@ interface SidebarItem {
 }
 
 const dashboardItems: SidebarItem[] = [
-  { key: "overview", label: "总览", icon: LayoutDashboard, href: "/dashboard", iconColor: "text-blue-400" },
-  { key: "analytics", label: "数据分析", icon: BarChart3, href: "/dashboard/analytics", iconColor: "text-purple-400" },
+  { key: "overview", label: "继续创作", icon: LayoutDashboard, href: "/dashboard", iconColor: "text-primary" },
+  { key: "runs", label: "全部生产", icon: Clapperboard, href: "/production", iconColor: "text-primary" },
 ];
 
 const projectListItems: SidebarItem[] = [
-  { key: "list", label: "项目列表", icon: FolderKanban, href: "/projects", iconColor: "text-purple-400" },
+  { key: "list", label: "剧目列表", icon: FolderKanban, href: "/projects", iconColor: "text-primary" },
 ];
 
 const projectDetailItems: SidebarItem[] = [
-  { key: "", label: "概览", icon: LayoutDashboard, href: "", iconColor: "text-blue-400" },
-  { key: "scripts", label: "剧本", icon: BookOpen, href: "/scripts", iconColor: "text-purple-400" },
-  { key: "storyboards", label: "分镜", icon: Film, href: "/storyboards", iconColor: "text-cyan-400" },
-  { key: "assets", label: "资产", icon: Images, href: "/assets", iconColor: "text-orange-400" },
-  // { key: "members", label: "成员", icon: Users, href: "/members", iconColor: "text-green-400" },
-  { key: "settings", label: "设置", icon: Settings, href: "/settings", iconColor: "text-rose-400" },
+  { key: "", label: "这部剧", icon: LayoutDashboard, href: "", iconColor: "text-primary" },
+  { key: "source", label: "写 · 原文", icon: ScrollText, href: "/source", iconColor: "text-primary" },
+  { key: "scripts", label: "写 · 剧本", icon: BookOpen, href: "/scripts", iconColor: "text-primary" },
+  { key: "assets", label: "定 · 圣经", icon: Images, href: "/assets", iconColor: "text-primary" },
+  { key: "storyboards", label: "拆 · 分镜", icon: Film, href: "/storyboards", iconColor: "text-primary" },
+  { key: "production", label: "拍 · 生产", icon: Clapperboard, href: "/production", iconColor: "text-primary" },
+  { key: "delivery", label: "剪 · 成片", icon: Video, href: "/delivery", iconColor: "text-primary" },
+  { key: "settings", label: "设置", icon: Settings, href: "/settings", iconColor: "text-primary" },
 ];
 
 const assetItems: SidebarItem[] = [
-  { key: "list", label: "全部资产", icon: Images, href: "/assets", iconColor: "text-orange-400" },
+  { key: "list", label: "全部资产", icon: Images, href: "/assets", iconColor: "text-primary" },
 ];
 
 const generationItems: SidebarItem[] = [
-  { key: "home", label: "创作总览", icon: LayoutDashboard, href: "/generate", iconColor: "text-primary" },
-  { key: "images", label: "图像工坊", icon: Images, href: "/generate/images", iconColor: "text-primary" },
-  { key: "image", label: "生图", icon: ImagePlus, href: "/generate/image", iconColor: "text-fuchsia-400" },
-  { key: "videos", label: "视频工坊", icon: Clapperboard, href: "/generate/videos", iconColor: "text-cyan-400" },
-  { key: "video", label: "生视频", icon: Video, href: "/generate/video", iconColor: "text-cyan-400" },
+  { key: "home", label: "工坊", icon: LayoutDashboard, href: "/generate", iconColor: "text-primary" },
+  { key: "images", label: "图像", icon: Images, href: "/generate/image", iconColor: "text-primary" },
+  { key: "video", label: "视频", icon: Clapperboard, href: "/generate/video", iconColor: "text-primary" },
 ];
 
 interface SidebarNavProps {
@@ -99,16 +98,15 @@ export function SidebarNav({
 
   const settingsItems: SidebarItem[] = isAdmin
     ? [
-      { key: "general", label: "通用设置", icon: Settings, href: "/settings/general", iconColor: "text-green-400" },
-      { key: "users", label: "用户列表", icon: Users, href: "/settings/users", iconColor: "text-cyan-400" },
-      { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
-      { key: "ai-models", label: "AI 配置", icon: Bot, href: "/settings/ai-models", iconColor: "text-purple-400" },
-      { key: "agents", label: "智能体配置", icon: Bot, href: "/settings/agents", iconColor: "text-violet-400" },
-      { key: "storage", label: "存储配置", icon: HardDrive, href: "/settings/storage", iconColor: "text-orange-400" },
+      { key: "general", label: "通用设置", icon: Settings, href: "/settings/general", iconColor: "text-primary" },
+      { key: "users", label: "用户列表", icon: Users, href: "/settings/users", iconColor: "text-primary" },
+      { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-primary" },
+      { key: "ai-models", label: "AI 配置", icon: Bot, href: "/settings/ai-models", iconColor: "text-primary" },
+      { key: "agents", label: "智能体配置", icon: Bot, href: "/settings/agents", iconColor: "text-primary" },
+      { key: "storage", label: "存储配置", icon: HardDrive, href: "/settings/storage", iconColor: "text-primary" },
     ]
     : [
-      { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
-      { key: "agents", label: "智能体配置", icon: Bot, href: "/settings/agents", iconColor: "text-violet-400" },
+      { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-primary" },
     ];
 
   // 若外部已传入 project，则不在组件内自行请求
@@ -153,20 +151,20 @@ export function SidebarNav({
       router.push("/projects");
       onNavigate?.();
     };
-  } else if (pathname.startsWith("/dashboard")) {
-    sectionTitle = "仪表盘";
+  } else if (pathname.startsWith("/dashboard") || pathname.startsWith("/production")) {
+    sectionTitle = "工作台";
     items = dashboardItems;
   } else if (pathname.startsWith("/projects")) {
     sectionTitle = "项目";
     items = projectListItems;
   } else if (pathname.startsWith("/assets")) {
-    sectionTitle = "资产";
+    sectionTitle = "圣经";
     items = assetItems;
   } else if (pathname.startsWith("/generate")) {
-    sectionTitle = "创作工作台";
+    sectionTitle = "工坊";
     items = generationItems;
   } else if (pathname.startsWith("/settings")) {
-    sectionTitle = "系统设置";
+    sectionTitle = "设置";
     items = settingsItems;
   }
 
@@ -175,6 +173,13 @@ export function SidebarNav({
       const basePath = `/projects/${projectId}`;
       if (href === basePath) return pathname === basePath;
       return pathname.startsWith(href);
+    }
+    if (href === "/generate") return pathname === "/generate";
+    if (href === "/generate/image") {
+      return pathname.startsWith("/generate/image");
+    }
+    if (href === "/generate/video") {
+      return pathname.startsWith("/generate/video") || pathname.startsWith("/generate/universal") || pathname.startsWith("/generate/videos");
     }
     return pathname === href;
   };
@@ -244,7 +249,6 @@ export function SidebarNav({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold truncate">
-                    {projectId && "项目: "}
                     {sectionTitle}
                   </h3>
                   {projectId && project?.description && (

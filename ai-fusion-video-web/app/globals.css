@@ -206,7 +206,7 @@
   }
 }
 
-/* 融光助手内部导航按容器宽度切换，而不是读取 viewport breakpoint。 */
+/* 助手内部导航按容器宽度切换，而不是读取 viewport breakpoint。 */
 .assistant-shell,
 [data-assistant-dock-surface],
 [data-assistant-surface] {

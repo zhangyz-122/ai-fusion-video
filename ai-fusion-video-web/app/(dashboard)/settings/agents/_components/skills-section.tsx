@@ -18,17 +18,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { agentConfigApi, type AgentUserSkill } from "@/lib/api/agent-config";
+import type { AssistantSkillReferenceOption } from "@/lib/api/ai-assistant";
 import { SkillImportDialog } from "./skills/skill-import-dialog";
 import { settingsTypography } from "../../_shared";
 
 interface SkillsSectionProps {
   skills: AgentUserSkill[];
+  bundledSkills: AssistantSkillReferenceOption[];
   onRefresh: () => Promise<void>;
 }
 
 const EMPTY_FORM = { name: "", displayName: "", description: "", content: "" };
 
-export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
+export function SkillsSection({ skills, bundledSkills, onRefresh }: SkillsSectionProps) {
   const { confirm } = useConfirm();
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -146,6 +148,31 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
                 {deleting === skill.name ? <Loader2 className="animate-spin" /> : <Trash2 />}
               </Button>
             </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-border/20 bg-background/70">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/20 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium">平台内置 Skills</h3>
+            <Badge variant="secondary">{bundledSkills.length}</Badge>
+          </div>
+          <Badge variant="outline">平台提供 · 只读</Badge>
+        </div>
+        {bundledSkills.length === 0 ? (
+          <div className="p-4 text-xs text-muted-foreground">平台暂未加载内置 Skills。</div>
+        ) : bundledSkills.map((skill) => (
+          <div
+            key={skill.id}
+            className="border-b border-border/20 p-3 last:border-b-0"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-medium">{skill.displayName}</span>
+              <Badge variant="outline">内置</Badge>
+            </div>
+            <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{skill.name}</div>
+            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{skill.description}</div>
           </div>
         ))}
       </div>

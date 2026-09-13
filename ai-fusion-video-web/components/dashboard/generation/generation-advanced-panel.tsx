@@ -35,6 +35,7 @@ interface GenerationAdvancedPanelProps {
   onSubmit: () => void;
   onSimple: () => void;
   referenceImageUploadAvailability: ReferenceImageUploadAvailability;
+  modelLocked?: boolean;
 }
 
 export function GenerationAdvancedPanel({
@@ -50,8 +51,10 @@ export function GenerationAdvancedPanel({
   onSubmit,
   onSimple,
   referenceImageUploadAvailability,
+  modelLocked = false,
 }: GenerationAdvancedPanelProps) {
   const outputLimit = parseLimit(capabilities?.maxCount || 0, 4);
+  const lockedModelName = models.find((model) => model.id === modelId)?.name;
   const imageInputCount =
     form.firstFrame.filter(Boolean).length +
     form.lastFrame.filter(Boolean).length +
@@ -124,13 +127,19 @@ export function GenerationAdvancedPanel({
                 </p>
               </div>
             </div>
-            <GenerationModelPicker
-              models={models}
-              modelId={modelId}
-              loading={loadingModels}
-              onChange={onModelChange}
-              className="mt-2.5 border border-border/40 bg-background/72 hover:bg-background"
-            />
+            {modelLocked ? (
+              <div className="mt-2.5 rounded-xl border border-primary/15 bg-primary/[0.06] px-3 py-2.5 text-xs text-primary">
+                万能导演底座{lockedModelName ? `：${lockedModelName}` : "正在加载…"}
+              </div>
+            ) : (
+              <GenerationModelPicker
+                models={models}
+                modelId={modelId}
+                loading={loadingModels}
+                onChange={onModelChange}
+                className="mt-2.5 border border-border/40 bg-background/72 hover:bg-background"
+              />
+            )}
             {!loadingModels && models.length === 0 && (
               <p className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs text-amber-600">
                 未配置{mode === "image" ? "图片" : "视频"}模型
@@ -324,7 +333,9 @@ export function GenerationAdvancedPanel({
                   ? capabilities.minImageInputs
                   : capabilities.minReferenceImages
               } 张图片`
-            : "参数会随所选模型自动调整"}
+              : modelLocked
+                ? "参考素材和输出参数会自动交给当前底座处理"
+                : "参数会随所选模型自动调整"}
         </p>
         <Button
           variant={mode === "image" ? "image" : "video"}

@@ -24,10 +24,10 @@ const uiFontFamily =
 
 export const metadata: Metadata = {
   title: {
-    template: "%s - 融光",
-    default: "融光",
+    template: "%s",
+    default: "短剧制造",
   },
-  description: "基于 Agent 的智能视频创作平台",
+  description: "短剧制造平台",
 };
 
 export default function RootLayout({

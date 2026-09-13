@@ -61,6 +61,7 @@ interface GenerationSimpleComposerProps {
   onSubmit: () => void;
   onAdvanced: () => void;
   attachmentDisabledReason?: string;
+  modelLocked?: boolean;
 }
 
 export function GenerationSimpleComposer({
@@ -83,6 +84,7 @@ export function GenerationSimpleComposer({
   onSubmit,
   onAdvanced,
   attachmentDisabledReason = "",
+  modelLocked = false,
 }: GenerationSimpleComposerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedUploadOptionRef = useRef<SimpleAttachmentUploadOption | null>(null);
@@ -278,9 +280,15 @@ export function GenerationSimpleComposer({
               loadingModels={loadingModels}
               capabilities={capabilities}
               form={form}
+              showModelPicker={!modelLocked}
               onModelChange={onModelChange}
               onFormChange={onFormChange}
             />
+            {modelLocked && (
+              <span className="rounded-lg border border-primary/15 bg-primary/[0.06] px-2.5 py-1.5 text-[10px] font-medium text-primary">
+                自动使用默认底座
+              </span>
+            )}
             {attachmentCapacity > 0 && (
               <span className="hidden text-[10px] text-muted-foreground sm:inline">
                 {missingRequiredAttachments
