@@ -52,6 +52,7 @@ import {
   useSmartScroll,
 } from "./hooks";
 import { MessageTimeline } from "./timeline";
+import { TaskStreamSection } from "./task-stream-section";
 import {
   formatDatetime,
   formatElapsed,
@@ -615,6 +616,8 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
+  // 本面板会话内的实时任务流（运行中/刚出结果），历史列表中对应的会话由该区块承载，避免重复展示。
+  const [liveTaskStreamIds, setLiveTaskStreamIds] = useState<string[]>([]);
   const pageSize = 20;
 
   const hasMore = conversations.length < historyTotal;
@@ -743,7 +746,8 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   );
   const visibleConversations = conversations.filter(
     (conversation) =>
-      !currentPipelineConversationIds.has(conversation.conversationId)
+      !currentPipelineConversationIds.has(conversation.conversationId) &&
+      !liveTaskStreamIds.includes(conversation.conversationId)
   );
 
   // helper: select an item and switch to detail view on mobile
@@ -781,6 +785,11 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   /* ---- shared list content (used in both desktop sidebar and mobile full view) ---- */
   const listContent = (
     <>
+      <TaskStreamSection
+        className="px-3 pt-3 pb-1"
+        onItemsChange={(items) => setLiveTaskStreamIds(items.map((item) => item.taskId))}
+      />
+
       {runningTasks.length > 0 && (
         <div className="px-3 pt-3 pb-1">
           <p className="text-[10px] font-medium text-muted-foreground px-1 pb-1.5 uppercase tracking-wider">

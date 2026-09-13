@@ -287,6 +287,40 @@ export function getConfigStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }
 
+/** 参考图传递格式（与后端 normalizeReferenceImageInputFormats 同口径，仅保留 url / data_uri） */
+export type ReferenceImageInputFormat = "url" | "data_uri";
+
+export function getReferenceImageInputFormats(config: Record<string, unknown>): ReferenceImageInputFormat[] {
+  const normalized = getConfigStringArray(config.referenceImageInputFormats)
+    .map(value => value.toLowerCase())
+    .map(value => value === "base64" || value === "data-uri" ? "data_uri" as const : value)
+    .filter((value): value is ReferenceImageInputFormat => value === "url" || value === "data_uri");
+  const formats = Array.from(new Set(normalized));
+  if (getConfigBooleanValue(config.supportDataUriInput) && !formats.includes("data_uri")) {
+    formats.push("data_uri");
+  }
+  return formats;
+}
+
+/** 增删一种参考图传递格式；data_uri 与 supportDataUriInput 保持同步。 */
+export function withReferenceImageInputFormat(
+  config: Record<string, unknown>,
+  format: ReferenceImageInputFormat,
+  enabled: boolean
+): Record<string, unknown> {
+  const nextFormats = new Set(getReferenceImageInputFormats(config));
+  if (enabled) {
+    nextFormats.add(format);
+  } else {
+    nextFormats.delete(format);
+  }
+  return {
+    ...config,
+    referenceImageInputFormats: Array.from(nextFormats),
+    ...(format === "data_uri" ? { supportDataUriInput: enabled } : {}),
+  };
+}
+
 export function getFirstConfigString(value: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const current = value[key];
@@ -844,9 +878,6 @@ export function getConfigFieldsByModelType(modelType: number, platform?: string 
       return [
         { key: "supportedResolutions", label: "支持的分辨率", type: "aspect-ratios", hint: "如 480p, 720p, 1080p", presetOptions: ["480p", "720p", "1080p", "2K", "4K"] },
         { key: "supportedAspectRatios", label: "支持的宽高比", type: "aspect-ratios", hint: "如 16:9, 9:16, 1:1" },
-        { key: "minDuration", label: "最短时长（秒）", type: "number", min: 1, max: 60, step: 1, placeholder: "例如：4" },
-        { key: "maxDuration", label: "最长时长（秒）", type: "number", min: 1, max: 60, step: 1, placeholder: "例如：15" },
-        { key: "defaultDuration", label: "默认时长（秒）", type: "number", min: 1, max: 60, step: 1, placeholder: "例如：5" },
       ];
     default:
       return [];

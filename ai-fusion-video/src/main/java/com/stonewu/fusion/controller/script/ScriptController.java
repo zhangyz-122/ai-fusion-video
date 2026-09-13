@@ -16,13 +16,19 @@ import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.project.ProjectAccessGuard;
 import com.stonewu.fusion.service.script.ScriptAutoSplitService;
 import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.script.SubtitleExportService;
 import com.stonewu.fusion.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -37,6 +43,7 @@ public class ScriptController {
     private final ScriptService scriptService;
     private final ProjectAccessGuard accessGuard;
     private final ScriptAutoSplitService scriptAutoSplitService;
+    private final SubtitleExportService subtitleExportService;
 
     // ========== 剧本 ==========
 
@@ -85,7 +92,8 @@ public class ScriptController {
         accessGuard.assertScript(id);
         Long userId = SecurityUtils.requireCurrentUserId();
         Long modelId = reqVO == null ? null : reqVO.getModelId();
-        return CommonResult.success(scriptAutoSplitService.startAutoSplit(id, userId, modelId));
+        Integer chunkChars = reqVO == null ? null : reqVO.getChunkChars();
+        return CommonResult.success(scriptAutoSplitService.startAutoSplit(id, userId, modelId, chunkChars));
     }
 
     @Operation(summary = "查询自动分块解析任务状态")
@@ -114,6 +122,23 @@ public class ScriptController {
     public CommonResult<ScriptEpisode> getEpisode(@PathVariable Long id) {
         accessGuard.assertScriptEpisode(id);
         return CommonResult.success(scriptService.getEpisodeById(id));
+    }
+
+    @Operation(summary = "导出分集 SRT 字幕")
+    @GetMapping("/episode/{id}/subtitle.srt")
+    public ResponseEntity<byte[]> downloadEpisodeSubtitle(
+            @PathVariable Long id,
+            @RequestParam(required = false) Integer secondsPerLine) {
+        accessGuard.assertScriptEpisode(id);
+        ScriptEpisode episode = scriptService.getEpisodeById(id);
+        String srt = subtitleExportService.buildEpisodeSrt(id, secondsPerLine);
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(subtitleExportService.buildSubtitleFilename(episode), StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/x-subrip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(srt.getBytes(StandardCharsets.UTF_8));
     }
 
     @Operation(summary = "创建分集")

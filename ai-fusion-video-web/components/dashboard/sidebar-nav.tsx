@@ -15,6 +15,7 @@ import {
   HardDrive,
   Video,
   Clapperboard,
+  AudioLines,
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
@@ -63,6 +64,7 @@ const generationItems: SidebarItem[] = [
   { key: "home", label: "工坊", icon: LayoutDashboard, href: "/generate", iconColor: "text-primary" },
   { key: "images", label: "图像", icon: Images, href: "/generate/image", iconColor: "text-primary" },
   { key: "video", label: "视频", icon: Clapperboard, href: "/generate/video", iconColor: "text-primary" },
+  { key: "audios", label: "声音", icon: AudioLines, href: "/generate/audios", iconColor: "text-primary" },
 ];
 
 interface SidebarNavProps {

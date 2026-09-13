@@ -383,4 +383,72 @@ class StoryboardServiceTests {
                 .hasMessage("selectedTakeId 仅允许由 Production 选择接口更新");
         verify(itemMapper, never()).updateById(conflictingPatch);
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void updateSceneMovesSceneToEpisodeWithinSameStoryboard() {
+        when(sceneMapper.selectById(37L)).thenReturn(
+                StoryboardScene.builder().id(37L).episodeId(6L).storyboardId(21L).build(),
+                StoryboardScene.builder().id(37L).episodeId(8L).storyboardId(21L).build());
+        when(episodeMapper.selectById(8L)).thenReturn(StoryboardEpisode.builder()
+                .id(8L)
+                .storyboardId(21L)
+                .build());
+
+        StoryboardScene result = storyboardService.updateScene(StoryboardScene.builder()
+                .id(37L)
+                .episodeId(8L)
+                .sceneHeading("新场次标题")
+                .build());
+
+        assertThat(result.getEpisodeId()).isEqualTo(8L);
+        ArgumentCaptor<StoryboardScene> sceneCaptor = ArgumentCaptor.forClass(StoryboardScene.class);
+        verify(sceneMapper).updateById(sceneCaptor.capture());
+        assertThat(sceneCaptor.getValue().getEpisodeId()).isEqualTo(8L);
+        assertThat(sceneCaptor.getValue().getStoryboardId()).isEqualTo(21L);
+
+        ArgumentCaptor<UpdateWrapper<StoryboardItem>> itemUpdateCaptor =
+                ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(itemMapper).update(isNull(), itemUpdateCaptor.capture());
+        UpdateWrapper<StoryboardItem> itemUpdate = itemUpdateCaptor.getValue();
+        assertThat(itemUpdate.getSqlSet()).contains("storyboard_episode_id");
+        assertThat(itemUpdate.getParamNameValuePairs().values()).contains(8L);
+    }
+
+    @Test
+    void updateSceneRejectsTargetEpisodeFromAnotherStoryboard() {
+        when(sceneMapper.selectById(37L)).thenReturn(
+                StoryboardScene.builder().id(37L).episodeId(6L).storyboardId(21L).build());
+        when(episodeMapper.selectById(9L)).thenReturn(StoryboardEpisode.builder()
+                .id(9L)
+                .storyboardId(22L)
+                .build());
+
+        assertThatThrownBy(() -> storyboardService.updateScene(StoryboardScene.builder()
+                .id(37L)
+                .episodeId(9L)
+                .build()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("目标分镜集不属于当前场次所属分镜");
+
+        verify(sceneMapper, never()).updateById(any(StoryboardScene.class));
+        verify(itemMapper, never()).update(any(), any());
+    }
+
+    @Test
+    void updateSceneKeepsEpisodeWhenEpisodeIdIsAbsent() {
+        when(sceneMapper.selectById(37L)).thenReturn(
+                StoryboardScene.builder().id(37L).episodeId(6L).storyboardId(21L).build(),
+                StoryboardScene.builder().id(37L).episodeId(6L).storyboardId(21L).build());
+
+        StoryboardScene result = storyboardService.updateScene(StoryboardScene.builder()
+                .id(37L)
+                .sceneHeading("只改标题")
+                .build());
+
+        assertThat(result.getEpisodeId()).isEqualTo(6L);
+        verify(sceneMapper).updateById(any(StoryboardScene.class));
+        verify(episodeMapper, never()).selectById(any());
+        verify(itemMapper, never()).update(any(), any());
+    }
 }

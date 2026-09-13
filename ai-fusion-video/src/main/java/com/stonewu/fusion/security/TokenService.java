@@ -284,7 +284,8 @@ public class TokenService {
                 String username = parts.length > 1 ? parts[1] : null;
                 return new TokenSession(userId, username, null);
             } catch (Exception ex) {
-                log.warn("解析认证会话失败: {}", rawValue, ex);
+                // 认证会话原值等价于凭据，禁止写入日志，仅记录长度便于排查
+                log.warn("解析认证会话失败: rawValueLength={}", rawValue.length(), ex);
                 return null;
             }
         }

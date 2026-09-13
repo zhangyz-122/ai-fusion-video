@@ -19,6 +19,7 @@ import {
 import { EpisodeTree } from "./_components/episode-tree";
 import { SceneList } from "./_components/scene-list";
 import { SceneDetail } from "./_components/scene-detail";
+import { StoryToScriptButton } from "./_components/story-to-script-button";
 import { ScriptOverview } from "./_components/script-overview";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
@@ -742,6 +743,14 @@ export default function ScriptTabPage() {
           </Sheet>
         </div>
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-center justify-end border-b border-border/20 bg-background/80 px-4 py-2 backdrop-blur-sm">
+            <StoryToScriptButton
+              projectId={projectId}
+              scriptId={script.id}
+              rawContentLength={script.rawContent?.length ?? 0}
+              onStarted={handleManualRefreshScript}
+            />
+          </div>
           <SceneList
             activeEpisode={activeEpisode}
             activeScenes={activeScenes}

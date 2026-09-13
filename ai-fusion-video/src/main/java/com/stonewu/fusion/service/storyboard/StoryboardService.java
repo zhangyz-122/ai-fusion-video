@@ -522,9 +522,38 @@ public class StoryboardService {
     @CacheEvict(value = { "storyboardScene", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardScene updateScene(StoryboardScene scene) {
-        getSceneById(scene.getId());
+        StoryboardScene existing = getSceneById(scene.getId());
+        boolean episodeChanged = scene.getEpisodeId() != null
+                && !scene.getEpisodeId().equals(existing.getEpisodeId());
+        if (episodeChanged) {
+            validateSceneEpisodeBelongsToStoryboard(existing, scene.getEpisodeId());
+        }
+        // 冗余字段始终以库内数据为准，避免调用方伪造或携带过期归属信息
+        scene.setStoryboardId(existing.getStoryboardId());
+        if (episodeChanged) {
+            // 场次移动分集时同步迁移其条目的冗余分集归属，保持与创建时的一致性
+            itemMapper.update(null, new UpdateWrapper<StoryboardItem>()
+                    .eq("storyboard_scene_id", scene.getId())
+                    .set("storyboard_episode_id", scene.getEpisodeId()));
+        }
         sceneMapper.updateById(scene);
         return sceneMapper.selectById(scene.getId());
+    }
+
+    /**
+     * 校验目标分镜集与场次同属一个分镜，用于场次移动分集时的归属一致性校验。
+     *
+     * @param scene           库内当前场次
+     * @param targetEpisodeId 目标分镜集ID
+     * @return 目标分镜集
+     */
+    private StoryboardEpisode validateSceneEpisodeBelongsToStoryboard(
+            StoryboardScene scene, Long targetEpisodeId) {
+        StoryboardEpisode targetEpisode = getEpisodeById(targetEpisodeId);
+        if (!scene.getStoryboardId().equals(targetEpisode.getStoryboardId())) {
+            throw new BusinessException("目标分镜集不属于当前场次所属分镜");
+        }
+        return targetEpisode;
     }
 
     @CacheEvict(

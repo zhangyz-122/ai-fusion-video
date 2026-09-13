@@ -32,9 +32,7 @@ import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import com.stonewu.fusion.service.storyboard.VideoComposeService;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -54,7 +52,6 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ProductionRunService {
 
     public static final String RUN_CREATED = "CREATED";
@@ -63,11 +60,11 @@ public class ProductionRunService {
     public static final String RUN_SELECTED = "SELECTED";
     public static final String RUN_FAILED = "FAILED";
 
-    private static final String STEP_GENERATE_VIDEO = "GENERATE_VIDEO";
+    public static final String STEP_GENERATE_VIDEO = "GENERATE_VIDEO";
     private static final String STEP_CREATED = "CREATED";
     private static final String STEP_SUBMITTED = "SUBMITTED";
     private static final String STEP_SUCCEEDED = "SUCCEEDED";
-    private static final String STEP_FAILED = "FAILED";
+    public static final String STEP_FAILED = "FAILED";
 
     private static final String QC_PASS = "PASS";
     private static final String QC_FAIL = "FAIL";
@@ -455,19 +452,6 @@ public class ProductionRunService {
             throw new BusinessException("分镜条目未关联分镜集，无法调用现有合成服务");
         }
         return videoComposeService.submitCompose(item.getStoryboardEpisodeId(), userId);
-    }
-
-    @Scheduled(fixedDelay = 10000)
-    public void reconcilePendingRuns() {
-        List<ProductionRun> runs = runMapper.selectList(new LambdaQueryWrapper<ProductionRun>()
-                .in(ProductionRun::getStatus, RUN_WAITING_GENERATION));
-        for (ProductionRun run : runs) {
-            try {
-                reconcile(run.getId(), run.getUserId());
-            } catch (Exception exception) {
-                log.warn("[Production] 自动同步运行失败: runId={}, error={}", run.getId(), exception.getMessage());
-            }
-        }
     }
 
     private ProductionRun findByIdempotency(Long userId, Long storyboardItemId, String idempotencyKey) {

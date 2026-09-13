@@ -62,7 +62,6 @@ public interface StoryboardConvert {
     @Mapping(target = "status", ignore = true)
     StoryboardScene convert(StoryboardSceneCreateReqVO reqVO);
 
-    @Mapping(target = "episodeId", ignore = true)
     @Mapping(target = "storyboardId", ignore = true)
     @Mapping(target = "status", ignore = true)
     StoryboardScene convert(StoryboardSceneUpdateReqVO reqVO);

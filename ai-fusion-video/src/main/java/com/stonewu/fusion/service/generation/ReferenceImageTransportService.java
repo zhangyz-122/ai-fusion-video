@@ -8,6 +8,7 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.storage.StorageConfig;
+import com.stonewu.fusion.security.http.PublicHttpUrlValidator;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
@@ -19,9 +20,6 @@ import okhttp3.Response;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.net.Inet6Address;
-import java.net.InetAddress;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -132,18 +130,27 @@ public class ReferenceImageTransportService {
             return new TransportSelection(ReferenceImageTransport.DATA_URI, normalizedSource);
         }
 
+        if (looksLikeAbsoluteUri(normalizedSource) && !isHttpUrl(normalizedSource)) {
+            throw unsupported(model, "参考图仅支持 http(s) 远程地址或站内素材路径");
+        }
+
         if (isHttpUrl(normalizedSource)) {
-            if (capability.supportsUrl() && isPotentiallyPublicHttpUrl(normalizedSource)) {
+            if (!PublicHttpUrlValidator.isAllowedPublicHttpUrl(normalizedSource)) {
+                throw unsupported(model, "参考图 URL 指向本机、回环、内网或链路本地地址，"
+                        + "出于 SSRF 防护已被禁止，远端模型无法访问，平台也不会代为拉取");
+            }
+            if (capability.supportsUrl()) {
                 return new TransportSelection(ReferenceImageTransport.URL, normalizedSource);
             }
             if (capability.supportsDataUri()) {
                 return new TransportSelection(ReferenceImageTransport.DATA_URI, normalizedSource);
             }
-            throw unsupported(model, "当前参考图 URL 指向本机、回环或内网地址，远端模型无法访问，且模型未启用 base64/Data URI 传递模式");
+            throw unsupported(model, "模型未启用 URL 或 base64/Data URI 传递模式，无法传递参考图");
         } else {
             if (capability.supportsUrl()) {
                 String publicUrl = systemConfigService.resolvePublicUrl(normalizedSource);
-                if (StrUtil.isNotBlank(publicUrl) && isPotentiallyPublicHttpUrl(publicUrl)) {
+                if (StrUtil.isNotBlank(publicUrl)
+                        && PublicHttpUrlValidator.isAllowedPublicHttpUrl(publicUrl)) {
                     return new TransportSelection(ReferenceImageTransport.URL, publicUrl);
                 }
             }
@@ -176,6 +183,9 @@ public class ReferenceImageTransportService {
             return new BinaryResource(resource.bytes(), normalizeMimeType(resource.mimeType(), source));
         }
         if (isHttpUrl(source)) {
+            if (!PublicHttpUrlValidator.isAllowedPublicHttpUrl(source)) {
+                throw new BusinessException("参考图 URL 指向本机、回环或内网地址，已被安全策略禁止拉取");
+            }
             Request request = new Request.Builder().url(source).get()
                     .addHeader("Accept", "image/*,*/*;q=0.8").build();
             OkHttpClient client = apiConfig == null
@@ -250,52 +260,18 @@ public class ReferenceImageTransportService {
                 || StrUtil.startWithIgnoreCase(value, "https://");
     }
 
-    private boolean isPotentiallyPublicHttpUrl(String value) {
-        try {
-            URI uri = URI.create(value);
-            String host = StrUtil.blankToDefault(uri.getHost(), "").trim().toLowerCase(Locale.ROOT);
-            while (host.endsWith(".")) {
-                host = host.substring(0, host.length() - 1);
-            }
-            if (StrUtil.isBlank(host)
-                    || "localhost".equals(host)
-                    || host.endsWith(".localhost")
-                    || host.endsWith(".local")
-                    || "host.docker.internal".equals(host)
-                    || "gateway.docker.internal".equals(host)) {
-                return false;
-            }
-            if (!isIpLiteral(host)) {
-                return true;
-            }
-
-            InetAddress address = InetAddress.getByName(host);
-            if (address.isAnyLocalAddress()
-                    || address.isLoopbackAddress()
-                    || address.isLinkLocalAddress()
-                    || address.isSiteLocalAddress()
-                    || address.isMulticastAddress()) {
-                return false;
-            }
-            return !(address instanceof Inet6Address) || !isUniqueLocalIpv6(address);
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    private boolean isIpLiteral(String host) {
-        if (host.indexOf(':') >= 0) return true;
-        if (host.isEmpty()) return false;
-        for (int i = 0; i < host.length(); i++) {
-            char current = host.charAt(i);
-            if (current != '.' && !Character.isDigit(current)) return false;
+    /** 形如 scheme:// 的绝对地址（排除 Windows 盘符等本地路径写法）。 */
+    private boolean looksLikeAbsoluteUri(String value) {
+        int schemeEnd = value.indexOf("://");
+        if (schemeEnd <= 0) return false;
+        for (int i = 0; i < schemeEnd; i++) {
+            char current = value.charAt(i);
+            boolean valid = i == 0
+                    ? Character.isLetter(current)
+                    : Character.isLetterOrDigit(current) || current == '+' || current == '-' || current == '.';
+            if (!valid) return false;
         }
         return true;
-    }
-
-    private boolean isUniqueLocalIpv6(InetAddress address) {
-        byte[] bytes = address.getAddress();
-        return bytes.length == 16 && (bytes[0] & 0xFE) == 0xFC;
     }
 
     public record ReferenceImageTransportCapability(List<String> formats,
