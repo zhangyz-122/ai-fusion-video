@@ -310,6 +310,11 @@ export function ProductionTakeDrawer({
                   {loading ? <Loader2 className="animate-spin" /> : <Clapperboard />}
                   生产这一镜
                 </Button>
+                {readiness?.ready === false && readiness.blockers.length > 0 && (
+                  <p role="status" className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                    暂不能生产这一镜：{readiness.blockers.map((blocker) => blocker.message).join("；")}
+                  </p>
+                )}
               </div>
             </div>
           ) : (
