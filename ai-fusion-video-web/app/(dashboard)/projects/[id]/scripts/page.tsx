@@ -692,16 +692,19 @@ export default function ScriptTabPage() {
 
       {/* 中栏：场次卡片列表 */}
       <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="flex-1 flex flex-col min-w-0">
-        <div className="2xl:hidden px-4 py-3 border-b border-border/20 flex items-center justify-between shrink-0 bg-card/30 backdrop-blur-sm">
+        <div className="2xl:hidden px-3 sm:px-4 py-2 border-b border-border/20 flex items-center justify-between shrink-0 bg-card/30 backdrop-blur-sm">
           <Sheet open={leftSheetOpen} onOpenChange={setLeftSheetOpen}>
             <SheetTrigger
               render={
-                <button className="xl:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
+                <button
+                  className="xl:hidden flex h-11 w-11 -ml-2 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors"
+                  aria-label="打开剧本目录"
+                >
                   <Menu className="h-5 w-5" />
                 </button>
               }
             />
-            <SheetContent side="left" className="w-[300px] p-0 border-r-0 flex flex-col pt-12">
+            <SheetContent side="left" className="w-full sm:w-[300px] p-0 border-r-0 flex flex-col pt-12">
               <EpisodeTree
         onRefresh={handleManualRefreshScript}
         isRefreshing={isRefreshingScript}
@@ -728,12 +731,15 @@ export default function ScriptTabPage() {
           <Sheet open={rightSheetOpen} onOpenChange={setRightSheetOpen}>
             <SheetTrigger
               render={
-                <button className="p-1.5 -mr-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
+                <button
+                  className="flex h-11 w-11 -mr-2 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors"
+                  aria-label="打开场次详情"
+                >
                   <Info className="h-5 w-5" />
                 </button>
               }
             />
-            <SheetContent side="right" className="w-[300px] p-0 border-l-0 flex flex-col pt-12 overflow-y-auto">
+            <SheetContent side="right" className="w-full sm:w-[300px] p-0 border-l-0 flex flex-col pt-12 overflow-y-auto">
               {selectedScene ? (
                 <SceneDetail scene={selectedScene} projectId={projectId} />
               ) : (
