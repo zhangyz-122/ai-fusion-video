@@ -6,31 +6,13 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { productionApi, type ProductionRun, type ProductionRunStatus } from "@/lib/api/production";
-
-const statusFilters: Array<{ label: string; value: ProductionRunStatus | "" }> = [
-  { label: "全部", value: "" },
-  { label: "准备中", value: "CREATED" },
-  { label: "生成中", value: "WAITING_GENERATION" },
-  { label: "待质检", value: "QC_PENDING" },
-  { label: "已选定", value: "SELECTED" },
-  { label: "失败", value: "FAILED" },
-];
-
-const statusLabels: Record<ProductionRunStatus, string> = {
-  CREATED: "准备中",
-  WAITING_GENERATION: "生成中",
-  QC_PENDING: "待质检",
-  SELECTED: "已选定",
-  FAILED: "失败",
-};
-
-const statusStyles: Record<ProductionRunStatus, string> = {
-  CREATED: "text-muted-foreground bg-muted/30 border-border/30",
-  WAITING_GENERATION: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20",
-  QC_PENDING: "text-amber-600 bg-amber-500/10 border-amber-500/20",
-  SELECTED: "text-violet-600 bg-violet-500/10 border-violet-500/20",
-  FAILED: "text-rose-600 bg-rose-500/10 border-rose-500/20",
-};
+import {
+  formatRunTime,
+  runStatusFilters,
+  runStatusLabels,
+  runStatusStyles,
+} from "./_components/production-status";
+import { RunDetailDrawer } from "./_components/run-detail-drawer";
 
 const PAGE_SIZE = 10;
 
@@ -41,6 +23,7 @@ export default function ProductionCenterPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
+  const [detailRunId, setDetailRunId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,7 +58,7 @@ export default function ProductionCenterPage() {
       </header>
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="状态筛选">
-        {statusFilters.map(f => (
+        {runStatusFilters.map(f => (
           <button
             key={f.value}
             role="tab"
@@ -107,16 +90,24 @@ export default function ProductionCenterPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-sm font-semibold">Run #{run.id}</span>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] ${statusStyles[run.status]}`}>
-                    {statusLabels[run.status]}
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] ${runStatusStyles[run.status]}`}>
+                    {runStatusLabels[run.status]}
                   </span>
                   {run.selectedTakeId && (
                     <span className="text-xs text-muted-foreground">已选 Take #{run.selectedTakeId}</span>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  {new Date(run.createTime).toLocaleString("zh-CN", { hour12: false })}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{formatRunTime(run.createTime)}</span>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setDetailRunId(run.id)}
+                    title="查看运行详情"
+                  >
+                    详情
+                  </Button>
+                </div>
               </div>
               {run.failureMessage && (
                 <p className="mt-2 truncate text-xs text-rose-600 dark:text-rose-300" title={run.failureMessage}>
@@ -149,6 +140,15 @@ export default function ProductionCenterPage() {
           </Button>
         </div>
       )}
+
+      <RunDetailDrawer
+        open={detailRunId !== null}
+        runId={detailRunId}
+        onOpenChange={open => {
+          if (!open) setDetailRunId(null);
+        }}
+        onChanged={() => setRevision(v => v + 1)}
+      />
     </div>
   );
 }
