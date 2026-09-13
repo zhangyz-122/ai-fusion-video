@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
+import com.stonewu.fusion.entity.project.Project;
 import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
 import com.stonewu.fusion.security.SecurityUtils;
@@ -248,6 +249,52 @@ public class AssetService {
     @Transactional
     public void delete(Long id) {
         assetMapper.deleteById(id);
+    }
+
+    // ========== 回收站（已逻辑删除资产） ==========
+
+    /**
+     * 分页查询当前用户可访问项目内已逻辑删除的资产（回收站），按删除时间（update_time）倒序。
+     * 软删行被 @TableLogic 过滤、既有查询不可达，只能走 AssetMapper 的显式自定义 SQL。
+     */
+    public IPage<Asset> pageDeletedInAccessibleProjects(Long userId, int page, int size) {
+        List<Long> accessibleProjectIds = projectService.listAccessibleByUser(userId).stream()
+                .map(Project::getId)
+                .collect(Collectors.toList());
+        if (accessibleProjectIds.isEmpty()) {
+            return new Page<>(page, size);
+        }
+        return assetMapper.selectDeletedPage(new Page<>(page, size), accessibleProjectIds);
+    }
+
+    /**
+     * 查询已逻辑删除的资产，不存在或未删除时抛业务异常。
+     * 供控制器在归属校验前解析软删行（selectById 自动追加 deleted = 0，无法命中）。
+     */
+    public Asset getDeletedById(Long id) {
+        Asset asset = assetMapper.selectDeletedById(id);
+        if (asset == null) {
+            throw new BusinessException("回收站中不存在该资产: " + id);
+        }
+        return asset;
+    }
+
+    /** 恢复回收站资产（置 deleted = 0），保留原 id、子资产与引用关系 */
+    @CacheEvict(value = { "asset", "assetItem" }, allEntries = true)
+    @Transactional
+    public Asset restore(Long id) {
+        if (assetMapper.restoreById(id) == 0) {
+            throw new BusinessException("回收站中不存在该资产: " + id);
+        }
+        return assetMapper.selectById(id);
+    }
+
+    /** 彻底删除回收站资产：物理删除资产行及其全部子资产行 */
+    @CacheEvict(value = { "asset", "assetItem" }, allEntries = true)
+    @Transactional
+    public void purge(Long id) {
+        assetItemMapper.deletePhysicallyByAssetId(id);
+        assetMapper.deletePhysicallyById(id);
     }
 
     // ========== 子资产 ==========

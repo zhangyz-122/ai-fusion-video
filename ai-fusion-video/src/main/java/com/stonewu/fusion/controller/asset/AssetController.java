@@ -121,6 +121,39 @@ public class AssetController {
         return CommonResult.success(true);
     }
 
+    // ========== 回收站（已逻辑删除资产） ==========
+
+    @Operation(summary = "回收站：分页查询当前用户可访问项目内的已删除资产")
+    @GetMapping("/recycle-bin")
+    public CommonResult<Map<String, Object>> listRecycleBin(@RequestParam(defaultValue = "1") int page,
+                                                            @RequestParam(defaultValue = "20") int size) {
+        Long userId = SecurityUtils.requireCurrentUserId();
+        IPage<Asset> pageResult = assetService.pageDeletedInAccessibleProjects(userId, page, size);
+        return CommonResult.success(Map.of(
+                "records", pageResult.getRecords(),
+                "total", pageResult.getTotal(),
+                "page", pageResult.getCurrent(),
+                "size", pageResult.getSize()
+        ));
+    }
+
+    @Operation(summary = "回收站：恢复已删除资产（置 deleted = 0，保留原 id）")
+    @PutMapping("/recycle-bin/{id}/restore")
+    public CommonResult<Asset> restoreRecycled(@PathVariable Long id) {
+        Asset deleted = assetService.getDeletedById(id);
+        accessGuard.assertProject(deleted.getProjectId());
+        return CommonResult.success(assetService.restore(deleted.getId()));
+    }
+
+    @Operation(summary = "回收站：彻底删除（物理删除）已删除资产")
+    @DeleteMapping("/recycle-bin/{id}")
+    public CommonResult<Boolean> purgeRecycled(@PathVariable Long id) {
+        Asset deleted = assetService.getDeletedById(id);
+        accessGuard.assertProject(deleted.getProjectId());
+        assetService.purge(deleted.getId());
+        return CommonResult.success(true);
+    }
+
     // ========== 子资产 ==========
 
     @Operation(summary = "获取子资产详情")
