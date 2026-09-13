@@ -501,6 +501,59 @@ T10 发现的六条 UI 缺陷逐一修复,每项单独提交(分支 `swarm/a3-de
 
 ---
 
+## Round 2 执行记录(Dev-B 前端追加,2026-09-13):导航统一 + 品牌收尾
+
+前置:合并 `sprint/universal-director-integration`(6c3fe0f,快进无冲突,含 Round 1 六项修复与
+SW-T05/T06/T10/T14~T19 等集成成果)。
+
+### 导航方案与理由(侧栏"生图/生视频" vs "图像工坊/视频工坊"并存问题)
+采用"目录层唯一"方案(任务建议的第二种),即:侧栏只保留工坊目录入口,编辑器直达全部收纳为
+工坊页内次级入口。理由:
+- 仪表盘快捷入口(T6)、编辑器返回链接(Round 1)、声音工坊页结构三者的既有语义都已是
+  "目录页=入口层",侧栏直指编辑器是唯一的分歧点,收敛后全站一致;
+- 目录页天然承载"模型选择/能力状态"这一层信息,直达编辑器绕过它会造成 SeedVR2 类
+  "已启用模型不可见"问题复发(T10 缺陷 2 的根源)。
+落地(提交 3f60d05):
+1. 侧栏工坊组:图像工坊(/generate/images)、视频工坊(/generate/videos)、声音工坊
+   (/generate/audios)三项;移除冗余"工坊"首页项(/generate 与三个目录语义重复,页面保留为
+   直达 URL 落地)。
+2. 视频工坊目录顶部新增「万能导演台」卡片(default 主按钮 → /generate/video 免选模型模式),
+   文案复用编辑器内描述;避免侧栏改指目录后统一导演流程失联——这是对"收纳为次级入口"的
+   关键补位。
+3. 活动态归属:/generate/image*高亮图像工坊,/generate/video*与 /generate/universal*高亮
+   视频工坊(编辑器/导演台视为对应工坊的深层路由)。
+4. /generate 落地页按钮「打开视频工坊」更正为「打开万能导演台」,与指向一致。
+
+### 品牌统一(提交 55895bf)
+layout metadata(default title"短剧制造"→"融光",description→"融光视频平台",口径与设置页
+邮箱占位一致)、顶栏品牌字样(app-header"短剧制造"→"融光")、忘记密码页页脚
+("短剧制造平台"→"融光")。全仓前端源码 grep 已无"短剧制造/荣光"残留;register/setup 页
+无品牌文案,无需改动。
+
+### 变更文件
+- `ai-fusion-video-web/components/dashboard/sidebar-nav.tsx`
+- `ai-fusion-video-web/app/(dashboard)/generate/videos/page.tsx`(新增万能导演台区块)
+- `ai-fusion-video-web/app/(dashboard)/generate/page.tsx`(按钮文案)
+- `ai-fusion-video-web/app/layout.tsx`、`components/dashboard/app-header.tsx`、
+  `app/(auth)/forgot-password/page.tsx`(品牌)
+
+### 验证结果
+- `corepack pnpm exec tsc --noEmit`:0 错误;`eslint`(6 个改动文件):0 问题。
+- 架构守护 `node --test tests/architecture/line-budget.test.mjs`:pass(1) fail(0)。
+- UI 级浏览器验证未做(子代理不使用 Browser Use),建议集成部署后在浏览器复核:
+  ① 侧栏三工坊入口与活动态;② 视频工坊→万能导演台卡片;③ 顶栏/登录/忘记密码品牌文案。
+
+### 需要决策/遗留(不空等)
+1. 【e2e 适配】`e2e/generation.spec.ts` 注释与断言基于"部署版 /generate/images|videos 服务端
+   重定向"的旧行为(Round 1 已恢复目录页,重定向不复存在),且 QA 归属 SW-T03,本次未动;
+   合并后需 QA 同步用例(路径 1/5 的 waitForURL 断言)。
+2. 【万能导演台层级】现方案将其作为视频工坊内首张卡片;若产品希望它升至与工坊平级的侧栏
+   一级项(四入口方案),只需在 generationItems 加一项并补活动态,改动极小,待拍板。
+3. 【/generate 落地页】侧栏移除后仅剩直达 URL/旧书签触达,内容与三工坊部分重叠;后续可考虑
+   重定向到 /dashboard 或改造为真正的"创作总览",属信息架构增强,待派发。
+
+---
+
 ## SW-T06 执行记录与发现(QA 子代理追加,2026-09-14)
 
 ### 执行方式与范围
