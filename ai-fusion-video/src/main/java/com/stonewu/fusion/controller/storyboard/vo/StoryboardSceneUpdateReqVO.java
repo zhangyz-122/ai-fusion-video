@@ -9,6 +9,9 @@ public class StoryboardSceneUpdateReqVO {
 
     private Long id;
 
+    /** 目标分镜集ID，传值且与当前不同时移动场次（必须与场次属于同一分镜） */
+    private Long episodeId;
+
     private String sceneNumber;
 
     private String sceneHeading;
