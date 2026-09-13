@@ -101,7 +101,8 @@ public class ComfyUiNativeClient {
                                            String fileName,
                                            String contentType,
                                            String subfolder) {
-        return uploadMedia(apiConfig, bytes, fileName, contentType, subfolder, false);
+        return uploadMedia(apiConfig, bytes, fileName, contentType, subfolder,
+                UploadMediaKind.IMAGE);
     }
 
     public ComfyUiUploadResult uploadVideo(ApiConfig apiConfig,
@@ -109,7 +110,17 @@ public class ComfyUiNativeClient {
                                            String fileName,
                                            String contentType,
                                            String subfolder) {
-        return uploadMedia(apiConfig, bytes, fileName, contentType, subfolder, true);
+        return uploadMedia(apiConfig, bytes, fileName, contentType, subfolder,
+                UploadMediaKind.VIDEO);
+    }
+
+    public ComfyUiUploadResult uploadAudio(ApiConfig apiConfig,
+                                           byte[] bytes,
+                                           String fileName,
+                                           String contentType,
+                                           String subfolder) {
+        return uploadMedia(apiConfig, bytes, fileName, contentType, subfolder,
+                UploadMediaKind.AUDIO);
     }
 
     private ComfyUiUploadResult uploadMedia(ApiConfig apiConfig,
@@ -117,7 +128,7 @@ public class ComfyUiNativeClient {
                                              String fileName,
                                              String contentType,
                                              String subfolder,
-                                             boolean video) {
+                                             UploadMediaKind kind) {
         if (bytes == null || bytes.length == 0) {
             throw new BusinessException(400, "上传到 ComfyUI 的输入文件不能为空");
         }
@@ -125,7 +136,7 @@ public class ComfyUiNativeClient {
         MultipartBody.Builder body = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("image", safeFileName,
-                        RequestBody.create(bytes, MediaType.get(normalizeContentType(contentType, video))))
+                        RequestBody.create(bytes, MediaType.get(normalizeContentType(contentType, kind))))
                 .addFormDataPart("type", "input")
                 .addFormDataPart("overwrite", "false");
         if (StrUtil.isNotBlank(subfolder)) {
@@ -135,7 +146,7 @@ public class ComfyUiNativeClient {
                 .post(body.build())
                 .build();
         JsonNode response = executeJson(apiConfig, request,
-                video ? "上传输入视频" : "上传输入图片", 200);
+                "上传输入" + kind.label, 200);
         String name = requiredText(response, "name", "ComfyUI 上传响应缺少 name");
         String returnedSubfolder = requiredString(
                 response, "subfolder", "ComfyUI 上传响应缺少 subfolder");
@@ -442,17 +453,30 @@ public class ComfyUiNativeClient {
         return subfolder;
     }
 
-    private String normalizeContentType(String value, boolean video) {
+    private String normalizeContentType(String value, UploadMediaKind kind) {
         if (StrUtil.isBlank(value)) {
             throw new BusinessException(400, "ComfyUI 上传文件缺少 Content-Type");
         }
         String contentType = value.split(";", 2)[0].trim();
-        if (!contentType.startsWith("image/")
-                && !(video && contentType.startsWith("video/"))) {
+        if (!contentType.startsWith(kind.prefix + "/")) {
             throw new BusinessException(400,
-                    video ? "ComfyUI 视频输入不是受支持的视频文件" : "ComfyUI 图片输入不是受支持的图片文件");
+                    "ComfyUI " + kind.label + "输入不是受支持的" + kind.label + "文件");
         }
         return contentType;
+    }
+
+    private enum UploadMediaKind {
+        IMAGE("image", "图片"),
+        VIDEO("video", "视频"),
+        AUDIO("audio", "音频");
+
+        private final String prefix;
+        private final String label;
+
+        UploadMediaKind(String prefix, String label) {
+            this.prefix = prefix;
+            this.label = label;
+        }
     }
 
     private String extensionOf(String filename) {

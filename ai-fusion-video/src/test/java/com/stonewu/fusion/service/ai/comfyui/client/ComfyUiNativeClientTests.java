@@ -149,6 +149,38 @@ class ComfyUiNativeClientTests {
     }
 
     @Test
+    void uploadAudioSendsAudioFileThroughOfficialUploadContract() {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server.createContext("/upload/image", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            json(exchange, 200,
+                    "{\"name\":\"voice.mp3\",\"subfolder\":\"ai-fusion-video\",\"type\":\"input\"}");
+        });
+
+        ComfyUiUploadResult result = client.uploadAudio(
+                apiConfig, "mp3-data".getBytes(StandardCharsets.UTF_8),
+                "voice.mp3", "audio/mpeg", "ai-fusion-video");
+
+        assertThat(result.workflowValue()).isEqualTo("ai-fusion-video/voice.mp3");
+        assertThat(requestBody.get())
+                .contains("name=\"image\"; filename=\"voice.mp3\"")
+                .contains("audio/mpeg")
+                .contains("name=\"type\"")
+                .contains("input")
+                .contains("name=\"subfolder\"")
+                .contains("ai-fusion-video");
+    }
+
+    @Test
+    void uploadAudioRejectsNonAudioContentType() {
+        assertThatThrownBy(() -> client.uploadAudio(
+                apiConfig, "png-data".getBytes(StandardCharsets.UTF_8),
+                "voice.png", "image/png", "ai-fusion-video"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("音频");
+    }
+
+    @Test
     void getJobParsesOfficialCompletedOutputs() {
         String promptId = UUID.randomUUID().toString();
         server.createContext("/api/jobs/" + promptId, exchange -> json(exchange, 200,

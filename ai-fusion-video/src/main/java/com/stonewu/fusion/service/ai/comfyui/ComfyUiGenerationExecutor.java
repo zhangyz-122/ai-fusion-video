@@ -164,10 +164,10 @@ public class ComfyUiGenerationExecutor {
                 context.model().getModelType(), context.version().getApiWorkflowJson(),
                 context.version().getInputBindingsJson());
         Set<String> imageFields = new LinkedHashSet<>();
+        Set<String> audioFields = new LinkedHashSet<>();
         for (ComfyUiInputBinding binding : bindings) {
             if ("uploaded_audio".equals(binding.valueType())) {
-                throw new BusinessException(400,
-                        "Native API 第一版不支持音频文件上传绑定: " + binding.businessField());
+                audioFields.add(binding.businessField());
             }
             if ("uploaded_image".equals(binding.valueType())) {
                 imageFields.add(binding.businessField());
@@ -176,8 +176,15 @@ public class ComfyUiGenerationExecutor {
         for (String field : imageFields) {
             Object raw = values.get(field);
             if (raw == null) continue;
-            List<String> sources = toStringList(raw, field);
+            List<String> sources = toStringList(raw, field, "图片");
             values.put(field, inputResourceService.uploadImages(
+                    context.apiConfig(), taskKey, field, sources));
+        }
+        for (String field : audioFields) {
+            Object raw = values.get(field);
+            if (raw == null) continue;
+            List<String> sources = toStringList(raw, field, "音频");
+            values.put(field, inputResourceService.uploadAudios(
                     context.apiConfig(), taskKey, field, sources));
         }
         for (ComfyUiInputBinding binding : bindings) {
@@ -186,21 +193,21 @@ public class ComfyUiGenerationExecutor {
             Object raw = values.get(field);
             if (raw == null) continue;
             values.put(field, inputResourceService.uploadVideos(
-                    context.apiConfig(), taskKey, field, toStringList(raw, field)));
+                    context.apiConfig(), taskKey, field, toStringList(raw, field, "视频")));
         }
     }
 
-    private List<String> toStringList(Object raw, String field) {
+    private List<String> toStringList(Object raw, String field, String mediaLabel) {
         if (raw instanceof List<?> list) {
             return list.stream().map(value -> {
                 if (value == null || value.toString().isBlank()) {
-                    throw new BusinessException(400, "ComfyUI 图片输入包含空值: " + field);
+                    throw new BusinessException(400, "ComfyUI " + mediaLabel + "输入包含空值: " + field);
                 }
                 return value.toString();
             }).toList();
         }
         if (raw.toString().isBlank()) {
-            throw new BusinessException(400, "ComfyUI 图片输入不能为空: " + field);
+            throw new BusinessException(400, "ComfyUI " + mediaLabel + "输入不能为空: " + field);
         }
         return List.of(raw.toString());
     }
