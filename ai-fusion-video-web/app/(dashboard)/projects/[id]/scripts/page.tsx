@@ -20,10 +20,12 @@ import { EpisodeTree } from "./_components/episode-tree";
 import { SceneList } from "./_components/scene-list";
 import { SceneDetail } from "./_components/scene-detail";
 import { ScriptOverview } from "./_components/script-overview";
+import { StoryToScriptButton } from "./_components/story-to-script-button";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
 import { useProject } from "../project-context";
 
 const SCRIPT_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-script-sidebar-collapsed";
@@ -742,6 +744,14 @@ export default function ScriptTabPage() {
           </Sheet>
         </div>
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-center justify-end border-b border-border/20 bg-background/80 px-4 py-2 backdrop-blur-sm">
+            <StoryToScriptButton
+              projectId={projectId}
+              scriptId={script.id}
+              rawContentLength={script.rawContent?.length ?? 0}
+              onStarted={handleManualRefreshScript}
+            />
+          </div>
           <SceneList
             activeEpisode={activeEpisode}
             activeScenes={activeScenes}
