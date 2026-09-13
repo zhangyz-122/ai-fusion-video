@@ -191,7 +191,7 @@ export function AppHeader() {
             className="flex items-center cursor-pointer shrink-0 px-2"
             onClick={() => router.push("/dashboard")}
           >
-            <span className="text-sm font-semibold tracking-tight">短剧制造</span>
+            <span className="text-sm font-semibold tracking-tight">融光</span>
           </button>
         }
         mobileControls={

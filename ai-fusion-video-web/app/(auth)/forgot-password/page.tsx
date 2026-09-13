@@ -336,7 +336,7 @@ function ForgotPasswordContent() {
         </Link>
       </div>
 
-      <p className="text-xs text-white/30 pt-8">短剧制造平台</p>
+      <p className="text-xs text-white/30 pt-8">融光</p>
     </AuthLayout>
   );
 }

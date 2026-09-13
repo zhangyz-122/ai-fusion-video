@@ -25,9 +25,9 @@ const uiFontFamily =
 export const metadata: Metadata = {
   title: {
     template: "%s",
-    default: "短剧制造",
+    default: "融光",
   },
-  description: "短剧制造平台",
+  description: "融光视频平台",
 };
 
 export default function RootLayout({
