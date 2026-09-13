@@ -70,12 +70,14 @@ public class ProductionRunReconcileScheduler {
                     log.info("[ProductionScheduler] 滞留运行已自动同步: runId={}, videoTaskId={}, taskStatus={}",
                             run.getId(), videoTaskId, taskStatus);
                 } catch (Exception exception) {
-                    log.warn("[ProductionScheduler] 滞留运行自动同步失败: runId={}, error={}",
-                            run.getId(), exception.getMessage());
+                    // 最后一个参数传异常对象，SLF4J 会输出完整堆栈，避免 NPE 等无消息异常只剩空 error。
+                    log.warn("[ProductionScheduler] 滞留运行自动同步失败: runId={}, videoTaskId={}, error={}",
+                            run.getId(), videoTaskId, exception.getMessage(), exception);
                 }
             }
         } catch (Exception exception) {
-            log.warn("[ProductionScheduler] 滞留运行扫描失败: error={}", exception.getMessage());
+            // 完整堆栈必须落日志：本轮扫描的根因曾是无消息 NPE，仅有 error={} 时无法定位。
+            log.warn("[ProductionScheduler] 滞留运行扫描失败: error={}", exception.getMessage(), exception);
         }
     }
 
@@ -89,7 +91,14 @@ public class ProductionRunReconcileScheduler {
                         (first, second) -> first));
     }
 
-    /** 直接查表取任务状态，绕过 videoTask 缓存，避免回收/竞态场景读到过期状态。 */
+    /**
+     * 直接查表取任务状态，绕过 videoTask 缓存，避免回收/竞态场景读到过期状态。
+     *
+     * <p>{@code afv_video_task.status} 列允许 NULL（DDL 仅 DEFAULT 0 而非 NOT NULL）。
+     * {@link Collectors#toMap} 遇到 null value 会抛出无消息的 NPE，导致整个扫描批次
+     * 在构建状态映射时崩溃，所有滞留运行（含任务已终态的）永远无法进入同步。
+     * 未知状态按“非终态”处理：跳过该任务，等待下一轮扫描，不阻塞同批其他运行。</p>
+     */
     private Map<Long, Integer> loadTaskStatuses(Iterable<Long> videoTaskIds) {
         List<Long> ids = new ArrayList<>();
         videoTaskIds.forEach(ids::add);
@@ -97,6 +106,7 @@ public class ProductionRunReconcileScheduler {
                         .select(VideoTask::getId, VideoTask::getStatus)
                         .in(VideoTask::getId, ids))
                 .stream()
+                .filter(task -> task.getId() != null && task.getStatus() != null)
                 .collect(Collectors.toMap(VideoTask::getId, VideoTask::getStatus));
     }
 
