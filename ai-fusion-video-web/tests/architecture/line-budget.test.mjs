@@ -29,8 +29,6 @@ const WARN_FLOOR = 500;
 
 /** key=模块根 POSIX 相对路径,value=登记行数(只许减少)。owner=Architect(Agent-1)。 */
 const WHITELIST = {
-  'app/(dashboard)/projects/[id]/storyboards/_components/storyboard-ref-panel.tsx': 1637,
-  'app/(dashboard)/projects/[id]/storyboards/page.tsx': 1541,
   'components/dashboard/asset-detail-sheet.tsx': 1465,
   'lib/store/pipeline-store.ts': 1140,
   'components/dashboard/notification-panel/detail.tsx': 1028,
