@@ -113,3 +113,19 @@ SW-T22|P3|Dev-A|StoryboardService 跨域直连 Script mapper 收拢:改经 Scrip
   COST: M(1 天;ScriptService 补只读方法+缓存语义)。
   RISK: ScriptService 新增读方法需评估 @Cacheable/@CacheEvict(AGENTS.md 规则);VideoComposeService 对 productionTake/videoItem 的跨域读属 ARCHITECTURE 规则4 已认可编排,不在本条范围。
   DEPENDENCIES: 建议与 storyboard 页面族后端收尾同批(SW-T12 前端部分之后)。
+
+---
+
+
+## 红队 R1 升级条目(2026-09-14)
+SW-T17|P0|Dev-Sec|API 密钥泄露:/get、/list 补 @PreAuthorize admin;RespVO 脱敏(不回传 apiKey/appSecret/proxyPassword);实体 @ToString.Exclude|ApiConfigController、ApiConfigRespVO、ApiConfig|uitest 调 /get 拿不到密钥
+SW-T18|P0|Dev-Sec|SSRF 旁路封堵:ComfyUiInputResourceService.downloadHttp/downloadVideoHttp 与 LocalStorageStrategy.store 接入 PublicHttpUrlValidator;OkHttp 关闭自动重定向或重定向后重校验;统一 VideoCompose 漂移的第二套校验|上述两服务+VideoComposeService|内网 URL 全链路拒绝
+SW-T19|P0|Dev-Sec|上传链路:subDir 路径穿越 sanitize;扩展名与 Content-Type 绑定白名单;魔数校验;大小流式处理(不 getBytes 入堆)|LocalStorageStrategy、上传端点|穿越/XSS/内存三向用例全拒
+
+---
+
+
+## Dev-A 备注(分支 swarm/a2-dev-backend)
+- SW-T01 后端已完成(2026-09-14):`uploadBoundMedia` 不再拒绝 `uploaded_audio`,改为走 `ComfyUiInputResourceService.uploadAudios`(URL/DataURI→下载/解码→`ComfyUiNativeClient.uploadAudio`→`/upload/image` 端点 + `ai-fusion-video` 子目录),渲染端 `uploaded_*` 单元素自动解包,无需改 renderer。音频上限 100MB,支持 mp3/wav/m4a/aac/ogg/flac/webm。验收"请求传音频试运行出片含音轨"需要 Supervisor 在 v23 INFINITETALK 工作流上为 LoadAudio 配置 `uploaded_audio` 绑定(referenceAudios 字段)后实测,后端已具备能力。
+- SW-T04 已完成(2026-09-14):`AgentMessageAllocator.append` 撞唯一键后重锁会话重读计数再试一次,仍冲突则记 WARN(conversationId/attemptedOrder/runId/projectionKey/role)并按"已落库"返回最后尝试的顺序,不再上抛 DataIntegrityViolation,也不更新会话计数。效果验证:AgentRunMaintenanceScheduler 每5秒 recoverTerminalBatch 原会因该异常反复 log.error,单测 `appendIdempotentSkipKeepsProjectionRecoveryLoopAliveForMaintenanceScheduler` 证明重复投影幂等返回、异常不再外泄,Mono 链正常完成;真机验证看日志不再出现 "Agent run maintenance failed"。决策点(留档):持续冲突按已存在跳过,理论上可能丢弃一条真正的新消息,日志字段足以人工对账;如需强一致可在投影层先按 projection_key 比对后删除重投,归 Supervisor 决策。
+- 存量失败记录(非本分支引入):ProjectServiceTests(SW-T10 已立项)、AgentScopeGaDependencyContractTests.sourceTreeContainsNoObsoleteV1Symbol 标记 ApplicationTimeZoneInitializerTests.java(历史遗留)。

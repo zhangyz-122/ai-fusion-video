@@ -1,6 +1,6 @@
 "use client";
 
-import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X } from "lucide-react";
+import { Film, GripVertical, Plus, Trash2, Video, Clapperboard, Play, ZoomIn, X } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -745,24 +745,26 @@ export function StoryboardTableView({
 
                 {/* 操作按钮 */}
                 <div className="px-1 py-2 flex items-center justify-center gap-0.5">
-                  {/* 生成视频 */}
+                  {/* 生产这一镜 */}
                   {onVideoGen && (
                     <Tooltip>
                       <TooltipTrigger
                         render={
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               onVideoGen(item.id);
                             }}
-                            className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-purple-400 hover:bg-purple-500/10 transition-all"
+                            aria-label={`生产镜头 ${item.shotNumber || String(idx + 1)} 的 3 个候选视频`}
+                            className="p-1 rounded text-muted-foreground transition-colors hover:text-violet-400 hover:bg-violet-500/10 focus-visible:outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           >
-                            <Video className="h-3 w-3" />
+                            <Clapperboard className="h-3 w-3" />
                           </button>
                         }
                       />
-                        <TooltipContent className={TOOLTIP_CONTENT_CLASS}>
-                          生产 3 个候选视频
+                      <TooltipContent className={TOOLTIP_CONTENT_CLASS}>
+                        生产这一镜（3 个候选）
                       </TooltipContent>
                     </Tooltip>
                   )}

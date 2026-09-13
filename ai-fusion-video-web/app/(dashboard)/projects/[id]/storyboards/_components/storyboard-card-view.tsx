@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useState, useMemo } from "react";
-import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Video, Play, Trash2 } from "lucide-react";
+import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Clapperboard, Play, Trash2 } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -266,21 +266,23 @@ const CardItemUI = memo(
               </div>
             )}
 
-            {/* 生成视频按钮 - 右下角悬浮（只在图片模式或没有切换 tab 时显示） */}
+            {/* 生产这一镜按钮 - 右下角常显（只在图片模式或没有切换 tab 时显示） */}
             {onVideoGen && !hasBoth && (
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onVideoGen(item.id);
                 }}
                 className={cn(
-                  "absolute bottom-2 right-2 p-1.5 rounded-md bg-black/40 backdrop-blur-sm",
-                  "opacity-0 group-hover:opacity-100 transition-all z-20",
-                  "hover:bg-purple-500/60 text-white/90"
+                  "absolute bottom-2 right-2 p-1.5 rounded-md bg-black/45 backdrop-blur-sm",
+                  "transition-colors hover:bg-violet-500/70 z-20",
+                  "text-white/90 focus-visible:outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 )}
-                  title="生产 3 个候选视频"
+                aria-label={`生产镜头 ${item.shotNumber || idx + 1} 的 3 个候选视频`}
+                title="生产这一镜（3 个候选）"
               >
-                <Video className="h-3.5 w-3.5" />
+                <Clapperboard className="h-3.5 w-3.5" />
               </button>
             )}
           </div>

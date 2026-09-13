@@ -1,0 +1,24 @@
+{
+  "projectId": 8,
+  "scriptId": 8,
+  "results": [
+    {
+      "chunkChars": 999999,
+      "label": "chunkChars=999999(应钳12000)",
+      "expectMin": 2,
+      "expectMax": 5,
+      "count": 2,
+      "noLoss": true,
+      "pass": true
+    },
+    {
+      "chunkChars": -1,
+      "label": "chunkChars=-1(应钳2000)",
+      "expectMin": 6,
+      "expectMax": 13,
+      "count": 9,
+      "noLoss": true,
+      "pass": true
+    }
+  ]
+}

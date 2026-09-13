@@ -1,0 +1,117 @@
+[
+  {
+    "name": "health 管理员 200 + 类型",
+    "pass": true,
+    "detail": "status=UP db=UP checkedAt=2026-09-13T18:39:02.590505236Z"
+  },
+  {
+    "name": "storage 管理员 200 + 类型 + 加和一致",
+    "pass": true,
+    "detail": "files=97 bytes=183457676 images=43 videos=51 composed=3"
+  },
+  {
+    "name": "video-queue 管理员 200 + 类型 + 加和一致",
+    "pass": true,
+    "detail": "available=true queues=0 pending=0 running=0"
+  },
+  {
+    "name": "uitest 访问 health → 403",
+    "pass": true,
+    "detail": "HTTP 403"
+  },
+  {
+    "name": "匿名访问 health → 401/403",
+    "pass": true,
+    "detail": "HTTP 401"
+  },
+  {
+    "name": "uitest 访问 storage → 403",
+    "pass": true,
+    "detail": "HTTP 403"
+  },
+  {
+    "name": "匿名访问 storage → 401/403",
+    "pass": true,
+    "detail": "HTTP 401"
+  },
+  {
+    "name": "uitest 访问 video-queue → 403",
+    "pass": true,
+    "detail": "HTTP 403"
+  },
+  {
+    "name": "匿名访问 video-queue → 401/403",
+    "pass": true,
+    "detail": "HTTP 401"
+  },
+  {
+    "name": "pageNo=0 行为(与第1页一致或 400)",
+    "pass": true,
+    "detail": "ids0=[5,4,3,2,1] ids1=[5,4,3,2,1]"
+  },
+  {
+    "name": "pageNo=999 → 200 空列表且 total 保留",
+    "pass": true,
+    "detail": "list=0 total=5"
+  },
+  {
+    "name": "pageSize=0 不 500 且结构完整",
+    "pass": true,
+    "detail": "HTTP 200 list=0"
+  },
+  {
+    "name": "pageSize=-1 不 500 且结构完整",
+    "pass": true,
+    "detail": "HTTP 200 list=5"
+  },
+  {
+    "name": "pageSize=1000 不 500 且结构完整",
+    "pass": true,
+    "detail": "HTTP 200 list=5"
+  },
+  {
+    "name": "status=CREATED 过滤(全部匹配)",
+    "pass": true,
+    "detail": "count=0"
+  },
+  {
+    "name": "status=WAITING_GENERATION 过滤(全部匹配)",
+    "pass": true,
+    "detail": "count=0"
+  },
+  {
+    "name": "status=QC_PENDING 过滤(全部匹配)",
+    "pass": true,
+    "detail": "count=0"
+  },
+  {
+    "name": "status=SELECTED 过滤(全部匹配)",
+    "pass": true,
+    "detail": "count=2"
+  },
+  {
+    "name": "status=FAILED 过滤(全部匹配)",
+    "pass": true,
+    "detail": "count=3"
+  },
+  {
+    "name": "status=NOT_A_STATUS → 200 空列表",
+    "pass": true,
+    "detail": "HTTP 200"
+  },
+  {
+    "name": "status=(空串) 等价于不过滤",
+    "pass": true,
+    "detail": "count=5"
+  },
+  {
+    "name": "uitest 只见己方运行",
+    "pass": true,
+    "detail": "count=8"
+  },
+  {
+    "name": "uitest 访问他人 run 详情 → 非 200",
+    "pass": true,
+    "detail": "HTTP 500"
+  }
+]
