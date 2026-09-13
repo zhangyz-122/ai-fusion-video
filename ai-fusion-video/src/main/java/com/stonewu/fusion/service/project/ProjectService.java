@@ -88,7 +88,7 @@ public class ProjectService {
         if (currentTeamId == null) {
             return listByOwner(OWNER_TYPE_PERSONAL, userId);
         }
-        return projectMapper.selectList(accessibleProjectWrapper(userId));
+        return projectMapper.selectList(teamScopedProjectWrapper(currentTeamId));
     }
 
     private LambdaQueryWrapper<Project> accessibleProjectWrapper(Long userId) {
@@ -99,6 +99,10 @@ public class ProjectService {
                     .eq(Project::getOwnerId, userId)
                     .orderByDesc(Project::getCreateTime);
         }
+        return teamScopedProjectWrapper(currentTeamId);
+    }
+
+    private LambdaQueryWrapper<Project> teamScopedProjectWrapper(Long currentTeamId) {
         List<Long> memberUserIds = teamService.listMemberUserIds(currentTeamId);
         return new LambdaQueryWrapper<Project>()
                 .and(wrapper -> wrapper
