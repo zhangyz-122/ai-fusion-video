@@ -42,14 +42,19 @@ E2E_BASE_URL=http://localhost:8081 corepack pnpm exec playwright test -c e2e/pla
 | 1 | `auth.spec.ts` | 错误密码登录提示错误且不进入系统 | 登录 | 提示"用户名或密码错误",停留登录页 |
 | 2 | `auth.spec.ts` | 登录成功进入仪表盘并显示当前用户 | 登录 | 跳转 `/dashboard`,顶栏出现用户名 |
 | 3 | `auth.spec.ts` | 退出登录返回登录页 | 登出 | 头像下拉退出后回到 `/login` |
-| 4 | `generation.spec.ts` | 路径1 独立生图:图像创作编辑器填写提示词后生成按钮可点 | `/generate/images` → 编辑器 | 生成按钮 enabled,**不点击** |
+| 4 | `generation.spec.ts` | 路径1 独立生图:图像工坊选择模型并在编辑器填写提示词 | `/generate/images` → 使用此模型 → 编辑器 | 生成按钮 enabled,**不点击** |
 | 5 | `generation.spec.ts` | 路径2 参考生图:直达编辑器并选中参考图生图模型 | `/generate/image?modelId=15` | 编辑器加载、模型已选中 |
-| 6 | `generation.spec.ts` | 路径5 高清处理入口:生视频工作台(万能导演台)加载 | `/generate/videos` | 页面与提示词输入加载 |
-| 7 | `project-flows.spec.ts` | 路径3 图生视频生产:分镜页打开镜头生产抽屉 | 项目概览 → 分镜页 | 生产抽屉打开、按钮可见,**不启动** |
-| 8 | `project-flows.spec.ts` | 路径4 对白片段/自动分块:原文页转剧本面板完整 | 项目"写 · 原文"页 | 面板与表单完整,**不启动解析** |
-| 9 | `project-flows.spec.ts` | 路径6 项目成片:项目概览进入分镜页可见分集合成入口 | 项目概览 → 分镜页 | 合成入口可见,**不点击** |
+| 6 | `generation.spec.ts` | 路径5 高清处理入口:视频工坊目录加载且含高清放大能力卡片 | `/generate/videos` | 标题与 SeedVR2 能力卡片可见 |
+| 7 | `project-flows.spec.ts` | 路径3 图生视频生产:分镜页打开镜头生产抽屉 | 项目概览 → 分镜页 → 选中分集 | 抽屉"生产这一镜"打开、按钮可见,**不启动** |
+| 8 | `project-flows.spec.ts` | 路径4 对白片段/自动分块:剧本页故事转剧本弹窗完整 | 项目"写 · 剧本"页 | 弹窗表单完整,**不启动解析** |
+| 9 | `project-flows.spec.ts` | 路径6 项目成片:项目概览进入分镜页可见分集合成入口 | 项目概览 → 分镜页 → 选中分集 | 合成入口可见,**不点击** |
 | 10 | `permission.spec.ts` | uitest 项目列表不包含 zhangyz 的项目 | 权限对照 | UI 列表只含自己的项目 |
 | 11 | `permission.spec.ts` | uitest 通过 API 无法读取 zhangyz 的项目详情 | 权限对照 | API 不返回他属主项目数据 |
+
+> 适配记录(2026-09-14):最终集成版部署后适配了 5 处 UI 结构变化——工坊目录页恢复
+> (`/generate/images`、`/generate/videos` 不再重定向,经"使用此模型"进编辑器);
+> 生产抽屉文案统一为"生产这一镜"(需先选中分集);故事转剧本入口移至"写 · 剧本"页;
+> 分集合成入口在选中分集后才渲染。详见 TASK.md 末尾适配记录。
 
 ## 实现说明
 
