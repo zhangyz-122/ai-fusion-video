@@ -107,7 +107,9 @@ class ProjectAccessGuardTests {
 
         assertThatThrownBy(() -> guard.assertScript(11L))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("无权访问该项目内容");
+                .hasMessageContaining("无权访问该项目内容")
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(403);
     }
 
     @Test
@@ -136,7 +138,9 @@ class ProjectAccessGuardTests {
 
         assertThatThrownBy(() -> guard.assertAssetItem(41L))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("无权访问该项目内容");
+                .hasMessageContaining("无权访问该项目内容")
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(403);
     }
 
     @Test
@@ -147,7 +151,9 @@ class ProjectAccessGuardTests {
 
         assertThatThrownBy(() -> guard.assertProductionRun(61L))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("无权访问该项目内容");
+                .hasMessageContaining("无权访问该项目内容")
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(403);
     }
 
     @Test
@@ -156,6 +162,30 @@ class ProjectAccessGuardTests {
 
         assertThatThrownBy(() -> guard.assertScript(999L))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("剧本不存在");
+                .hasMessageContaining("剧本不存在")
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void missingScriptEpisodeIsRejectedWithNotFoundCode() {
+        when(scriptEpisodeMapper.selectById(999999L)).thenReturn(null);
+
+        assertThatThrownBy(() -> guard.assertScriptEpisode(999999L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("剧本分集不存在: 999999")
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(404);
+    }
+
+    @Test
+    void missingProductionRunIsRejectedWithNotFoundCode() {
+        when(productionRunMapper.selectById(999999L)).thenReturn(null);
+
+        assertThatThrownBy(() -> guard.assertProductionRun(999999L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("生产运行不存在: 999999")
+                .extracting(e -> ((BusinessException) e).getCode())
+                .isEqualTo(404);
     }
 }

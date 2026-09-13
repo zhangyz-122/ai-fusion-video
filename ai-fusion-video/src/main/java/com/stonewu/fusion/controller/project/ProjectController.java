@@ -46,7 +46,8 @@ public class ProjectController {
     public CommonResult<Project> get(@PathVariable Long id) {
         Long userId = SecurityUtils.requireCurrentUserId();
         if (!projectService.canAccessProject(id, userId)) {
-            throw new BusinessException("无权访问该项目");
+            // 越权访问使用 403 语义，由 GlobalExceptionHandler 映射 HTTP 状态；文案保持不变
+            throw new BusinessException(403, "无权访问该项目");
         }
         return CommonResult.success(projectService.getById(id));
     }
@@ -56,7 +57,8 @@ public class ProjectController {
     public CommonResult<ProjectWorkspaceOverview> getWorkspaceOverview(@PathVariable Long id) {
         Long userId = SecurityUtils.requireCurrentUserId();
         if (!projectService.canAccessProject(id, userId)) {
-            throw new BusinessException("无权访问该项目");
+            // 越权访问使用 403 语义，由 GlobalExceptionHandler 映射 HTTP 状态；文案保持不变
+            throw new BusinessException(403, "无权访问该项目");
         }
         return CommonResult.success(projectService.getWorkspaceOverview(id));
     }
@@ -66,7 +68,7 @@ public class ProjectController {
     public CommonResult<ProjectWorkspaceOverview> initializeWorkspace(@PathVariable Long id) {
         Long userId = SecurityUtils.requireCurrentUserId();
         if (!projectService.canAccessProject(id, userId)) {
-            throw new BusinessException("无权初始化该项目工作区");
+            throw new BusinessException(403, "无权初始化该项目工作区");
         }
         return CommonResult.success(projectService.initializeWorkspace(id));
     }
@@ -89,7 +91,7 @@ public class ProjectController {
     public CommonResult<Project> update(@Valid @RequestBody ProjectUpdateReqVO reqVO) {
         Long userId = SecurityUtils.requireCurrentUserId();
         if (!projectService.canAccessProject(reqVO.getId(), userId)) {
-            throw new BusinessException("无权修改该项目");
+            throw new BusinessException(403, "无权修改该项目");
         }
         Project project = ProjectConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(projectService.update(project));
@@ -100,7 +102,7 @@ public class ProjectController {
     public CommonResult<Boolean> delete(@PathVariable Long id) {
         Long userId = SecurityUtils.requireCurrentUserId();
         if (!projectService.canAccessProject(id, userId)) {
-            throw new BusinessException("无权删除该项目");
+            throw new BusinessException(403, "无权删除该项目");
         }
         projectService.delete(id);
         return CommonResult.success(true);
