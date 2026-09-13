@@ -1,0 +1,30 @@
+{
+  "structOk": true,
+  "noLoss": true,
+  "picks": [
+    {
+      "ep": 378,
+      "no": 169,
+      "scenes": 7,
+      "verbatimFallback": false,
+      "copyRate": 0,
+      "ok": true
+    },
+    {
+      "ep": 360,
+      "no": 151,
+      "scenes": 4,
+      "verbatimFallback": false,
+      "copyRate": 0.01639344262295082,
+      "ok": true
+    },
+    {
+      "ep": 210,
+      "no": 1,
+      "scenes": 8,
+      "verbatimFallback": false,
+      "copyRate": 0,
+      "ok": true
+    }
+  ]
+}

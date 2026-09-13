@@ -460,3 +460,33 @@ production-take-drawer 数据展示)、重新同步(reconcile)与重试(repair)�
 ### 验证结果
 - 后端:`./mvnw test-compile` 通过;SubtitleExportServiceTests(21)+ScriptControllerSubtitleExportTests(3) 全绿。
 - 前端:`tsc --noEmit` 通过;改动文件 eslint 0 error(scene-detail.tsx 的 hasLinkedAssets 未使用警告为 base 既有)。
+
+---
+
+## SW-T06 执行记录与发现(QA 子代理追加,2026-09-14)
+
+### 执行方式与范围
+- 全部真实运行:JDK21 单测(新增 2 个测试类,24 例)+ 对 8081 实时平台的 HTTP 级实测(5 个脚本,
+  swarm/qa/,证据存 swarm/qa/out/)。未改任何产品代码;Redis 停机测试仅 stop/start fusion-redis,
+  已恢复 healthy;E2E 临时项目(id=8)已删除,零数据残留。
+
+### 测试执行汇总
+1. chunkChars 边界:单测 11 例全绿(null=6000/1999→2000/12001→12000/0、负数、MIN/MAX_VALUE);
+   硬切、章节边界、>400 块拒绝、无丢字。E2E 真跑(12524 字临时剧本):chunkChars=999999→钳12000→2 集;
+   chunkChars=-1→钳2000→9 集,分块数与单测推算完全一致,拼接无丢字 → PASS。
+2. 170 集抽查:全量结构(编号 1..170 连续/每集场景数≥1/原文非空)PASS;170 集 rawContent 拼接与
+   剧本原文逐字符一致(无丢字)PASS;随机 3 集(#169/#151/#1)场景非空、无原文兜底、无整段照抄、
+   长句照抄率 0-2%,结构化场次标题 → PASS。
+3. 字幕导出:真实分集(id=210,16 cues)序号连续/时间轴单调/每条时长=secondsPerLine/内容 16/16 可溯源;
+   secondsPerLine=0/-5/61/999999 → 400;=1/60 → 200 且时间轴吻合;空对白分集(id=228)→ 400
+   "该分集暂无可导出的对白",不产空文件;uitest 越权/不存在分集 → 500(缺陷,见 BUGS)。
+4. 系统状态:三端点管理员 200 + 类型与加和断言 PASS;uitest 三端点 403、匿名 401;Redis 停机:
+   video-queue 降级代码路径本身正确,但认证层先失效,实测 401/500(缺陷 SW-T06-01),Redis 已恢复 healthy。
+5. 生产运行:pageNo=0(钳制为第1页)/999(空列表 total 保留)/pageSize 0/-1/1000 无 5xx;
+   五状态过滤全部匹配、计数之和=total;空串等价不过滤;uitest 只见己方(userId=2,8 条,与 zhangyz 零重叠)。
+
+### 结论与增量
+- 单测+实测合计:通过 60+ 项断言;发现缺陷 4 项(SW-T06-01 P2、-02/-03 P3、-04 P4)与 3 条观察项,
+  已按 现象/触发/影响/建议 落盘 swarm/BUGS.md。
+- 需要决策(不空等):SW-T06-01 的"降级语义 vs 认证依赖 Redis"矛盾,需 Supervisor/Architect 拍板
+  修复方向(登录 503 透出/token 校验降级/接受现状仅留档)。
