@@ -57,7 +57,7 @@ export default function ProjectProductionPage() {
   }, [runs]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 px-6 py-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6 px-5 py-4 lg:px-6 lg:py-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">拍 · 生产</p>

@@ -36,11 +36,11 @@ export default function VideoStudio() {
   const pending = catalog.filter((item) => item.source === "WORKFLOW");
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-8 px-6 py-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 lg:space-y-8 px-5 py-4 lg:px-6 lg:py-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">创作工作台 / 视频</p>
-          <h1 className="text-3xl font-semibold tracking-tight">视频工坊</h1>
+          <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">视频工坊</h1>
           <p className="text-muted-foreground">选择视频生成能力，进入编辑器编排与预览。原有生成记录保持不变。</p>
         </div>
         <Link href="/assets" className={buttonVariants({ variant: "outline" })}>查看资产</Link>

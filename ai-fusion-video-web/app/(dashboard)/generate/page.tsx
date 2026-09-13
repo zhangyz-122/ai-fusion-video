@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 
 export default function CreativeHome() {
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8 px-6 py-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6 lg:space-y-8 px-5 py-4 lg:px-6 lg:py-6">
       <header className="space-y-2">
         <p className="text-sm text-muted-foreground">工坊</p>
         <h1 className="text-2xl font-semibold tracking-tight">图像和视频工具</h1>

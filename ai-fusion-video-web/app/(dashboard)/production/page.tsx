@@ -45,11 +45,11 @@ export default function ProductionCenterPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-6 py-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 px-5 py-4 lg:px-6 lg:py-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">生产中心</p>
-          <h1 className="text-3xl font-semibold tracking-tight">生产运行</h1>
+          <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">生产运行</h1>
           <p className="text-muted-foreground">全部三候选生产运行的状态、失败原因与项目入口。</p>
         </div>
         <Button variant="outline" size="icon-sm" onClick={() => setRevision(v => v + 1)} disabled={loading} title="刷新">
@@ -64,7 +64,7 @@ export default function ProductionCenterPage() {
             role="tab"
             aria-selected={status === f.value}
             onClick={() => { setStatus(f.value); setPageNo(1); }}
-            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+            className={`inline-flex items-center min-h-11 rounded-full border px-4 lg:px-3 lg:py-1 text-xs transition-colors ${
               status === f.value
                 ? "border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300"
                 : "border-border/30 bg-card/50 text-muted-foreground hover:border-border/50 hover:text-foreground"
