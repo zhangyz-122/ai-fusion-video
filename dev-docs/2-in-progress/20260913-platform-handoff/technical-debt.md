@@ -26,6 +26,23 @@
   3. `POST /publish`：发布新版本（此时存储的 workflow_hash 即为应用规范化值）。
 - 建议顺带用真实 5 秒任务验收时长（`num_frames` 应为 81）。
 
+### 2026-09-13 补充：WAN 模型(16)能力配置缺失（阻塞 WAN 验收，需管理员）
+
+- 实测：以 modelId=16 启动生产立即失败，`VIDEO_TASK_SUBMIT_FAILED: 模型 Wan I2V Standard 无法使用参考图：未配置允许的参考图传递模式`。
+- 根因：模型 16 的 `config` 只有 `{supportFirstFrame, minDuration, maxDuration, defaultFps}`，缺少 `supportReferenceImages`、`maxReferenceImages`、`referenceImageInputFormats: ["url","data_uri"]`、`supportDataUriInput` 等字段（对照模型 4 H3 的完整配置）。
+- 修复：管理员在 设置→AI模型 编辑模型 16 的能力配置，参照模型 4 补齐参考图字段（WAN I2V 工作流绑定的是首帧输入，需同时确认 `supportFirstFrame:true` 与参考图传递模式）。
+- 说明：历史 Run #4/#5 用的是模型 4（MiniMax H3，走 `duration` 秒绑定，配置完整），因此从未触发该缺口。
+
+### 2026-09-13 验收记录：uitest 全链路（H3 路径，已闭环）
+
+- 链路验证通过：项目 6 工作区初始化 → 分集 8 / 场次 37 / 镜头 79 → 模型14 真实生图首帧并回填 → 启动 Run 7（H3 模型4，duration=5）→ 幂等复验（同 key 返回同 run，仅 1 个 VideoTask）→ ComfyUI 串行生成 3 候选 → QC_PENDING → detail 返回 3 个真实 videoUrl（TakeView 生效）→ QC PASS Take1 → 选片，Run 状态 SELECTED，selectedTakeId 已落库。
+- **发现新缺口（重要）**：模型 4 实际绑定的发布版本是**工作流 7 / 版本 10**（非文档记载的 workflow 4 / version 5）。版本 10 的 input_bindings 只配置了 prompt 和 width 两项——duration、seed、height、referenceImages 全部缺失：
+  - 提交的 duration=5 被丢弃，模板 `PrimitiveFloat(529).value=15` 生效 → 三候选实际都是 **15.083 秒**（362 帧 @24fps）；
+  - 首帧图未进入视频（无 referenceImages 绑定，LoadImage 节点保持模板占位图），实为纯文生视频；
+  - 历史 Run #4/#5 用同一版本，ffprobe 同为 15.083s——证明该缺口自历史"成功闭环"起就存在，此前验收未检查参数流。
+- **版本 10 绑定修复手册（需 ADMIN）**：`PUT /version/update` 补齐 input_bindings：duration→节点529 `value`(number)、seed→节点322 `noise_seed`(integer)、referenceImages→LoadImage 节点（469/475/515/525/526/527 中实际接入 AudioConditioning/ImageScale 链路的那些，index 0..N）、height→节点338；随后 `version/validate` → `version/test` → `publish`。完成后用 duration=5 复跑，ffprobe 应 ≈5.2s（公式 max(5,round(a×24))+…）。
+- WAN 路径验收仍待：模型 16 能力配置修复（上文）+ 渲染器 num_frames 派生（已上线，单测覆盖）将在 WAN 可提交后自动生效。
+
 ## 2026-09-13：跨用户项目访问（对应总任务 M01）
 
 ### 已修复（本轮，48/48 测试通过 + API 实测验证）
