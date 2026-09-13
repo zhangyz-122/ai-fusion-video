@@ -1,4 +1,4 @@
-import { http } from "./client";
+import { API_BASE_URL, http } from "./client";
 
 // ========== 类型定义 ==========
 
@@ -218,3 +218,57 @@ export const scriptApi = {
   deleteScene: (id: number) =>
     http.delete<never, boolean>(`/api/script/scene/${id}`),
 };
+
+// ========== 字幕导出 ==========
+
+/**
+ * 下载分集 SRT 字幕文件。
+ * 该接口直接返回字幕文件流而非 CommonResult JSON，需单独用 fetch 携带鉴权头取回 blob。
+ */
+export async function downloadEpisodeSubtitle(
+  episodeId: number,
+  secondsPerLine?: number
+): Promise<void> {
+  const query = secondsPerLine ? `?secondsPerLine=${secondsPerLine}` : "";
+  const url = `${API_BASE_URL}/api/script/episode/${episodeId}/subtitle.srt${query}`;
+  const { useAuthStore } = await import("@/lib/store/auth-store");
+  const token = useAuthStore.getState().token;
+
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!response.ok) {
+    let message = `导出字幕失败（HTTP ${response.status}）`;
+    try {
+      const body = (await response.json()) as { msg?: string };
+      if (body?.msg) message = body.msg;
+    } catch {
+      // 错误响应不是 JSON 时保留默认提示
+    }
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const anchor = document.createElement("a");
+  anchor.href = URL.createObjectURL(blob);
+  anchor.download = resolveSubtitleFilename(
+    response.headers.get("content-disposition"),
+    episodeId
+  );
+  anchor.click();
+  URL.revokeObjectURL(anchor.href);
+}
+
+/** 从 Content-Disposition 解析文件名，缺失时使用“字幕-分集ID.srt” */
+function resolveSubtitleFilename(
+  contentDisposition: string | null,
+  episodeId: number
+): string {
+  if (contentDisposition) {
+    const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
+    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
+    const plainMatch = /filename="?([^";]+)"?/i.exec(contentDisposition);
+    if (plainMatch?.[1]) return plainMatch[1];
+  }
+  return `字幕-分集${episodeId}.srt`;
+}

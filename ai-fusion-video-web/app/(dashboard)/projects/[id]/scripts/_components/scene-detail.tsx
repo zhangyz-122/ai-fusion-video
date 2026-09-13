@@ -9,16 +9,20 @@ import {
   Users,
   Package,
   Loader2,
+  Download,
   ExternalLink,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { SceneItem, DialogueElement } from "@/lib/api/script";
+import { downloadEpisodeSubtitle } from "@/lib/api/script";
 import { assetApi } from "@/lib/api/asset";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import type { Asset, AssetItem } from "@/lib/api/asset";
 import { parseDialogues, parseCharacters } from "./utils";
 import { SafeImage } from "@/components/ui/safe-image";
+import { Button } from "@/components/ui/button";
 
 // ========== 资产类型配置 ==========
 
@@ -78,6 +82,20 @@ export function SceneDetail({
     props: AssetWithItems[];
   }>({ characters: [], scenes: [], props: [] });
   const [assetsLoading, setAssetsLoading] = useState(false);
+  const [subtitleExporting, setSubtitleExporting] = useState(false);
+
+  // 导出该场次所属分集的 SRT 字幕
+  const handleExportSubtitle = useCallback(async () => {
+    setSubtitleExporting(true);
+    try {
+      await downloadEpisodeSubtitle(scene.episodeId);
+      toast.success("字幕已导出");
+    } catch (err) {
+      toastApiError(err, "导出字幕失败");
+    } finally {
+      setSubtitleExporting(false);
+    }
+  }, [scene.episodeId]);
 
   const loadLinkedAssets = useCallback(async () => {
     const charIds = parseIds(scene.characterAssetIds);
@@ -141,9 +159,26 @@ export function SceneDetail({
     <div className="p-4 space-y-5">
       {/* 场景头部信息 */}
       <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <Info className="h-3 w-3" /> 场景详情
-        </h4>
+        <div className="flex items-center gap-1.5 mb-3">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <Info className="h-3 w-3" /> 场景详情
+          </h4>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="ml-auto"
+            disabled={subtitleExporting}
+            title="导出该分集的 SRT 字幕文件"
+            aria-label="导出该分集的 SRT 字幕文件"
+            onClick={() => void handleExportSubtitle()}
+          >
+            {subtitleExporting ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Download />
+            )}
+          </Button>
+        </div>
 
         {/* 场号和内外景 */}
         <div className="flex items-center gap-2 mb-3">
