@@ -61,11 +61,10 @@ class BackendArchitectureGuardTests {
 
     // ------------------------------------------------------------------
     // 规则 R1:controller 不得直接依赖 mapper(跨域只能走 service)
-    // 豁免格式 "Source -> Target"。清零期限:SW-T14 验收后首个冲刺。
+    // 豁免格式 "Source -> Target"。原豁免 TeamController -> TeamMemberMapper 已随 SW-T18 清零移除。
     // ------------------------------------------------------------------
 
-    private static final Set<String> CONTROLLER_TO_MAPPER_EXEMPT = Set.of(
-            "TeamController -> TeamMemberMapper");
+    private static final Set<String> CONTROLLER_TO_MAPPER_EXEMPT = Set.of();
 
     // ------------------------------------------------------------------
     // 规则 R2:service/ai/run 不得 import service/ai/agentscope(agentscope→run 单向)。

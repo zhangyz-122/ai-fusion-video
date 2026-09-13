@@ -14,6 +14,8 @@ import com.stonewu.fusion.security.TokenService;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -146,9 +148,11 @@ public class TeamService {
         return listMemberUserIds(getRequiredSingleTeam().getId());
     }
 
+    @CacheEvict(value = "teamMember", allEntries = true)
     @Transactional
     public void addUserToSingleTeam(Long userId, Integer role) {
         Team team = getRequiredSingleTeam();
+        // teamId 在方法内解析且 addMember 为同类自调用(缓存切面不生效),故此处在 teamMember 缓存整体失效
         addMember(team.getId(), userId, role);
     }
 
@@ -180,6 +184,7 @@ public class TeamService {
         throw new BusinessException(400, "开源版仅支持单团队，不支持删除团队");
     }
 
+    @CacheEvict(value = "teamMember", key = "'memberCount:' + #teamId")
     @Transactional
     public Long addMember(Long teamId, Long userId, Integer role) {
         boolean exists = teamMemberMapper.exists(new LambdaQueryWrapper<TeamMember>()
@@ -197,6 +202,7 @@ public class TeamService {
         return member.getId();
     }
 
+    @CacheEvict(value = "teamMember", key = "'memberCount:' + #teamId")
     @Transactional
     public void removeMember(Long teamId, Long userId) {
         teamMemberMapper.delete(new LambdaQueryWrapper<TeamMember>()
@@ -216,6 +222,11 @@ public class TeamService {
 
     public List<TeamMember> getMemberList(Long teamId) {
         return teamMemberMapper.selectList(new LambdaQueryWrapper<TeamMember>().eq(TeamMember::getTeamId, teamId));
+    }
+
+    @Cacheable(value = "teamMember", key = "'memberCount:' + #teamId")
+    public Long getMemberCount(Long teamId) {
+        return teamMemberMapper.selectCount(new LambdaQueryWrapper<TeamMember>().eq(TeamMember::getTeamId, teamId));
     }
 
     private Team createTeamRecord(String name, String description, Long ownerUserId, Integer ownerRole) {

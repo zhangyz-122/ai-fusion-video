@@ -76,4 +76,12 @@ class TeamServiceTests {
         assertThat(ownerScope.getOwnerType()).isEqualTo(2);
         assertThat(ownerScope.getOwnerId()).isEqualTo(5L);
     }
+
+    @Test
+    void getMemberCountQueriesByTeamId() {
+        when(teamMemberMapper.selectCount(any())).thenReturn(3L);
+
+        assertThat(teamService.getMemberCount(5L)).isEqualTo(3L);
+        verify(teamMemberMapper).selectCount(any());
+    }
 }

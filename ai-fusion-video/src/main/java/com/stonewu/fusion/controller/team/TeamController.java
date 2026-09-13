@@ -1,13 +1,10 @@
 package com.stonewu.fusion.controller.team;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.controller.team.vo.*;
 import com.stonewu.fusion.convert.team.TeamConvert;
 import com.stonewu.fusion.entity.team.Team;
-import com.stonewu.fusion.entity.team.TeamMember;
-import com.stonewu.fusion.mapper.team.TeamMemberMapper;
 import com.stonewu.fusion.service.team.TeamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -31,7 +28,6 @@ import static com.stonewu.fusion.security.SecurityUtils.getCurrentUserId;
 public class TeamController {
 
     private final TeamService teamService;
-    private final TeamMemberMapper teamMemberMapper;
 
     @PostMapping("/create")
     @Operation(summary = "创建团队")
@@ -115,8 +111,7 @@ public class TeamController {
      */
     private TeamRespVO enrichTeamVO(Team team) {
         TeamRespVO vo = TeamConvert.INSTANCE.convert(team);
-        vo.setMemberCount(teamMemberMapper.selectCount(
-                new LambdaQueryWrapper<TeamMember>().eq(TeamMember::getTeamId, team.getId())));
+        vo.setMemberCount(teamService.getMemberCount(team.getId()));
         return vo;
     }
 
