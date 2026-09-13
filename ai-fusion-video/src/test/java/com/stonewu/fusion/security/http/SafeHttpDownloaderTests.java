@@ -4,7 +4,6 @@ import com.stonewu.fusion.common.BusinessException;
 import com.sun.net.httpserver.HttpServer;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.HttpUrl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -13,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -88,14 +88,17 @@ class SafeHttpDownloaderTests {
 
     @AfterEach
     void restoreGate() {
-        SafeHttpDownloader.gate = PublicHttpUrlValidator::isAllowedPublicHttpUrl;
+        SafeHttpDownloader.pinnedResolver =
+                url -> PublicHttpUrlValidator.resolveIfAllowedPublicHost(url.scheme(), url.host());
     }
 
     /** 模拟 “127.0.0.1 是公网主机”：放行本机地址，其余仍按真实校验。 */
     private void treatLoopbackAsPublic() {
-        SafeHttpDownloader.gate = url -> {
-            HttpUrl parsed = HttpUrl.parse(url);
-            return parsed != null && "127.0.0.1".equals(parsed.host());
+        SafeHttpDownloader.pinnedResolver = url -> {
+            if ("127.0.0.1".equals(url.host())) {
+                return new InetAddress[]{InetAddress.getLoopbackAddress()};
+            }
+            return PublicHttpUrlValidator.resolveIfAllowedPublicHost(url.scheme(), url.host());
         };
     }
 
@@ -169,5 +172,47 @@ class SafeHttpDownloaderTests {
                 "http://100.100.100.200/latest/meta-data/", "元数据 URL"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("SSRF 防护拒绝");
+    }
+
+    @Test
+    void connectsToPinnedResolvedAddressWithoutSecondDnsLookup() throws Exception {
+        // 红队 S-2：校验通过时返回的 IP 直接固定到连接（自定义 Dns）。
+        // 使用无法通过系统 DNS 解析的假域名 .invalid：若实现仍走二次 DNS 解析，
+        // 该请求将抛 UnknownHostException；IP 固定生效时则按解析结果直连本机服务器。
+        SafeHttpDownloader.pinnedResolver = url -> {
+            if ("pin-test.invalid".equals(url.host())) {
+                return new InetAddress[]{InetAddress.getLoopbackAddress()};
+            }
+            return PublicHttpUrlValidator.resolveIfAllowedPublicHost(url.scheme(), url.host());
+        };
+        String pinnedUrl = base.replace("127.0.0.1", "pin-test.invalid") + "/final";
+
+        assertThat(fetch(pinnedUrl)).isEqualTo("final-payload");
+        assertThat(HITS.get("/final").get()).isEqualTo(1);
+    }
+
+    @Test
+    void redirectHopRevalidatesAndRepinsBeforeConnecting() throws Exception {
+        // 302 跳向新的“公网”假域名：新跳必须重新校验并重新固定到新跳解析结果
+        server.createContext("/hop2pin", exchange -> {
+            HITS.computeIfAbsent("/hop2pin", k -> new AtomicInteger()).incrementAndGet();
+            exchange.getResponseHeaders().set("Location",
+                    base.replace("127.0.0.1", "hop-target.invalid") + "/final");
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
+        SafeHttpDownloader.pinnedResolver = url -> {
+            if ("127.0.0.1".equals(url.host())) {
+                return new InetAddress[]{InetAddress.getLoopbackAddress()};
+            }
+            if ("hop-target.invalid".equals(url.host())) {
+                return new InetAddress[]{InetAddress.getLoopbackAddress()};
+            }
+            return PublicHttpUrlValidator.resolveIfAllowedPublicHost(url.scheme(), url.host());
+        };
+
+        assertThat(fetch(base + "/hop2pin")).isEqualTo("final-payload");
+        assertThat(HITS.get("/hop2pin").get()).isEqualTo(1);
+        assertThat(HITS.get("/final").get()).isEqualTo(1);
     }
 }

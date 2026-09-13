@@ -42,7 +42,7 @@ class FileUploadControllerTests {
         when(aiModelService.getById(7L)).thenReturn(model);
         when(storageConfigService.getDefaultConfig()).thenReturn(
                 StorageConfig.builder().type(StorageTypes.S3).build());
-        when(mediaStorageService.storeBytes(file.getBytes(), "assistant/image", "png"))
+        when(mediaStorageService.storeFile(any(Path.class), eq("assistant/image"), eq("png")))
                 .thenReturn("stored/sample.png");
         when(systemConfigService.resolvePublicUrl("stored/sample.png"))
                 .thenReturn("https://cdn.example.com/sample.png");
@@ -50,7 +50,7 @@ class FileUploadControllerTests {
         var result = controller.uploadAssistantInput(file, 7L, "url");
 
         assertThat(result.getData()).isEqualTo("https://cdn.example.com/sample.png");
-        verify(mediaStorageService).storeBytes(file.getBytes(), "assistant/image", "png");
+        verify(mediaStorageService).storeFile(any(Path.class), eq("assistant/image"), eq("png"));
     }
 
     @Test
@@ -74,13 +74,13 @@ class FileUploadControllerTests {
         when(aiModelService.getById(9L)).thenReturn(model);
         when(storageConfigService.getDefaultConfig()).thenReturn(
                 StorageConfig.builder().type(StorageTypes.LOCAL).build());
-        when(mediaStorageService.storeBytes(file.getBytes(), "assistant/image", "png"))
+        when(mediaStorageService.storeFile(any(Path.class), eq("assistant/image"), eq("png")))
                 .thenReturn("/media/assistant/image/sample.png");
 
         var result = controller.uploadAssistantInput(file, 9L, "base64");
 
         assertThat(result.getData()).isEqualTo("/media/assistant/image/sample.png");
-        verify(mediaStorageService).storeBytes(file.getBytes(), "assistant/image", "png");
+        verify(mediaStorageService).storeFile(any(Path.class), eq("assistant/image"), eq("png"));
         verifyNoInteractions(systemConfigService);
     }
 

@@ -1,24 +1,29 @@
 package com.stonewu.fusion.security.http;
 
 import com.stonewu.fusion.common.BusinessException;
+import okhttp3.Dns;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.function.Function;
 
 /**
- * 服务端出站 HTTP 拉取的统一安全通道（SSRF 防护，红队 S-1/S-3 修复）。
+ * 服务端出站 HTTP 拉取的统一安全通道（SSRF 防护，红队 S-1/S-2/S-3 修复）。
  * <p>
  * 规则：
  * <ul>
  *   <li>初始 URL 与每一跳重定向目标都必须通过 {@link PublicHttpUrlValidator} 校验；</li>
  *   <li>强制关闭 OkHttp 自动跟随重定向，防止“校验一次、跳转失控”的 302 绕过；</li>
+ *   <li>校验通过的 DNS 解析结果直接固定到本次连接（自定义 {@link Dns}），
+ *       消除“校验时解析 ≠ 连接时解析”的 DNS rebinding TOCTOU；</li>
  *   <li>重定向跳数有上限，超限、缺少 Location 或目标非法一律失败。</li>
  * </ul>
- * 调用方通过 {@link RequestFactory} 决定请求细节（Accept 头、方法等），
+ * 调用方通过 {@code requestFactory} 决定请求细节（Accept 头、方法等），
  * 通过 {@link ResponseHandler} 在响应未重定向时消费响应体。
  */
 public final class SafeHttpDownloader {
@@ -26,13 +31,14 @@ public final class SafeHttpDownloader {
     /** 重定向最大跳数：合法 CDN 链路一般不超过 3 跳。 */
     static final int MAX_REDIRECTS = 5;
 
-    /** 校验闸门：生产环境固定走 PublicHttpUrlValidator，包内可见以便单测注入固定映射。 */
+    /** 校验+解析闸门：生产固定走 PublicHttpUrlValidator，包内可见以便单测注入固定映射。 */
     @FunctionalInterface
-    interface UrlGate {
-        boolean isAllowed(String url);
+    interface PinnedAddressResolver {
+        InetAddress[] resolve(HttpUrl url);
     }
 
-    static UrlGate gate = PublicHttpUrlValidator::isAllowedPublicHttpUrl;
+    static PinnedAddressResolver pinnedResolver =
+            url -> PublicHttpUrlValidator.resolveIfAllowedPublicHost(url.scheme(), url.host());
 
     private SafeHttpDownloader() {
     }
@@ -41,7 +47,9 @@ public final class SafeHttpDownloader {
      * 校验给定 URL 必须是可安全访问的公网 http(s) 地址，否则抛出业务异常。
      */
     public static void requirePublicUrl(String url, String purpose) {
-        if (!gate.isAllowed(url)) {
+        HttpUrl parsed = HttpUrl.parse(url);
+        boolean allowed = parsed != null && pinnedResolver.resolve(parsed) != null;
+        if (!allowed) {
             throw new BusinessException(400, (purpose == null ? "URL" : purpose)
                     + " 指向本机、内网或保留地址，已被 SSRF 防护拒绝");
         }
@@ -49,8 +57,9 @@ public final class SafeHttpDownloader {
 
     /**
      * 以受控方式执行 GET：初始 URL 校验 → 请求 → 30x 时手动解析 Location 并逐跳复检。
+     * 每一跳的 DNS 解析结果固定到该跳连接（Host/SNI 头保持域名不变）。
      *
-     * @param client         基础 OkHttp 客户端（自动重定向状态会被强制覆盖）
+     * @param client         基础 OkHttp 客户端（重定向与 DNS 行为会被强制覆盖）
      * @param startUrl       初始 URL
      * @param purpose        错误信息中描述用途的前缀，如 “ComfyUI 图片 URL”
      * @param requestFactory 由校验通过的 HttpUrl 构造请求
@@ -62,7 +71,7 @@ public final class SafeHttpDownloader {
                               String purpose,
                               Function<HttpUrl, Request> requestFactory,
                               ResponseHandler<T> handler) throws IOException {
-        OkHttpClient safeClient = client.newBuilder()
+        OkHttpClient safeBaseClient = client.newBuilder()
                 .followRedirects(false)
                 .followSslRedirects(false)
                 .build();
@@ -71,15 +80,27 @@ public final class SafeHttpDownloader {
             throw new BusinessException(400, (purpose == null ? "URL" : purpose) + " 无效");
         }
         for (int hops = 0; hops <= MAX_REDIRECTS; hops++) {
-            requirePublicUrl(current.toString(), purpose);
-            Request request = requestFactory.apply(current);
-            try (Response response = safeClient.newCall(request).execute()) {
+            final HttpUrl hopUrl = current;
+            // 每跳一次解析、一次校验，解析结果固定到本跳连接，杜绝校验与建连间的 DNS 漂移
+            InetAddress[] pinned = pinnedResolver.resolve(hopUrl);
+            if (pinned == null) {
+                throw new BusinessException(400, (purpose == null ? "URL" : purpose)
+                        + " 指向本机、内网或保留地址，已被 SSRF 防护拒绝");
+            }
+            OkHttpClient hopClient = safeBaseClient.newBuilder().dns(hostname -> {
+                if (hostname.equalsIgnoreCase(hopUrl.host())) {
+                    return Arrays.asList(pinned);
+                }
+                return Dns.SYSTEM.lookup(hostname);
+            }).build();
+            Request request = requestFactory.apply(hopUrl);
+            try (Response response = hopClient.newCall(request).execute()) {
                 if (isRedirect(response.code())) {
                     String location = response.header("Location");
                     if (location == null || location.isBlank()) {
                         throw new IOException((purpose == null ? "URL" : purpose) + " 重定向缺少 Location");
                     }
-                    HttpUrl next = current.resolve(location);
+                    HttpUrl next = hopUrl.resolve(location);
                     if (next == null) {
                         throw new IOException((purpose == null ? "URL" : purpose)
                                 + " 重定向地址无效: " + location);

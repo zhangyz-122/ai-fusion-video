@@ -30,6 +30,39 @@ public final class PublicHttpUrlValidator {
     }
 
     /**
+     * 校验并解析：仅当 scheme/host 指向公网时返回全部 DNS 解析结果（用于连接级 IP 固定，
+     * 防止“校验时解析 ≠ 连接时解析”的 DNS rebinding TOCTOU，红队 S-2）；校验失败返回 null。
+     */
+    public static InetAddress[] resolveIfAllowedPublicHost(String scheme, String host) {
+        return resolveIfAllowedPublicHost(scheme, host, SYSTEM_RESOLVER);
+    }
+
+    public static InetAddress[] resolveIfAllowedPublicHost(String scheme, String host, DnsResolver resolver) {
+        String lower = scheme == null ? "" : scheme.toLowerCase(Locale.ROOT);
+        if (!"http".equals(lower) && !"https".equals(lower)) {
+            return null;
+        }
+        String normalizedHost = normalizeHost(host);
+        if (isForbiddenHostname(normalizedHost)) {
+            return null;
+        }
+        try {
+            InetAddress[] addresses = resolver.resolve(normalizedHost);
+            if (addresses == null || addresses.length == 0) {
+                return null;
+            }
+            for (InetAddress address : addresses) {
+                if (!isPublicAddress(address)) {
+                    return null;
+                }
+            }
+            return addresses;
+        } catch (UnknownHostException e) {
+            return null;
+        }
+    }
+
+    /**
      * 仅当 URL 为 http(s) 协议且主机名（含全部 DNS 解析结果）均为公网地址时返回 true。
      * 抛业务异常的入口见 {@link SafeHttpDownloader#requirePublicUrl(String, String)}。
      */
@@ -39,37 +72,30 @@ public final class PublicHttpUrlValidator {
 
     public static boolean isAllowedPublicHttpUrl(String value, DnsResolver resolver) {
         String normalized = value == null ? "" : value.trim();
-        if (!isHttpScheme(normalized)) {
-            return false;
-        }
         String host;
         try {
             URI uri = new URI(normalized);
+            if (!isHttpScheme(normalized) || (uri.getScheme() == null)) {
+                return false;
+            }
             host = uri.getHost();
         } catch (Exception e) {
             return false;
         }
-        host = host == null ? "" : host.trim().toLowerCase(Locale.ROOT);
-        while (host.endsWith(".")) {
-            host = host.substring(0, host.length() - 1);
+        return resolveIfAllowedPublicHost(uriScheme(normalized), host, resolver) != null;
+    }
+
+    private static String uriScheme(String value) {
+        int colon = value.indexOf("://");
+        return colon > 0 ? value.substring(0, colon) : value;
+    }
+
+    private static String normalizeHost(String host) {
+        String normalized = host == null ? "" : host.trim().toLowerCase(Locale.ROOT);
+        while (normalized.endsWith(".")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
         }
-        if (isForbiddenHostname(host)) {
-            return false;
-        }
-        try {
-            InetAddress[] addresses = resolver.resolve(host);
-            if (addresses == null || addresses.length == 0) {
-                return false;
-            }
-            for (InetAddress address : addresses) {
-                if (!isPublicAddress(address)) {
-                    return false;
-                }
-            }
-            return true;
-        } catch (UnknownHostException e) {
-            return false;
-        }
+        return normalized;
     }
 
     private static boolean isHttpScheme(String value) {
