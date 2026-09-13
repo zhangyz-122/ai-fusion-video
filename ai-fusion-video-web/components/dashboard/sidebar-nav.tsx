@@ -195,6 +195,8 @@ export function SidebarNav({
     <div
       className={cn(
         "w-full h-[calc(100vh-6rem)] rounded-2xl p-2",
+        // 移动端抽屉:限高,避免被底部 Tab 栏遮挡
+        "max-lg:h-auto max-lg:max-h-[calc(100dvh-11rem)]",
         "bg-linear-to-b from-background/80 to-background/40",
         "backdrop-blur-lg border border-border/40",
         "shadow-lg"
