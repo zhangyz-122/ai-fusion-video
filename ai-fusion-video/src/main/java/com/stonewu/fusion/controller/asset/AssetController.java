@@ -154,6 +154,20 @@ public class AssetController {
         return CommonResult.success(true);
     }
 
+    @Operation(summary = "回收站：查询无项目归属的历史软删资产（当前用户有权访问的）")
+    @GetMapping("/recycle-bin/orphans")
+    public CommonResult<List<Asset>> listOrphanRecycled() {
+        Long userId = SecurityUtils.requireCurrentUserId();
+        return CommonResult.success(assetService.listDeletedOrphansAccessibleByUser(userId));
+    }
+
+    @Operation(summary = "回收站：批量彻底删除无项目归属的历史软删资产")
+    @DeleteMapping("/recycle-bin/orphans")
+    public CommonResult<Integer> purgeOrphanRecycled(@RequestParam("ids") List<Long> ids) {
+        Long userId = SecurityUtils.requireCurrentUserId();
+        return CommonResult.success(assetService.purgeDeletedOrphans(userId, ids));
+    }
+
     // ========== 子资产 ==========
 
     @Operation(summary = "获取子资产详情")

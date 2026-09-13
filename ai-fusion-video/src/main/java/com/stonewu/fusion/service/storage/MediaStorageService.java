@@ -3,11 +3,13 @@ package com.stonewu.fusion.service.storage;
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.security.http.SafeHttpDownloader;
+import com.stonewu.fusion.service.storage.strategy.LocalStorageStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -25,6 +27,7 @@ public class MediaStorageService {
 
     private final StorageConfigService storageConfigService;
     private final List<StorageStrategy> strategies;
+    private final LocalStorageStrategy localStorageStrategy;
 
     private Map<String, StorageStrategy> strategyMap;
 
@@ -98,6 +101,35 @@ public class MediaStorageService {
         log.info("[MediaStorage] 直接保存文件: path={}, subDir={}, ext={}, strategy={}",
                 filePath, subDir, extension, strategy.getType());
         return strategy.storeFile(filePath, subDir, extension, config);
+    }
+
+    /**
+     * 批量清理本地 {@code /media/} 持久化文件（回收站彻底删除等场景的文件 GC）。
+     * <p>
+     * {@code /media/} 前缀 URL 只会由本地存储策略产出，与当前默认存储配置无关，
+     * 统一交由 {@link LocalStorageStrategy} 处理；外链、data: 等非本地产物直接忽略。
+     * 单个文件清理失败仅记录告警、不中断其余文件：数据库行删除的一致性优先，
+     * 残留文件经日志暴露后人工处理（与既有软删从不清理文件的行为相比只会更好）。
+     *
+     * @param urls 待清理的媒体 URL 集合，可含 null/空白/非 /media 元素
+     */
+    public void deleteByMediaUrls(Collection<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return;
+        }
+        StorageConfig config = storageConfigService.getDefaultConfig();
+        for (String url : urls) {
+            if (StrUtil.isBlank(url)) {
+                continue;
+            }
+            try {
+                if (localStorageStrategy.deleteByMediaUrl(url, config)) {
+                    log.info("[MediaStorage] 已清理本地媒体文件: {}", url);
+                }
+            } catch (RuntimeException e) {
+                log.warn("[MediaStorage] 清理本地媒体文件失败: url={}, error={}", url, e.getMessage());
+            }
+        }
     }
 
     private StorageStrategy resolveStrategy(StorageConfig config) {

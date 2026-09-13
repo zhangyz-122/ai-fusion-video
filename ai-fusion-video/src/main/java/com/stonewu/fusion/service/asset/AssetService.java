@@ -13,6 +13,7 @@ import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
 import com.stonewu.fusion.security.SecurityUtils;
 import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -20,9 +21,11 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -38,6 +41,7 @@ public class AssetService {
     private final AssetItemMapper assetItemMapper;
     private final ProjectService projectService;
     private final TeamService teamService;
+    private final MediaStorageService mediaStorageService;
 
     // ========== 资产 ==========
 
@@ -145,7 +149,9 @@ public class AssetService {
         if (currentTeamId == null) {
             return false;
         }
-        if (OWNER_TYPE_TEAM == asset.getOwnerType() && currentTeamId.equals(asset.getOwnerId())) {
+        // owner_type 历史脏数据可为 NULL（库列可空），用对象比较避免拆箱 NPE；
+        // NULL 视为非团队拥有，继续走创建者是否同团队成员的判断
+        if (Integer.valueOf(OWNER_TYPE_TEAM).equals(asset.getOwnerType()) && currentTeamId.equals(asset.getOwnerId())) {
             return true;
         }
         return teamService.listMemberUserIds(currentTeamId).contains(asset.getUserId());
@@ -279,22 +285,95 @@ public class AssetService {
         return asset;
     }
 
-    /** 恢复回收站资产（置 deleted = 0），保留原 id、子资产与引用关系 */
+    /**
+     * 查询当前用户有权访问的无项目归属（project_id IS NULL）历史软删资产。
+     * <p>
+     * 此类行无法解析所属项目，归属校验退回资产自身归属：创建者/拥有者本人，
+     * 或当前团队拥有/成员创建（复用 {@link #canAccessAsset} 的无项目分支）。
+     */
+    public List<Asset> listDeletedOrphansAccessibleByUser(Long userId) {
+        return assetMapper.selectDeletedWithoutProject().stream()
+                .filter(asset -> canAccessAsset(asset, userId))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 批量彻底删除无项目归属（project_id IS NULL）的历史软删资产。
+     * <p>
+     * 任一 id 不在历史软删行中或当前用户无权访问时整体失败，不做部分清理，
+     * 避免误传 id 时静默删掉预期外的数据。
+     *
+     * @return 实际彻底删除的资产数量
+     */
+    @CacheEvict(value = { "asset", "assetItem" }, allEntries = true)
+    @Transactional
+    public int purgeDeletedOrphans(Long userId, List<Long> ids) {
+        List<Long> distinctIds = ids == null ? List.of()
+                : ids.stream().filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        if (distinctIds.isEmpty()) {
+            throw new BusinessException("请提供要清理的历史软删资产 id");
+        }
+        List<Asset> orphans = assetMapper.selectDeletedByIds(distinctIds);
+        if (orphans.size() != distinctIds.size()) {
+            throw new BusinessException("部分资产不在无项目归属的历史软删行中，已取消批量清理");
+        }
+        for (Asset orphan : orphans) {
+            if (!canAccessAsset(orphan, userId)) {
+                throw new BusinessException(403, "无权清理资产: " + orphan.getId());
+            }
+        }
+        orphans.forEach(this::purgeDeletedAsset);
+        return orphans.size();
+    }
+
+    /**
+     * 恢复回收站资产（置 deleted = 0），保留原 id 与引用关系；
+     * 同步恢复其已软删的子资产——项目级联删除会连同子资产一起软删，
+     * 只恢复主资产会让子资产永久不可达。
+     */
     @CacheEvict(value = { "asset", "assetItem" }, allEntries = true)
     @Transactional
     public Asset restore(Long id) {
         if (assetMapper.restoreById(id) == 0) {
             throw new BusinessException("回收站中不存在该资产: " + id);
         }
+        assetItemMapper.restoreDeletedByAssetId(id);
         return assetMapper.selectById(id);
     }
 
-    /** 彻底删除回收站资产：物理删除资产行及其全部子资产行 */
+    /**
+     * 彻底删除回收站资产：物理删除资产行及其全部子资产行，
+     * 并清理行上引用的本地 /media 媒体文件（外链不属本系统产物，由门面忽略）。
+     */
     @CacheEvict(value = { "asset", "assetItem" }, allEntries = true)
     @Transactional
     public void purge(Long id) {
-        assetItemMapper.deletePhysicallyByAssetId(id);
-        assetMapper.deletePhysicallyById(id);
+        purgeDeletedAsset(getDeletedById(id));
+    }
+
+    /** 物理删除单个软删资产行及其子资产行，随后清理其媒体文件 */
+    private void purgeDeletedAsset(Asset deleted) {
+        List<String> mediaUrls = collectDeletedMediaUrls(deleted);
+        assetItemMapper.deletePhysicallyByAssetId(deleted.getId());
+        assetMapper.deletePhysicallyById(deleted.getId());
+        mediaStorageService.deleteByMediaUrls(mediaUrls);
+    }
+
+    /** 收集软删资产及其全部子资产（含已软删子资产）引用的媒体 URL，供彻底删除后清理 */
+    private List<String> collectDeletedMediaUrls(Asset deleted) {
+        List<String> urls = new ArrayList<>();
+        if (StrUtil.isNotBlank(deleted.getCoverUrl())) {
+            urls.add(deleted.getCoverUrl());
+        }
+        for (AssetItem item : assetItemMapper.selectPhysicallyByAssetId(deleted.getId())) {
+            if (StrUtil.isNotBlank(item.getImageUrl())) {
+                urls.add(item.getImageUrl());
+            }
+            if (StrUtil.isNotBlank(item.getThumbnailUrl())) {
+                urls.add(item.getThumbnailUrl());
+            }
+        }
+        return urls;
     }
 
     // ========== 子资产 ==========
