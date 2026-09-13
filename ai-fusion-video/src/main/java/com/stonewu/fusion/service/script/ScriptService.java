@@ -98,7 +98,13 @@ public class ScriptService {
     @CacheEvict(value = { "script", "episode", "scene" }, allEntries = true, beforeInvocation = true)
     @Transactional
     public Script fallbackParseStructure(Long scriptId) {
-        Script script = getById(scriptId);
+        // 行锁防止并发解析（AI 恢复与用户重试同时触发）重复创建分集
+        Script script = scriptMapper.selectOne(new LambdaQueryWrapper<Script>()
+                .eq(Script::getId, scriptId)
+                .last("FOR UPDATE"));
+        if (script == null) {
+            throw new BusinessException("剧本不存在: " + scriptId);
+        }
         String raw = script.getRawContent();
         if (raw == null || raw.isBlank()) {
             throw new BusinessException("剧本原文为空，无法解析");
@@ -107,6 +113,7 @@ public class ScriptService {
         List<ScriptEpisode> existingEpisodes = listEpisodes(scriptId);
         if (existingEpisodes.isEmpty()) {
             List<TextBlock> episodeBlocks = splitBlocks(raw, EPISODE_HEADING, true);
+            boolean structured = !episodeBlocks.isEmpty();
             if (episodeBlocks.isEmpty()) {
                 episodeBlocks = List.of(new TextBlock(1, "第1集", raw));
             }
@@ -121,12 +128,16 @@ public class ScriptService {
                         block.number());
                 saveScenesFromText(episode, block.content());
             }
+            script.setParsingProgress(structured
+                    ? "解析完成"
+                    : "未检测到“第X集/场次”分集标题，原文已按单集保存；结构化解析需要剧本格式文本或使用小说转剧本流程");
         } else {
             for (ScriptEpisode episode : existingEpisodes) {
                 if (episode.getTotalScenes() == null || episode.getTotalScenes() == 0) {
                     saveScenesFromText(episode, episode.getRawContent());
                 }
             }
+            script.setParsingProgress("解析完成");
         }
 
         // 原文已经完整保存在 mediumtext 的 raw_content 中；content 是 TEXT，
@@ -134,7 +145,6 @@ public class ScriptService {
         script.setContent(raw.length() <= MAX_SCENE_DESCRIPTION_CHARS ? raw : null);
         script.setTotalEpisodes(listEpisodes(scriptId).size());
         script.setParsingStatus(2);
-        script.setParsingProgress("解析完成");
         scriptMapper.updateById(script);
         return script;
     }

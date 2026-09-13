@@ -62,8 +62,10 @@ public final class AgentRunMaintenanceScheduler {
                 .subscribe(
                         ignored -> { },
                         failure -> log.error(
-                                "Agent run maintenance failed: type={}",
-                                failure.getClass().getSimpleName()));
+                                "Agent run maintenance failed: type={} message={}",
+                                failure.getClass().getSimpleName(),
+                                failure.getMessage(),
+                                failure));
     }
 
     public Mono<Void> maintainOnce() {

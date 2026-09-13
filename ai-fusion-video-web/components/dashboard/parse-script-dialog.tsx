@@ -31,6 +31,14 @@ export function ParseScriptDialog({
   const [readingFile, setReadingFile] = useState(false);
   const [error, setError] = useState("");
 
+  /** 超过该长度且无剧本结构标题时,提示用户 AI 无法有效结构化 */
+  const LONG_TEXT_THRESHOLD = 50000;
+  const hasScriptStructure = (text: string) =>
+    /第\s*[0-9一二三四五六七八九十百]+\s*集/.test(text) ||
+    /(^|\n)\s*(第\s*[0-9一二三四五六七八九十百]+\s*)?(场\s*次|镜头|场景)[\s:：|]/.test(text);
+  const isLongUnstructured =
+    rawContent.length > LONG_TEXT_THRESHOLD && !hasScriptStructure(rawContent);
+
   const extractFileText = async (file: File) => {
     const extension = file.name.split(".").pop()?.toLowerCase() || "";
     if (["txt", "md", "markdown", "csv", "json", "xml"].includes(extension)) {
@@ -126,6 +134,15 @@ export function ParseScriptDialog({
       setError("请粘贴剧本原文");
       return;
     }
+    if (isLongUnstructured && !hasScriptStructure(rawContent)) {
+      const ok = await confirm({
+        title: "超长且未分集的文本",
+        description: `当前文本共 ${rawContent.length.toLocaleString()} 字且未检测到“第X集/场次”结构。直接解析会把原文整篇保存为单集（不产生结构化分集）。建议先拆分整理后再导入。仍要继续吗？`,
+        variant: "ai",
+        confirmText: "仍要按原文导入",
+      });
+      if (!ok) return;
+    }
     if (mode === "reparse") {
       const ok = await confirm({ title: "重新解析剧本", description: "重新解析会清空当前剧本的分集和场次，并使用新原文重新生成。顶层剧本记录会保留，确定继续？", variant: "ai", confirmText: "确定重新解析" });
       if (!ok) return;
@@ -215,8 +232,14 @@ export function ParseScriptDialog({
                   </div>
                   {fileName && (
                     <p className="mb-2 truncate text-xs text-primary" title={fileName}>
-                      已载入：{fileName}
+                      已载入：{fileName}（{rawContent.length.toLocaleString()} 字）
                     </p>
+                  )}
+                  {isLongUnstructured && (
+                    <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                      检测到超长文本（{(rawContent.length / 10000).toFixed(1)} 万字）且未按剧本格式分集。
+                      直接解析会把原文整篇保存为单集；如需结构化拆集，请先按“第X集/场次”整理，或改用小说转剧本流程。
+                    </div>
                   )}
                   <textarea
                     value={rawContent}
