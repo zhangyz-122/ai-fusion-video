@@ -41,6 +41,11 @@
   - 首帧图未进入视频（无 referenceImages 绑定，LoadImage 节点保持模板占位图），实为纯文生视频；
   - 历史 Run #4/#5 用同一版本，ffprobe 同为 15.083s——证明该缺口自历史"成功闭环"起就存在，此前验收未检查参数流。
 - **版本 10 绑定修复手册（需 ADMIN）**：`PUT /version/update` 补齐 input_bindings：duration→节点529 `value`(number)、seed→节点322 `noise_seed`(integer)、referenceImages→LoadImage 节点（469/475/515/525/526/527 中实际接入 AudioConditioning/ImageScale 链路的那些，index 0..N）、height→节点338；随后 `version/validate` → `version/test` → `publish`。完成后用 duration=5 复跑，ffprobe 应 ≈5.2s（公式 max(5,round(a×24))+…）。
+- **一键修复脚本（已就绪，2026-09-13）**：`tools/repair-workflow7-v10-bindings.mjs`。已按真实版本 10 JSON 离线渲染验证通过（duration→529、seed→322、参考图 6 槽 index0-5 按 ref_image_0..5 槽位序 526/527/525/515/475/469，未供图槽位自动剪枝、prompt/width/数学链不受影响）。执行方式：
+  ```
+  FUSION_ADMIN_USER=zhangyz FUSION_ADMIN_PASSWORD=*** node tools/repair-workflow7-v10-bindings.mjs
+  ```
+  脚本自动完成：建新版本（规范化哈希同步修复）→ 在线验证 → 真实试运行（占用 GPU 数分钟，用验收首帧图）→ 发布。试运行可 FUSION_SKIP_TEST=1 跳过，但未试运行无法发布。
 - WAN 路径验收仍待：模型 16 能力配置修复（上文）+ 渲染器 num_frames 派生（已上线，单测覆盖）将在 WAN 可提交后自动生效。
 
 ## 2026-09-13：跨用户项目访问（对应总任务 M01）
