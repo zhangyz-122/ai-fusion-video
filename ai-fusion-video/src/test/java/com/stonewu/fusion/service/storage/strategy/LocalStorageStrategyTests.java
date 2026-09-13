@@ -50,4 +50,52 @@ class LocalStorageStrategyTests {
             throw new IllegalStateException(e);
         }
     }
+
+    // ---- SW-T19(P0):subDir 目录穿越断言（红队 A-3） ----
+
+    @Test
+    void storeBytesRejectsSubDirectoryEscapingStorageRoot() {
+        StorageConfig config = StorageConfig.builder().basePath(tempDir.toString()).build();
+
+        for (String subDir : List.of(
+                "../../../../tmp/evil",
+                "..\\..\\windows",
+                "images/../..",
+                "/etc")) {
+            assertThatThrownBy(() -> strategy.storeBytes(
+                    new byte[]{1, 2, 3}, subDir, "png", config))
+                    .as("subDir %s 必须被拒绝", subDir)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("非法存储子目录");
+        }
+
+        // 存储根目录内不得产生任何文件
+        try (Stream<Path> entries = Files.walk(tempDir)) {
+            assertThat(entries.filter(Files::isRegularFile)).isEmpty();
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void storeBytesWritesInsideConfiguredBasePathAndReturnsMediaUrl() throws IOException {
+        StorageConfig config = StorageConfig.builder().basePath(tempDir.toString()).build();
+
+        String url = strategy.storeBytes(new byte[]{1, 2, 3}, "images", "png", config);
+
+        assertThat(url).startsWith("/media/images/");
+        try (Stream<Path> entries = Files.list(tempDir.resolve("images"))) {
+            assertThat(entries.filter(Files::isRegularFile)).hasSize(1);
+        }
+    }
+
+    @Test
+    void storeFileRejectsTraversalBeyondStorageRoot() {
+        StorageConfig config = StorageConfig.builder().basePath(tempDir.toString()).build();
+
+        assertThatThrownBy(() -> strategy.storeFile(
+                tempDir, "../../../../outside", "png", config))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("非法存储子目录");
+    }
 }

@@ -21,10 +21,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 通用文件上传 Controller
@@ -37,8 +43,16 @@ import java.util.Set;
 public class FileUploadController {
 
     private static final long MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-    private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
-            "image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"
+    /**
+     * 扩展名由 Content-Type 白名单映射决定，与客户端提供的文件名解耦
+     * （红队 A-4：文件名扩展走私 x.html + Content-Type: image/png → /media 存储型 XSS）。
+     */
+    private static final Map<String, String> IMAGE_CONTENT_TYPE_TO_EXT = Map.of(
+            "image/png", "png",
+            "image/jpeg", "jpg",
+            "image/jpg", "jpg",
+            "image/webp", "webp",
+            "image/gif", "gif"
     );
     private static final Map<String, String> ASSISTANT_UPLOAD_TYPES = Map.ofEntries(
             Map.entry("image/png", "png"),
@@ -63,6 +77,8 @@ public class FileUploadController {
             Map.entry("text/csv", "csv"),
             Map.entry("application/json", "json")
     );
+    /** 魔数检测所需的最大头部长度（WebP 需要 RIFF....WEBP 共 12 字节）。 */
+    private static final int MAGIC_HEADER_LENGTH = 12;
 
     private final MediaStorageService mediaStorageService;
     private final StorageConfigService storageConfigService;
@@ -81,21 +97,96 @@ public class FileUploadController {
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new BusinessException("文件大小不能超过 100MB");
         }
-
-        String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_IMAGE_TYPES.contains(contentType.toLowerCase())) {
+        String contentType = normalizeContentType(file.getContentType());
+        // 扩展名与 Content-Type 绑定：文件名扩展不参与落盘决策
+        String extension = IMAGE_CONTENT_TYPE_TO_EXT.get(contentType);
+        if (extension == null) {
             throw new BusinessException("仅支持图片格式：PNG, JPEG, WebP, GIF");
         }
+        validateSubDir(subDir);
 
+        Path tempFile = null;
         try {
-            String ext = getExtension(file.getOriginalFilename());
-            String url = mediaStorageService.storeBytes(file.getBytes(), subDir, ext);
+            tempFile = Files.createTempFile("afv-upload-", "." + extension);
+            try (InputStream in = new BufferedInputStream(file.getInputStream())) {
+                // 魔数校验：声明类型必须与真实文件头一致（红队 A-4/A-6）
+                in.mark(MAGIC_HEADER_LENGTH);
+                byte[] header = in.readNBytes(MAGIC_HEADER_LENGTH);
+                requireImageMagic(header, contentType);
+                in.reset();
+                // 全程流式落盘，不将文件整体读入堆内存
+                Files.copy(in, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            String url = mediaStorageService.storeFile(tempFile, subDir, extension);
             log.info("[FileUpload] 上传成功: size={}KB, url={}", file.getSize() / 1024, url);
             return CommonResult.success(url);
         } catch (IOException e) {
             log.error("[FileUpload] 上传失败", e);
             throw new BusinessException("上传失败: " + e.getMessage());
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException cleanupError) {
+                    log.warn("[FileUpload] 临时文件清理失败: {}", tempFile, cleanupError);
+                }
+            }
         }
+    }
+
+    /**
+     * 校验用户可控的 subDir：拒绝目录穿越、绝对路径、盘符与非法字符（红队 A-3）。
+     */
+    private void validateSubDir(String subDir) {
+        String message = "非法存储子目录: " + subDir;
+        if (StrUtil.isBlank(subDir)) {
+            throw new BusinessException(message);
+        }
+        String normalized = subDir.trim().replace('\\', '/');
+        if (normalized.startsWith("/")
+                || normalized.contains(":")
+                || !normalized.matches("[a-zA-Z0-9][a-zA-Z0-9_/-]*")
+                || Arrays.stream(normalized.split("/"))
+                        .anyMatch(part -> part.isEmpty() || ".".equals(part) || "..".equals(part))) {
+            throw new BusinessException(message);
+        }
+    }
+
+    /**
+     * 按声明的 Content-Type 校验图片魔数，防止伪装成图片的可执行/任意文件落盘。
+     */
+    private void requireImageMagic(byte[] header, String contentType) {
+        boolean matches = switch (contentType) {
+            case "image/png" -> startsWith(header, new byte[]{
+                    (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A});
+            case "image/jpeg", "image/jpg" -> startsWith(header, new byte[]{
+                    (byte) 0xFF, (byte) 0xD8, (byte) 0xFF});
+            case "image/gif" -> startsWith(header, "GIF87a".getBytes(StandardCharsets.US_ASCII))
+                    || startsWith(header, "GIF89a".getBytes(StandardCharsets.US_ASCII));
+            case "image/webp" -> header.length >= MAGIC_HEADER_LENGTH
+                    && startsWith(header, "RIFF".getBytes(StandardCharsets.US_ASCII))
+                    && startsWith(header, 8, "WEBP".getBytes(StandardCharsets.US_ASCII));
+            default -> false;
+        };
+        if (!matches) {
+            throw new BusinessException("文件内容与声明的图片格式不符");
+        }
+    }
+
+    private boolean startsWith(byte[] data, byte[] prefix) {
+        return startsWith(data, 0, prefix);
+    }
+
+    private boolean startsWith(byte[] data, int offset, byte[] prefix) {
+        if (data.length < offset + prefix.length) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length; i++) {
+            if (data[offset + i] != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @PostMapping("/assistant-upload")
@@ -160,11 +251,5 @@ public class FileUploadController {
         int separator = contentType.indexOf(';');
         String value = separator >= 0 ? contentType.substring(0, separator) : contentType;
         return value.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String getExtension(String filename) {
-        if (filename == null) return "png";
-        int dotIndex = filename.lastIndexOf('.');
-        return dotIndex >= 0 ? filename.substring(dotIndex + 1) : "png";
     }
 }

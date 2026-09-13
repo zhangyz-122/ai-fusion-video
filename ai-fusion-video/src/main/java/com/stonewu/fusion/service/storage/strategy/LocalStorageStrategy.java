@@ -58,7 +58,7 @@ public class LocalStorageStrategy implements StorageStrategy {
                         String extension = guessExtension(remoteUrl, response.header("Content-Type"));
                         String filename = IdUtil.fastSimpleUUID() + "." + extension;
 
-                        Path dir = Paths.get(basePath, subDir);
+                        Path dir = resolveTargetDir(basePath, subDir);
                         Files.createDirectories(dir);
                         Path target = dir.resolve(filename);
 
@@ -82,7 +82,7 @@ public class LocalStorageStrategy implements StorageStrategy {
         String filename = IdUtil.fastSimpleUUID() + "." + extension;
 
         try {
-            Path dir = Paths.get(basePath, subDir);
+            Path dir = resolveTargetDir(basePath, subDir);
             Files.createDirectories(dir);
             Path target = dir.resolve(filename);
             Files.write(target, data);
@@ -100,7 +100,7 @@ public class LocalStorageStrategy implements StorageStrategy {
         String filename = IdUtil.fastSimpleUUID() + "." + extension;
 
         try {
-            Path dir = Paths.get(basePath, subDir);
+            Path dir = resolveTargetDir(basePath, subDir);
             Files.createDirectories(dir);
             Path target = dir.resolve(filename);
             Files.copy(filePath, target, new CopyOption[]{StandardCopyOption.REPLACE_EXISTING});
@@ -118,6 +118,20 @@ public class LocalStorageStrategy implements StorageStrategy {
             return config.getBasePath();
         }
         return DEFAULT_BASE_PATH;
+    }
+
+    /**
+     * 解析落盘目录并做越界断言：subDir 规范化后必须仍在存储根目录内
+     * （红队 A-3：Paths.get(basePath, subDir) 直拼时 ../ 可在进程权限内任意目录落盘）。
+     */
+    private Path resolveTargetDir(String basePath, String subDir) {
+        Path root = Paths.get(basePath).toAbsolutePath().normalize();
+        String safeSubDir = StrUtil.blankToDefault(subDir, "uploads");
+        Path dir = root.resolve(safeSubDir).normalize();
+        if (!dir.startsWith(root)) {
+            throw new RuntimeException("非法存储子目录: " + subDir);
+        }
+        return dir;
     }
 
     /**
