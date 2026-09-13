@@ -44,6 +44,25 @@
 - **版本 10 绑定修复（已完成，2026-09-13）**：执行 `tools/repair-workflow7-v10-bindings.mjs` 后流程被试运行环节的参考图格式拦住一次（本地 `/media` 路径需 Data URI），改用 Data URI 后全部通过。新版本 **19（version_no=2）已发布**，规范化哈希 `0a0ab8df7771`。
 - **修复后验收（通过）**：Run 8（uitest，duration=5）三候选全部 **5.166667 秒**（124 帧@24fps，公式 max(5,round(5×24))+… 精确命中）；ComfyUI 执行图核对：节点529 value=5、LoadImage 526=平台上传的首帧。QC PASS + 选片完成，Run 8 SELECTED。时长、种子、参考图自此由平台绑定控制。
 - 遗留提醒：模型 16（WAN）能力配置缺口仍待管理员补齐（见上文），补齐后 WAN 路径的 num_frames 派生（已上线）即可生效并做同样验收。
+
+## 2026-09-13 收口：WAN 全链路验收通过（模型16配置 + JSON转义修复）
+
+### 模型 16 能力配置（已修，管理员接口）
+
+补齐 `referenceImageInputFormats:["url","data_uri"]`、`supportDataUriInput:true`、`supportReferenceImages:true`、`maxReferenceImages:1`。
+
+### WAN 注册 JSON 非法转义（已修，新版本 20 发布）
+
+- 根因实证：`afv_comfyui_workflow_version` 中 WAN 版本的 `api_workflow_json` 含**单个反斜杠**的 Windows 模型路径（`wanvideo\Wan2_1_VAE_bf16.safetensors`、`WanVideo\Wan2_1-I2V-14B-480P_fp8...`，hex 5C57），Jackson 报 "Unrecognized character escape 'W'"。注意：mysql 批量客户端输出会把反斜杠翻倍，直接 CLI 提取分析会误判为合法，需以 DB hex 为准。
+- 伴随缺陷：单元素输出绑定数组被 PowerShell 展开为对象（`{...}` 而非 `[{...}]`），应用校验报"输出绑定必须是 JSON 数组"。
+- 修复：`tools/repair-wan-json-escapes.mjs`（拉版本→修转义→修输出绑定形状→建新版本→在线验证→试运行→发布）。工作流 9 新版本 **20（version_no=2）已发布**，规范化哈希 `0cafe6b42f6c`。工作流 10（FLF）/11（INFINITETALK）存在同样问题，待需要时跑同一脚本（先 FUSION_SKIP_TEST=1 建版本，再补试运行发布）。
+
+### WAN 5 秒三候选验收（通过，Run 12）
+
+- Run 12（uitest，modelId=16，profile=WAN_I2V_STANDARD，duration=5）：三候选 ffprobe 均 **5.062500 秒 = 81 帧@16fps**，与渲染器派生 round(5×16)+1 精确一致；首帧经参考图传输进入工作流。
+- QC PASS Take1 → 选片，Run 12 SELECTED。
+- 事故记录：验收期间 ComfyUI（sage启动器）进程崩溃一次导致 Run 10/11 连接失败，已用 sage启动器.bat 重启后恢复；未影响数据。
+- 附带诊断工具：`tools/analyze-wan-json.mjs`、`tools/analyze-backslash.mjs`。
 - WAN 路径验收仍待：模型 16 能力配置修复（上文）+ 渲染器 num_frames 派生（已上线，单测覆盖）将在 WAN 可提交后自动生效。
 
 ## 2026-09-13：跨用户项目访问（对应总任务 M01）
