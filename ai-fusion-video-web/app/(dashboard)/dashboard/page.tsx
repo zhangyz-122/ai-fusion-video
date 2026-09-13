@@ -9,17 +9,16 @@ import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
 import { storageConfigApi, type StorageConfig } from "@/lib/api/storage";
 import { http, resolveMediaUrl } from "@/lib/api/client";
 import {
-  FolderKanban,
   Images,
   Film,
   Loader2,
-  ArrowRight,
-  Plus,
   Package,
   Users,
   MapPin,
   Wrench,
-  ChevronRight,
+  Clapperboard,
+  AudioLines,
+  Factory,
   Cpu,
   Globe,
 } from "lucide-react";
@@ -27,8 +26,8 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { ActivitySection } from "./_components/activity-section";
-import { AssistantBrandIcon } from "@/components/dashboard/assistant/assistant-brand-icon";
-import { requestAssistantOpen } from "@/components/dashboard/assistant/open-assistant";
+import { RecentProjects } from "./_components/recent-projects";
+import { SectionHeader } from "./_components/section-header";
 import { SafeImage } from "@/components/ui/safe-image";
 
 // ============================================================
@@ -62,27 +61,9 @@ const ASSET_TYPE_CONFIG: Record<string, { label: string; icon: typeof Users; col
   prop: { label: "道具", icon: Wrench, color: "text-amber-400", bg: "bg-amber-500/10" },
 };
 
-function DashboardAssistantIcon({ className }: { className?: string }) {
-  return <AssistantBrandIcon className={className} loading="eager" />;
-}
-
 // ============================================================
 // 工具
 // ============================================================
-
-function formatTime(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "刚刚";
-  if (mins < 60) return `${mins} 分钟前`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} 小时前`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
-  return d.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
-}
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -312,41 +293,42 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* ========== 快捷操作 ========== */}
+      {/* ========== 快捷能力入口 ========== */}
       <motion.div
         variants={itemVariants}
         className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
       >
         <QuickAction
-          icon={FolderKanban}
-          label="新建项目"
-          desc="开始全新的创作"
-          color="text-blue-400"
-          bg="bg-blue-500/10"
-          onClick={() => router.push("/projects")}
-        />
-        <QuickAction
           icon={Images}
-          label="管理素材"
-          desc="查看所有创作资产"
-          color="text-orange-400"
-          bg="bg-orange-500/10"
-          onClick={() => router.push("/assets")}
+          label="生图"
+          desc="生成角色与场景画面"
+          color="text-fuchsia-400"
+          bg="bg-fuchsia-500/10"
+          onClick={() => router.push("/generate/images")}
         />
         <QuickAction
-          icon={DashboardAssistantIcon}
-          label="融光助手"
-          desc="智能辅助创作"
-          bg="bg-purple-500/10"
-          onClick={requestAssistantOpen}
-        />
-        <QuickAction
-          icon={Wrench}
-          label="工具"
-          desc="使用 AI 创作工具"
+          icon={Clapperboard}
+          label="视频"
+          desc="生成动态视频镜头"
           color="text-cyan-400"
           bg="bg-cyan-500/10"
-          onClick={() => router.push("/generate/image")}
+          onClick={() => router.push("/generate/videos")}
+        />
+        <QuickAction
+          icon={AudioLines}
+          label="声音"
+          desc="配音、音乐与音效"
+          color="text-emerald-400"
+          bg="bg-emerald-500/10"
+          onClick={() => router.push("/generate/audios")}
+        />
+        <QuickAction
+          icon={Factory}
+          label="生产"
+          desc="批量生产运行管理"
+          color="text-violet-400"
+          bg="bg-violet-500/10"
+          onClick={() => router.push("/production")}
         />
       </motion.div>
 
@@ -357,58 +339,7 @@ export default function DashboardPage() {
 
       {/* ========== 最近项目 ========== */}
       <motion.div variants={itemVariants} className="mb-8">
-        <SectionHeader
-          title="最近项目"
-          icon={<Film className="h-4 w-4 text-primary" />}
-          action={projects.length > 0 ? { label: "全部项目", onClick: () => router.push("/projects") } : undefined}
-        />
-
-        {recentProjects.length === 0 ? (
-          <div
-            onClick={() => router.push("/projects")}
-            className={cn(
-              "rounded-xl border border-dashed border-border/40 p-10",
-              "flex flex-col items-center justify-center text-center",
-              "bg-card/20 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all"
-            )}
-          >
-            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
-              <Plus className="h-6 w-6 text-primary/60" />
-            </div>
-            <p className="text-sm font-medium mb-0.5">创建你的第一个项目</p>
-            <p className="text-xs text-muted-foreground">
-              点击此处开始创建项目
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm overflow-hidden divide-y divide-border/15">
-            {recentProjects.map((proj) => (
-              <div
-                key={proj.id}
-                onClick={() => router.push(`/projects/${proj.id}`)}
-                className="group flex items-center gap-4 px-4 py-3.5 cursor-pointer hover:bg-muted/20 transition-colors"
-              >
-                <div className="h-9 w-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0 group-hover:bg-primary/12 transition-colors">
-                  <Film className="h-4.5 w-4.5 text-primary/70" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                    {proj.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground/60 truncate mt-0.5">
-                    {proj.description || "暂无描述"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-[11px] text-muted-foreground/40 tabular-nums">
-                    {formatTime(proj.updateTime)}
-                  </span>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-muted-foreground/60 transition-colors" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <RecentProjects projects={recentProjects} />
       </motion.div>
 
       {/* ========== 最近资产 ========== */}
@@ -511,35 +442,6 @@ function QuickAction({
           <p className="text-[11px] text-muted-foreground/50 truncate">{desc}</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-/** Section 头 */
-function SectionHeader({
-  title,
-  icon,
-  action,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  action?: { label: string; onClick: () => void };
-}) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <h2 className="text-sm font-semibold flex items-center gap-2 text-foreground/80">
-        {icon}
-        {title}
-      </h2>
-      {action && (
-        <button
-          onClick={action.onClick}
-          className="text-xs text-muted-foreground/50 hover:text-foreground flex items-center gap-0.5 transition-colors"
-        >
-          {action.label}
-          <ArrowRight className="h-3 w-3" />
-        </button>
-      )}
     </div>
   );
 }
