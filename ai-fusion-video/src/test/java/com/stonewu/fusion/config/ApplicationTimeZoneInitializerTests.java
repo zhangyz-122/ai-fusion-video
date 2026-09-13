@@ -21,7 +21,7 @@ class ApplicationTimeZoneInitializerTests {
                     "MYSQL_SESSION_TIME_ZONE=+08:00");
 
     @Test
-    void loadsApplicationAndMysqlSessionTimeZonesFromConfiguration() {
+    void loadsApplicationAndMysqlTimeZonePropertiesFromConfiguration() {
         contextRunner.run(context -> {
             assertThat(context.getEnvironment().getProperty("app.time-zone"))
                     .isEqualTo("Asia/Shanghai");
