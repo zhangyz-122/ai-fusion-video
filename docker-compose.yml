@@ -5,6 +5,8 @@
 # 使用方式: docker compose up -d
 # ============================================
 
+name: ai-fusion-video
+
 services:
   # ---------- 基础设施 ----------
   mysql:
@@ -45,9 +47,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # ---------- 后端 ----------
+  # ---------- 后端（本地构建，包含本机修正） ----------
   backend:
-    image: stonewuu/ai-fusion-video:latest
+    build:
+      context: ./ai-fusion-video
+      dockerfile: Dockerfile
+    image: ai-fusion-video:local
     container_name: fusion-backend
     restart: unless-stopped
     environment:
@@ -76,7 +81,10 @@ services:
 
   # ---------- 前端 ----------
   frontend:
-    image: stonewuu/ai-fusion-video-web:latest
+    build:
+      context: ./ai-fusion-video-web
+      dockerfile: Dockerfile
+    image: ai-fusion-video-web:local
     container_name: fusion-frontend
     restart: unless-stopped
     environment:
