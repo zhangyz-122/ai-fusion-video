@@ -3,13 +3,18 @@ package com.stonewu.fusion.service.dashboard;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.controller.dashboard.vo.DashboardActivityVO;
 import com.stonewu.fusion.controller.dashboard.vo.DashboardActivityVO.ActivityItem;
+import com.stonewu.fusion.entity.project.Project;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.entity.production.ProductionRun;
+import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.mapper.generation.ImageTaskMapper;
 import com.stonewu.fusion.mapper.generation.VideoTaskMapper;
 import com.stonewu.fusion.mapper.production.ProductionRunMapper;
 import com.stonewu.fusion.mapper.production.ProductionTakeMapper;
+import com.stonewu.fusion.mapper.project.ProjectMapper;
+import com.stonewu.fusion.mapper.script.ScriptMapper;
+import com.stonewu.fusion.service.project.ProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -34,10 +39,35 @@ public class DashboardActivityService {
     private final VideoTaskMapper videoTaskMapper;
     private final ProductionRunMapper runMapper;
     private final ProductionTakeMapper takeMapper;
+    private final ScriptMapper scriptMapper;
+    private final ProjectMapper projectMapper;
+    private final ProjectService projectService;
 
     public DashboardActivityVO getActivity(Long userId) {
         List<ActivityItem> running = new ArrayList<>();
         List<ActivityItem> pending = new ArrayList<>();
+
+        // 剧本解析（自动分块/AI 解析）进行中
+        List<Long> accessibleProjectIds = projectService.listAccessibleByUser(userId).stream()
+                .map(Project::getId)
+                .toList();
+        if (!accessibleProjectIds.isEmpty()) {
+            List<Script> parsingScripts = scriptMapper.selectList(new LambdaQueryWrapper<Script>()
+                    .in(Script::getProjectId, accessibleProjectIds)
+                    .eq(Script::getParsingStatus, 1)
+                    .orderByDesc(Script::getUpdateTime)
+                    .last("LIMIT " + LIMIT));
+            for (Script script : parsingScripts) {
+                running.add(ActivityItem.builder()
+                        .kind("SCRIPT_PARSE")
+                        .refId(script.getId())
+                        .title("剧本解析 · " + script.getTitle())
+                        .detail(script.getParsingProgress() == null ? "解析中" : script.getParsingProgress())
+                        .projectId(script.getProjectId())
+                        .createTime(TIME_FORMAT.format(script.getUpdateTime()))
+                        .build());
+            }
+        }
 
         List<ImageTask> imageTasks = imageTaskMapper.selectList(new LambdaQueryWrapper<ImageTask>()
                 .eq(ImageTask::getUserId, userId)
