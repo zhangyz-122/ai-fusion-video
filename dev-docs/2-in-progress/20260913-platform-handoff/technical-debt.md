@@ -8,12 +8,22 @@
 - 历史记录报告 AgentRunMaintenanceScheduler 的 DataIntegrityViolationException，需复查。
 - 历史证据路径指向 C 盘；其原始采集含义应保留，新的工具和计划使用当前项目相对路径。
 
-## 2026-09-13 新增：跨用户项目数据隔离漏洞（对应总任务 M01，高优先级）
+## 2026-09-13：跨用户项目访问（对应总任务 M01）
 
-以仅 user 角色的全新账号 uitest 实测确认：
+### 已修复（本轮，48/48 测试通过 + API 实测验证）
 
-- `GET /api/projects/page`（ProjectController 分页）底层 `ProjectService.page` 为全表查询，无任何用户/团队过滤，普通用户可见他人全部项目。
-- `GET /api/projects/{id}` 与 `GET /api/projects/{id}/workspace-overview` 无 `canAccessProject` 校验，普通用户可读取他人项目详情、剧本状态与资产库。
-- `ProjectService.update` / `ProjectService.delete` 无权限校验，任何登录用户可修改或删除他人项目（含级联删除剧本/分镜）。
-- 现成权限原语已存在：`listAccessibleByUser`、`canAccessProject`、`isMember`（`/api/projects/list` 已正确使用）。修复方向：读接口统一接入 canAccessProject，写/删接口加 owner 或成员校验，并审计 asset/script/storyboard 等其余按 projectId 直取的接口是否有同类问题。
-- 测试账号 uitest / 一条生图记录保留作为复现凭据；该账号仅本地测试环境使用。
+- `GET /api/project/page`：`ProjectService.page` 由全表查询改为按当前用户可访问范围过滤（无团队→个人项目；有团队→团队项目+团队成员个人项目）。
+- `GET /api/project/{id}`、`/{id}/workspace-overview`、`PUT /api/project`、`DELETE /api/project/{id}`：统一接入 `canAccessProject` 守卫（Controller 层，与 `workspace/initialize` 同模式；Agent 工具原有守卫不变）。
+- 新增 `ProjectAccessGuardTests`（7 例）：分页过滤条件、详情/概览/更新/删除的拒绝与放行路径。
+- 实测（uitest 移出共享团队后）：他人项目 page 不再出现、详情/改名/删除均返回"无权"，创建并查看自己项目正常。
+
+### 复核后的两层结论
+
+1. **端点守卫缺失（已修）**：此前项目读写接口完全无校验，任何登录用户可改/删任何人项目，属真实漏洞。
+2. **共享默认团队语义（设计决策，待确认）**：注册用户默认加入首个用户的"默认团队"（`getRequiredSingleTeam`），同团队成员按设计可见彼此个人项目。本地"单团队"部署下这是预期；若要面向多用户隔离，需改为注册即建个人团队（类似 `initializeAdmin`），属产品决策，未擅改。
+
+### 仍待审计（M01-01，下一批）
+
+- Script / Storyboard / Asset 等其余按 projectId 直取的控制器端点均未接入 `canAccessProject`（当前仅 ProjectController 接入）；需统一补齐读写守卫。
+- 生成、存储、成员管理等控制器同类排查。
+- 测试账号 uitest（已建独立团队 uitest-team、项目 id=6）保留作回归凭据。

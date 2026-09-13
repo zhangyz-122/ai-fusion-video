@@ -37,18 +37,27 @@ public class ProjectController {
     @Operation(summary = "项目分页")
     @GetMapping("/page")
     public CommonResult<PageResult<Project>> page(PageParam pageParam) {
-        return CommonResult.success(projectService.page(pageParam.getPageNo(), pageParam.getPageSize()));
+        return CommonResult.success(projectService.page(pageParam.getPageNo(), pageParam.getPageSize(),
+                SecurityUtils.requireCurrentUserId()));
     }
 
     @Operation(summary = "获取项目详情")
     @GetMapping("/{id}")
     public CommonResult<Project> get(@PathVariable Long id) {
+        Long userId = SecurityUtils.requireCurrentUserId();
+        if (!projectService.canAccessProject(id, userId)) {
+            throw new BusinessException("无权访问该项目");
+        }
         return CommonResult.success(projectService.getById(id));
     }
 
     @Operation(summary = "获取项目剧本与分镜工作区概览")
     @GetMapping("/{id}/workspace-overview")
     public CommonResult<ProjectWorkspaceOverview> getWorkspaceOverview(@PathVariable Long id) {
+        Long userId = SecurityUtils.requireCurrentUserId();
+        if (!projectService.canAccessProject(id, userId)) {
+            throw new BusinessException("无权访问该项目");
+        }
         return CommonResult.success(projectService.getWorkspaceOverview(id));
     }
 
@@ -78,6 +87,10 @@ public class ProjectController {
     @Operation(summary = "更新项目")
     @PutMapping
     public CommonResult<Project> update(@Valid @RequestBody ProjectUpdateReqVO reqVO) {
+        Long userId = SecurityUtils.requireCurrentUserId();
+        if (!projectService.canAccessProject(reqVO.getId(), userId)) {
+            throw new BusinessException("无权修改该项目");
+        }
         Project project = ProjectConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(projectService.update(project));
     }
@@ -85,6 +98,10 @@ public class ProjectController {
     @Operation(summary = "删除项目")
     @DeleteMapping("/{id}")
     public CommonResult<Boolean> delete(@PathVariable Long id) {
+        Long userId = SecurityUtils.requireCurrentUserId();
+        if (!projectService.canAccessProject(id, userId)) {
+            throw new BusinessException("无权删除该项目");
+        }
         projectService.delete(id);
         return CommonResult.success(true);
     }

@@ -70,8 +70,9 @@ public class ProjectService {
         return project;
     }
 
-    public PageResult<Project> page(int pageNo, int pageSize) {
-        return PageResult.of(projectMapper.selectPage(new Page<>(pageNo, pageSize), null));
+    public PageResult<Project> page(int pageNo, int pageSize, Long userId) {
+        return PageResult.of(projectMapper.selectPage(new Page<>(pageNo, pageSize),
+                accessibleProjectWrapper(userId)));
     }
 
     @Cacheable(value = "project", key = "'owner:' + #ownerType + ':' + #ownerId")
@@ -87,16 +88,27 @@ public class ProjectService {
         if (currentTeamId == null) {
             return listByOwner(OWNER_TYPE_PERSONAL, userId);
         }
+        return projectMapper.selectList(accessibleProjectWrapper(userId));
+    }
+
+    private LambdaQueryWrapper<Project> accessibleProjectWrapper(Long userId) {
+        Long currentTeamId = teamService.getCurrentTeamIdByUser(userId);
+        if (currentTeamId == null) {
+            return new LambdaQueryWrapper<Project>()
+                    .eq(Project::getOwnerType, OWNER_TYPE_PERSONAL)
+                    .eq(Project::getOwnerId, userId)
+                    .orderByDesc(Project::getCreateTime);
+        }
         List<Long> memberUserIds = teamService.listMemberUserIds(currentTeamId);
-        return projectMapper.selectList(new LambdaQueryWrapper<Project>()
+        return new LambdaQueryWrapper<Project>()
                 .and(wrapper -> wrapper
                         .and(teamOwned -> teamOwned
                                 .eq(Project::getOwnerType, OWNER_TYPE_TEAM)
-                    .eq(Project::getOwnerId, currentTeamId))
+                                .eq(Project::getOwnerId, currentTeamId))
                         .or(memberOwned -> memberOwned
                                 .eq(Project::getOwnerType, OWNER_TYPE_PERSONAL)
                                 .in(Project::getOwnerId, memberUserIds)))
-                .orderByDesc(Project::getCreateTime));
+                .orderByDesc(Project::getCreateTime);
     }
 
     public boolean canAccessProject(Long projectId, Long userId) {
