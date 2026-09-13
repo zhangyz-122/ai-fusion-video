@@ -66,15 +66,18 @@ public class ApiConfig extends BaseEntity {
     private String proxyUsername;
 
     /** 出站代理认证密码 */
+    @ToString.Exclude
     private String proxyPassword;
 
     /** API 密钥 */
+    @ToString.Exclude
     private String apiKey;
 
     /** 应用ID（部分平台需要） */
     private String appId;
 
     /** 应用密钥（部分平台需要） */
+    @ToString.Exclude
     private String appSecret;
 
     /** 关联模型ID */

@@ -33,6 +33,8 @@ public class ComfyUiWorkflowDocumentService {
     private static final int MAX_UI_JSON_BYTES = 4 * 1024 * 1024;
     private static final int MAX_NODES = 500;
     private static final int MAX_BINDINGS = 128;
+    /** JSON 嵌套深度上限，防止“嵌套炸弹”在解析后处理（排序、密钥扫描）中拖垮服务 */
+    private static final int MAX_JSON_DEPTH = 64;
     private static final Set<String> COMMON_FIELDS = Set.of(
             "prompt", "negativePrompt", "seed", "count", "referenceImageCount");
     private static final Set<String> IMAGE_FIELDS = Set.of(
@@ -58,15 +60,12 @@ public class ComfyUiWorkflowDocumentService {
                                                 String inputBindingsJson,
                                                 String outputBindingsJson) {
         requireModelType(modelType);
-        ObjectNode apiWorkflow = parseObject(apiWorkflowJson, "API-format 工作流", MAX_API_JSON_BYTES, true);
+        ObjectNode apiWorkflow = parseApiWorkflow(apiWorkflowJson);
         if (apiWorkflow.has("nodes") || apiWorkflow.has("links")) {
             throw invalid("检测到 UI-format 工作流，请从 ComfyUI 使用 Export (API) 导出");
         }
         if (apiWorkflow.isEmpty()) {
             throw invalid("API-format 工作流不能为空");
-        }
-        if (apiWorkflow.size() > MAX_NODES) {
-            throw invalid("工作流节点数量不能超过 " + MAX_NODES);
         }
 
         Map<String, String> nodeTypes = validateNodes(apiWorkflow);
@@ -103,7 +102,11 @@ public class ComfyUiWorkflowDocumentService {
     }
 
     public ObjectNode parseApiWorkflow(String json) {
-        return parseObject(json, "API-format 工作流", MAX_API_JSON_BYTES, true);
+        ObjectNode workflow = parseObject(json, "API-format 工作流", MAX_API_JSON_BYTES, true);
+        if (workflow.size() > MAX_NODES) {
+            throw invalid("工作流节点数量不能超过 " + MAX_NODES);
+        }
+        return workflow;
     }
 
     public List<ComfyUiInputBinding> parseInputBindings(int modelType,
@@ -273,6 +276,7 @@ public class ComfyUiWorkflowDocumentService {
         checkSize(value, label, maxBytes);
         try {
             JsonNode parsed = objectMapper.readTree(value);
+            checkDepth(parsed, label);
             if (!(parsed instanceof ObjectNode objectNode)) {
                 throw invalid(label + "必须是 JSON 对象");
             }
@@ -287,12 +291,26 @@ public class ComfyUiWorkflowDocumentService {
         checkSize(value, label, maxBytes);
         try {
             JsonNode parsed = objectMapper.readTree(value);
+            checkDepth(parsed, label);
             if (!(parsed instanceof ArrayNode arrayNode)) {
                 throw invalid(label + "必须是 JSON 数组");
             }
             return arrayNode;
         } catch (JsonProcessingException e) {
             throw invalid(label + "不是合法 JSON: " + e.getOriginalMessage());
+        }
+    }
+
+    private void checkDepth(JsonNode node, String label) {
+        checkDepth(node, label, 1);
+    }
+
+    private void checkDepth(JsonNode node, String label, int depth) {
+        if (depth > MAX_JSON_DEPTH) {
+            throw invalid(label + "嵌套深度不能超过 " + MAX_JSON_DEPTH);
+        }
+        if (node.isObject() || node.isArray()) {
+            node.forEach(child -> checkDepth(child, label, depth + 1));
         }
     }
 

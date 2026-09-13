@@ -359,8 +359,9 @@ public abstract class AbstractOpenAiCompatibleVideoStrategy implements VideoGene
         try {
             return JSONUtil.parseObj(configJson);
         } catch (Exception e) {
-            log.warn("[{} Video] 模型配置解析失败，已忽略附加参数: config={}",
-                    providerLabel(), configJson);
+            // 模型配置可能包含密钥字段，解析失败时禁止输出原文，仅记录长度
+            log.warn("[{} Video] 模型配置解析失败，已忽略附加参数: configLength={}",
+                    providerLabel(), configJson.length());
             return null;
         }
     }

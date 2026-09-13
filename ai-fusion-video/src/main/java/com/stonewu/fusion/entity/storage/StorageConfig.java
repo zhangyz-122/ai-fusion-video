@@ -46,6 +46,7 @@ public class StorageConfig extends BaseEntity {
     private String accessKey;
 
     /** OSS Secret Key */
+    @ToString.Exclude
     private String secretKey;
 
     /** 区域 */

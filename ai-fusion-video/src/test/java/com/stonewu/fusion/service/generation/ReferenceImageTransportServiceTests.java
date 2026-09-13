@@ -8,14 +8,11 @@ import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import com.stonewu.fusion.service.system.SystemConfigService;
-import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -42,7 +39,6 @@ class ReferenceImageTransportServiceTests {
             .build();
 
     private ReferenceImageTransportService service;
-    private HttpServer server;
 
     @BeforeEach
     void setUp() {
@@ -53,15 +49,11 @@ class ReferenceImageTransportServiceTests {
                 presetArtStyleResourceResolver);
     }
 
-    @AfterEach
-    void tearDown() {
-        if (server != null) server.stop(0);
-    }
-
     @Test
     void prefersPublicUrlWhenUrlAndDataUriAreBothAllowed() {
+        // 使用公网 IP 字面量，避免单测依赖真实 DNS
         when(systemConfigService.resolvePublicUrl("/media/reference.png"))
-                .thenReturn("https://fusion.example.com/media/reference.png");
+                .thenReturn("https://93.184.216.34/media/reference.png");
 
         List<String> resolved = service.resolveInputs(
                 model,
@@ -69,7 +61,7 @@ class ReferenceImageTransportServiceTests {
                 List.of("/media/reference.png"),
                 null);
 
-        assertThat(resolved).containsExactly("https://fusion.example.com/media/reference.png");
+        assertThat(resolved).containsExactly("https://93.184.216.34/media/reference.png");
     }
 
     @Test
@@ -91,25 +83,60 @@ class ReferenceImageTransportServiceTests {
     }
 
     @Test
-    void convertsLoopbackHttpUrlToDataUriEvenWhenUrlIsAllowed() throws IOException {
-        byte[] imageBytes = new byte[]{5, 6, 7, 8};
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/reference.png", exchange -> {
-            exchange.getResponseHeaders().set("Content-Type", "image/png");
-            exchange.sendResponseHeaders(200, imageBytes.length);
-            exchange.getResponseBody().write(imageBytes);
-            exchange.close();
-        });
-        server.start();
-
-        List<String> resolved = service.resolveInputs(
+    void rejectsLoopbackHttpUrlEvenWhenDataUriIsAllowed() {
+        // 平台不再代为拉取内网/回环地址（SSRF 防护），即使模型支持 Data URI
+        assertThatThrownBy(() -> service.resolveInputs(
                 model,
                 config("url", "data_uri"),
-                List.of("http://127.0.0.1:" + server.getAddress().getPort() + "/reference.png"),
+                List.of("http://127.0.0.1/reference.png"),
+                null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("SSRF 防护已被禁止");
+    }
+
+    @Test
+    void rejectsPrivateAndMetadataHttpUrlsEvenWhenDataUriIsAllowed() {
+        for (String url : List.of(
+                "http://192.168.1.20/reference.png",
+                "http://10.0.0.7/reference.png",
+                "http://172.16.5.4/reference.png",
+                "http://169.254.169.254/latest/meta-data/")) {
+            assertThatThrownBy(() -> service.resolveInputs(
+                    model,
+                    config("url", "data_uri"),
+                    List.of(url),
+                    null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("SSRF 防护已被禁止");
+        }
+    }
+
+    @Test
+    void rejectsNonHttpAbsoluteUri() {
+        assertThatThrownBy(() -> service.validateInputs(
+                model,
+                config("url", "data_uri"),
+                List.of("ftp://example.com/reference.png")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅支持 http(s)");
+
+        assertThatThrownBy(() -> service.validateInputs(
+                model,
+                config("url", "data_uri"),
+                List.of("file:///etc/passwd")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅支持 http(s)");
+    }
+
+    @Test
+    void passesPublicIpHttpUrlThroughAsUrlWithoutServerSideFetch() {
+        List<String> resolved = service.resolveInputs(
+                model,
+                config("url"),
+                List.of("http://93.184.216.34/reference.png"),
                 null);
 
-        assertThat(resolved).containsExactly(
-                "data:image/png;base64," + Base64.getEncoder().encodeToString(imageBytes));
+        assertThat(resolved).containsExactly("http://93.184.216.34/reference.png");
     }
 
     @Test
