@@ -474,3 +474,25 @@ production-take-drawer 数据展示)、重新同步(reconcile)与重试(repair)�
 5. **assistant-upload 仍为 getBytes 全量入堆(P-4 残留)**:本次流式化只覆盖 /upload;assistant-upload(类型受常量白名单约束)维持原状,建议在 P-4 任务统一处理。
 6. **uitest token 实机验证受限**:本环境 MySQL/Redis 仅在 docker 网络内且禁用 docker,无法起实例做实机验证;/get、/list 的 ADMIN 拒绝已由权限矩阵反射测试+全局 @EnableMethodSecurity 覆盖,合并后建议在 8081 平台用 uitest 账号实测一次。
 7. **全量回归结果**:714 例(含新增 37 例安全用例),2 失败均为 base 存量(AgentScopeGaDependencyContractTests.sourceTreeContainsNoObsoleteV1Symbol 指向 ApplicationTimeZoneInitializerTests.java、ProjectServiceTests.listAccessibleByUserUsesCurrentTeamScope,TASK.md 此前已记录在无本分支的 HEAD 复现);39 错误全部为 integration/*IT 与 AgentPersistenceMigrationIT 的 Redis/MySQL 连接失败(本机基础设施未运行,环境性)。FlywayMigrationNamingTests 通过。
+
+---
+
+# Round 2(部署后安全复验)结论与决策问题
+
+分支:swarm/p0-security-fix。提交:2cc0956(S-2 IP 固定)/ b9e3445(ComfyUI 逐跳 + assistant-upload 流式)。日期:2026-09-14。
+
+## 部署后实测(8081 集成版,e2e helpers 凭据)
+- api-config:匿名 401;uitest /get、/list 均 403;zhangyz /list 200 且响应无 apiKey/appSecret/proxyPassword 字段 ✓
+- /api/storage/upload(uitest):`../../etc` 与盘符路径均报"非法存储子目录";HTML 字节声明 PNG(含 x.html 文件名)被魔数校验拒;正常 PNG 200 落盘 .png ✓(测试残留 /media/sec-test/ 两个小文件)
+- SSRF 三项:入口拒绝逻辑在代码+单测层验证;实机验证需真实发起生成任务(消耗模型配额),刻意未做
+- 新端点抽查:系统状态三端点全部 @PreAuthorize(ADMIN),uitest 实测 403/admin 200;回收站三端点 userId+项目级 accessGuard(restore/purge 对他人资产拒绝,null projectId 拒绝);字幕导出 assertScriptEpisode 团队域校验,Content-Disposition 走 Spring 编码无头注入;actuator 匿名 307 → /login 不可达;/api/system/init/setup 有 isInitialized 守卫,初始化接管不可行;mapper 无 ${} SQL 拼接,keyword 走 LambdaQueryWrapper 参数化。未发现权限/注入盲区
+
+## Round 2 实现项
+1. S-2 DNS rebinding TOCTOU(高风险→已实现):SafeHttpDownloader 每跳校验通过的 DNS 解析结果经自定义 OkHttp Dns 固定到连接(Host/SNI 保持域名);校验 host 改取 OkHttp HttpUrl(与建连同源解析),收窄 S-5 parser differential。实证用例:.invalid 假域名走固定 IP 直连成功
+2. ComfyUI 输入 302 显式失败(中→已实现):改走 SafeHttpDownloader.fetch,公网重定向源恢复可用且逐跳复检+固定
+3. assistant-upload getBytes 入堆(P-4,中→已实现):流式临时文件落盘
+
+## 决策问题
+1. VersionInfoController(/api/system/version、/runtime)无 @PreAuthorize,依赖全局 authenticated 兜底:登录用户可见版本信息(含上游检查结果)。如需收紧建议补 ADMIN——属其他任务文件,未改动
+2. 回收站 list 的 size 分页参数无上限(用户可传 size=100000 拉大页):低风险,建议其他任务Owner加 PageParam 上限校验
+3. S-5 parser differential 的彻底修复(校验入口全量切 HttpUrl)仅覆盖 SafeHttpDownloader 通道;PublicHttpUrlValidator 直接调用点(ReferenceImageTransportService.selectTransport、VideoCompose allowlist 分支)仍走 java.net.URI 解析,建议红队 R3 评估
