@@ -107,3 +107,12 @@ export async function getTaskStreamStatus(taskId: string): Promise<string> {
 export async function listRunningTaskStreams(): Promise<AgentConversation[]> {
   return http.get("/api/task-stream/running");
 }
+
+/** `getTaskStreamStatus` 的返回值：Redis 侧任务流状态。 */
+export type TaskStreamStatus = "ACTIVE" | "COMPLETED" | "ERROR" | "NONE";
+
+export function isTerminalTaskStreamStatus(
+  status: TaskStreamStatus
+): status is "COMPLETED" | "ERROR" {
+  return status === "COMPLETED" || status === "ERROR";
+}

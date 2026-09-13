@@ -10,6 +10,7 @@ import {
   ExpandedPanel,
   PipelineTaskCard,
 } from "./detail";
+import { TaskStreamSection } from "./task-stream-section";
 
 interface NotificationPanelProps {
   anchorRef: RefObject<HTMLButtonElement | null>;
@@ -26,6 +27,7 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
   } = usePipelineStore();
 
   const [position, setPosition] = useState({ top: 0, right: 0 });
+  const [hasLiveTaskStreams, setHasLiveTaskStreams] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const completedTasks = tasks.filter((task) => task.status !== "running");
@@ -132,7 +134,7 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
       </div>
 
       <div className="max-h-[60vh] overflow-y-auto">
-        {tasks.length === 0 ? (
+        {tasks.length === 0 && !hasLiveTaskStreams ? (
           <div className="py-12 text-center">
             <p className="text-sm text-muted-foreground">暂无 AI 任务</p>
             <p className="text-xs text-muted-foreground/60 mt-1">
@@ -141,6 +143,7 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
           </div>
         ) : (
           <div className="p-2 space-y-2">
+            <TaskStreamSection onItemsChange={(items) => setHasLiveTaskStreams(items.length > 0)} />
             {runningTasks.length > 0 && (
               <div>
                 <p className="text-[10px] font-medium text-muted-foreground px-2 py-1 uppercase tracking-wider">
