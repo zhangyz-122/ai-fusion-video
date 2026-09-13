@@ -29,6 +29,7 @@ public class User extends BaseEntity {
     private String username;
 
     /** 登录密码（BCrypt 加密存储） */
+    @ToString.Exclude
     private String password;
 
     /** 用户昵称（显示名称） */
