@@ -26,6 +26,7 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { ActivitySection } from "./_components/activity-section";
 import { AssistantBrandIcon } from "@/components/dashboard/assistant/assistant-brand-icon";
 import { requestAssistantOpen } from "@/components/dashboard/assistant/open-assistant";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -347,6 +348,11 @@ export default function DashboardPage() {
           bg="bg-cyan-500/10"
           onClick={() => router.push("/generate/image")}
         />
+      </motion.div>
+
+      {/* ========== 进行中与待办 ========== */}
+      <motion.div variants={itemVariants} className="mb-8">
+        <ActivitySection />
       </motion.div>
 
       {/* ========== 最近项目 ========== */}

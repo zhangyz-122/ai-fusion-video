@@ -21,3 +21,10 @@
 - `/generate/video` 页支持 `?modelId=` 定向（镜像生图页），GenerationWorkbench 的 initialModelId 通路复用。
 - 侧边栏新增"视频工坊"入口（生视频旧入口保留）。
 - 验证：tsc/eslint（改动文件零告警）/生产构建通过；前端镜像重建上线；带认证 cookie 实测工坊页与带参编辑器页均 200（浏览器视觉验收仍受 webview 不可用限制，待恢复补看）。
+
+## 追加（同日）：仪表盘"进行中与待办"区块（B04 第一切片）
+
+- 后端 `GET /api/dashboard/activity`（新 DashboardController/Service）：聚合当前用户的进行中（图片任务 0/1、视频任务 0/1、生产 CREATED/WAITING_GENERATION）与待办（QC_PENDING、FAILED 含失败原因），各限 8 条按时间倒序。
+- 前端仪表盘新增"进行中与待办"区块（`dashboard/_components/activity-section.tsx`），30 秒自动刷新 + 手动刷新，条目按类型深链（生图/生视频编辑器、项目工作区）。
+- 实测：uitest 视角 pending 正确列出 Run 9/10/11 的失败原因；zhangyz 视角暴露了 9 月 6 日滞留"生成中"的真实卡死任务（如实反映，未做伪装）。
+- 遗留：卡死任务无超时机制（如滞留超过阈值应标记失败），后续在 L03 恢复语义中处理。
