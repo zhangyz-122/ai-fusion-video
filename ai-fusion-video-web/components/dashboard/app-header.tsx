@@ -11,6 +11,7 @@ import {
   Bell,
   Github,
   Clapperboard,
+  Film,
   LogOut,
   Menu,
   X,
@@ -83,6 +84,7 @@ const routeToLabel: Record<string, string> = {
   "/projects": "项目",
   "/assets": "资产",
   "/production": "生产中心",
+  "/editing": "剪辑交付",
   "/generate": "创作工作台",
   "/settings": "系统设置",
 };
