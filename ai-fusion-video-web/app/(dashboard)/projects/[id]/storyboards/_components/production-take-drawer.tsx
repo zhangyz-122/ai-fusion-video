@@ -168,7 +168,7 @@ export function ProductionTakeDrawer({
       });
       setDetail(next);
     } catch (error) {
-      toastApiError(error, "启动三候选生产失败");
+      toastApiError(error, "启动生产失败");
     } finally {
       setLoading(false);
     }
@@ -247,10 +247,10 @@ export function ProductionTakeDrawer({
         <SheetHeader className="border-b border-border/20 pb-4">
           <SheetTitle className="flex items-center gap-2">
             <Clapperboard className="h-4 w-4 text-violet-500" />
-            {title} · 三候选生产
+            {title} · 生产这一镜
           </SheetTitle>
           <SheetDescription>
-            复用现有视频任务链，生成 3 个候选后逐个质检并选择。
+            生产这一镜会生成 3 个候选视频，逐个质检后选用。
           </SheetDescription>
         </SheetHeader>
 
@@ -258,7 +258,7 @@ export function ProductionTakeDrawer({
           {!detail ? (
             <div className="space-y-4">
               <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
-                <div className="text-sm font-medium">准备生成 3 个候选视频</div>
+                <div className="text-sm font-medium">将生成 3 个候选视频</div>
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   这会创建一个可恢复的 ProductionRun，不会覆盖现有 Legacy 视频字段。
                 </p>
