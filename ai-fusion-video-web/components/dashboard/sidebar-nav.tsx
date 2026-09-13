@@ -61,10 +61,9 @@ const assetItems: SidebarItem[] = [
 ];
 
 const generationItems: SidebarItem[] = [
-  { key: "home", label: "工坊", icon: LayoutDashboard, href: "/generate", iconColor: "text-primary" },
-  { key: "images", label: "图像", icon: Images, href: "/generate/image", iconColor: "text-primary" },
-  { key: "video", label: "视频", icon: Clapperboard, href: "/generate/video", iconColor: "text-primary" },
-  { key: "audios", label: "声音", icon: AudioLines, href: "/generate/audios", iconColor: "text-primary" },
+  { key: "images", label: "图像工坊", icon: Images, href: "/generate/images", iconColor: "text-primary" },
+  { key: "videos", label: "视频工坊", icon: Clapperboard, href: "/generate/videos", iconColor: "text-primary" },
+  { key: "audios", label: "声音工坊", icon: AudioLines, href: "/generate/audios", iconColor: "text-primary" },
 ];
 
 interface SidebarNavProps {
@@ -176,12 +175,13 @@ export function SidebarNav({
       if (href === basePath) return pathname === basePath;
       return pathname.startsWith(href);
     }
-    if (href === "/generate") return pathname === "/generate";
-    if (href === "/generate/image") {
+    // 工坊条目指向目录页;编辑器(/generate/image、/generate/video)与万能导演台
+    // 归属对应工坊,一并高亮。
+    if (href === "/generate/images") {
       return pathname.startsWith("/generate/image");
     }
-    if (href === "/generate/video") {
-      return pathname.startsWith("/generate/video") || pathname.startsWith("/generate/universal") || pathname.startsWith("/generate/videos");
+    if (href === "/generate/videos") {
+      return pathname.startsWith("/generate/video") || pathname.startsWith("/generate/universal");
     }
     return pathname === href;
   };

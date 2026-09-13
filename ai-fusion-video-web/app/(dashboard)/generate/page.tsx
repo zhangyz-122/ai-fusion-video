@@ -27,7 +27,7 @@ export default function CreativeHome() {
             <h2 className="text-lg font-semibold">视频</h2>
             <p className="text-sm text-muted-foreground">底座由平台选择，不必挑模型。</p>
           </div>
-          <Link className={buttonVariants({ variant: "outline" })} href="/generate/video">打开视频工坊 <ArrowRight /></Link>
+          <Link className={buttonVariants({ variant: "outline" })} href="/generate/video">打开万能导演台 <ArrowRight /></Link>
         </div>
       </section>
       <section className="flex flex-wrap items-center justify-between gap-4 border-t border-border/20 pt-6">

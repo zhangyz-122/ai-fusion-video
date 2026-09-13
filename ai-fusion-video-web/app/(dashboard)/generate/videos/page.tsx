@@ -46,6 +46,17 @@ export default function VideoStudio() {
         <Link href="/assets" className={buttonVariants({ variant: "outline" })}>查看资产</Link>
       </header>
 
+      <section aria-labelledby="universal-director" className="space-y-4">
+        <h2 id="universal-director" className="text-xl font-semibold">万能导演台</h2>
+        <div className="flex flex-col gap-4 rounded-xl border border-border/30 bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="font-medium">一条流程集中处理角色、场景、动作、参考素材与视频输出</p>
+            <p className="text-sm text-muted-foreground">底座由平台选择,不必挑模型;需要指定模型或高清放大等能力时,使用下方目录。</p>
+          </div>
+          <Link className={buttonVariants()} href="/generate/video">进入万能导演台</Link>
+        </div>
+      </section>
+
       <section aria-labelledby="video-models" className="space-y-4">
         <h2 id="video-models" className="text-xl font-semibold">已配置的视频能力</h2>
         <p className="text-sm text-muted-foreground">以下状态来自平台配置，不代表本轮已完成出片测试。时长与参数上限以编辑器为准。</p>
