@@ -768,6 +768,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           {showAdvanced && <ModelConfigForm
             modelType={form.modelType}
             platform={selectedPlatform}
+            modelProtocol={effectiveModelProtocol}
             supportReasoning={!!form.supportReasoning}
             configJson={stringifyConfigObject(effectiveModelConfig)}
             onChange={updateCustomCapabilityConfig}
