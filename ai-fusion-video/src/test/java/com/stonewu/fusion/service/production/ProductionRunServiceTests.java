@@ -313,4 +313,29 @@ class ProductionRunServiceTests {
                 workflowProfileService
         );
     }
+
+    @org.junit.jupiter.api.Test
+    void detailAttachesVideoItemPreviewFieldsToTakes() {
+        ProductionRun run = ProductionRun.builder()
+                .id(5L).storyboardItemId(31L).userId(99L).projectId(1L)
+                .idempotencyKey("k").status("SELECTED").selectedTakeId(41L)
+                .build();
+        when(runMapper.selectById(5L)).thenReturn(run);
+        when(stepMapper.selectOne(any())).thenReturn(ProductionStep.builder()
+                .id(6L).runId(5L).stepType("GENERATE_VIDEO").status("DONE").attempt(1).videoTaskId(8L)
+                .build());
+        when(videoGenerationService.getById(8L)).thenReturn(VideoTask.builder().id(8L).build());
+        when(takeMapper.selectList(any())).thenReturn(java.util.List.of(
+                ProductionTake.builder().id(41L).runId(5L).videoItemId(301L).takeIndex(1).qcStatus("PASS").build()));
+        when(videoGenerationService.listItems(8L)).thenReturn(java.util.List.of(
+                com.stonewu.fusion.entity.generation.VideoItem.builder()
+                        .id(301L).videoUrl("/media/videos/a.mp4").coverUrl("/media/c.jpg").status(1)
+                        .build()));
+
+        ProductionRunDetail detail = service().detail(5L, 99L);
+
+        assertThat(detail.getTakes()).hasSize(1);
+        assertThat(detail.getTakes().get(0).getVideoUrl()).isEqualTo("/media/videos/a.mp4");
+        assertThat(detail.getTakes().get(0).getCoverUrl()).isEqualTo("/media/c.jpg");
+    }
 }

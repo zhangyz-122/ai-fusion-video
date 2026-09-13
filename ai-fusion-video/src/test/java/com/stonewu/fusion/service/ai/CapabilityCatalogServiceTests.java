@@ -32,9 +32,11 @@ class CapabilityCatalogServiceTests {
     private AiModelService aiModelService;
     @Mock
     private ComfyUiWorkflowMapper workflowMapper;
+    @Mock
+    private com.stonewu.fusion.service.ai.comfyui.WorkflowProfileService workflowProfileService;
 
     private CapabilityCatalogService service() {
-        return new CapabilityCatalogService(aiModelService, workflowMapper);
+        return new CapabilityCatalogService(aiModelService, workflowMapper, workflowProfileService);
     }
 
     @Test
@@ -94,5 +96,28 @@ class CapabilityCatalogServiceTests {
                     .noneMatch(field -> field.getName().toLowerCase().contains("apiconfig")
                             || field.getName().toLowerCase().contains("binding"));
         });
+    }
+
+    @Test
+    void videoProfilesExposeOnlyPublicFields() {
+        com.stonewu.fusion.entity.ai.WorkflowProfile profile = new com.stonewu.fusion.entity.ai.WorkflowProfile();
+        profile.setId(2L);
+        profile.setCode("WAN_FLF_STANDARD");
+        profile.setName("Wan FLF Standard");
+        profile.setPurpose("FLF");
+        profile.setInputContractJson("{\"private\":true}");
+        when(workflowProfileService.getEnabledList(null)).thenReturn(List.of(profile));
+
+        List<com.stonewu.fusion.controller.ai.vo.VideoProfileOptionVO> profiles = service().getVideoProfiles();
+
+        assertThat(profiles).hasSize(1);
+        com.stonewu.fusion.controller.ai.vo.VideoProfileOptionVO option = profiles.get(0);
+        assertThat(option.getId()).isEqualTo(2L);
+        assertThat(option.getCode()).isEqualTo("WAN_FLF_STANDARD");
+        assertThat(option.getName()).isEqualTo("Wan FLF Standard");
+        assertThat(option.getPurpose()).isEqualTo("FLF");
+        assertThat(option.getClass().getDeclaredFields())
+                .noneMatch(field -> field.getName().toLowerCase().contains("contract")
+                        || field.getName().toLowerCase().contains("dependency"));
     }
 }

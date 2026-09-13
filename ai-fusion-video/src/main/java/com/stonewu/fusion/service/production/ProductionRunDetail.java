@@ -24,7 +24,7 @@ public class ProductionRunDetail {
 
     private VideoTask videoTask;
 
-    private List<ProductionTake> takes;
+    private List<ProductionTakeView> takes;
 
     private List<QcResult> qcResults;
 

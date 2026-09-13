@@ -2,9 +2,11 @@ package com.stonewu.fusion.service.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.controller.ai.vo.CapabilityCatalogItemVO;
+import com.stonewu.fusion.controller.ai.vo.VideoProfileOptionVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflow;
 import com.stonewu.fusion.mapper.ai.ComfyUiWorkflowMapper;
+import com.stonewu.fusion.service.ai.comfyui.WorkflowProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +23,7 @@ public class CapabilityCatalogService {
 
     private final AiModelService aiModelService;
     private final ComfyUiWorkflowMapper workflowMapper;
+    private final WorkflowProfileService workflowProfileService;
 
     public List<CapabilityCatalogItemVO> getCatalog(Integer modelType) {
         List<CapabilityCatalogItemVO> catalog = new ArrayList<>();
@@ -55,5 +58,16 @@ public class CapabilityCatalogService {
                     .build());
         }
         return catalog;
+    }
+
+    public List<VideoProfileOptionVO> getVideoProfiles() {
+        return workflowProfileService.getEnabledList(null).stream()
+                .map(profile -> VideoProfileOptionVO.builder()
+                        .id(profile.getId())
+                        .code(profile.getCode())
+                        .name(profile.getName())
+                        .purpose(profile.getPurpose())
+                        .build())
+                .toList();
     }
 }

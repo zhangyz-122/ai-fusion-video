@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 /**
  * 分镜条目生产编排服务。
@@ -233,9 +234,15 @@ public class ProductionRunService {
                 .eq(ProductionStep::getStepType, STEP_GENERATE_VIDEO));
         VideoTask task = step != null && step.getVideoTaskId() != null
                 ? videoGenerationService.getById(step.getVideoTaskId()) : null;
-        List<ProductionTake> takes = takeMapper.selectList(new LambdaQueryWrapper<ProductionTake>()
+        List<ProductionTake> takeEntities = takeMapper.selectList(new LambdaQueryWrapper<ProductionTake>()
                 .eq(ProductionTake::getRunId, runId)
                 .orderByAsc(ProductionTake::getTakeIndex));
+        Map<Long, VideoItem> itemMap = task == null ? Map.of()
+                : videoGenerationService.listItems(task.getId()).stream()
+                        .collect(Collectors.toMap(VideoItem::getId, item -> item));
+        List<ProductionTakeView> takes = takeEntities.stream()
+                .map(take -> ProductionTakeView.of(take, itemMap.get(take.getVideoItemId())))
+                .toList();
         List<QcResult> qcResults = qcResultMapper.selectList(new LambdaQueryWrapper<QcResult>()
                 .eq(QcResult::getRunId, runId)
                 .orderByAsc(QcResult::getTakeId));

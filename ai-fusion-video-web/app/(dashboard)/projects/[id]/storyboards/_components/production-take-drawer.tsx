@@ -21,12 +21,23 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
+import { capabilityApi, type VideoProfileOption } from "@/lib/api/capability";
+import { resolveMediaUrl } from "@/lib/api/client";
 import {
   productionApi,
   type ProductionQcStatus,
   type ProductionRunDetail,
 } from "@/lib/api/production";
 import type { StoryboardItem } from "@/lib/api/storyboard";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const statusLabels: Record<string, string> = {
   CREATED: "准备中",
@@ -64,6 +75,35 @@ export function ProductionTakeDrawer({
   const [workingTakeId, setWorkingTakeId] = useState<number | null>(null);
   const [composing, setComposing] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  const [videoModels, setVideoModels] = useState<AiModel[]>([]);
+  const [profiles, setProfiles] = useState<VideoProfileOption[]>([]);
+  const [modelId, setModelId] = useState<string>("");
+  const [profileId, setProfileId] = useState<string>("");
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    async function loadOptions() {
+      try {
+        const models = await aiModelApi.listByType(3);
+        if (!active) return;
+        const enabled = models.filter(m => m.status === 1);
+        setVideoModels(enabled);
+        const fallback = enabled.find(m => m.defaultModel) ?? enabled[0];
+        setModelId(prev => prev || (fallback ? String(fallback.id) : ""));
+      } catch {
+        if (active) setVideoModels([]);
+      }
+      try {
+        const list = await capabilityApi.videoProfiles();
+        if (active) setProfiles(list);
+      } catch {
+        if (active) setProfiles([]);
+      }
+    }
+    void loadOptions();
+    return () => { active = false; };
+  }, [open]);
 
   const refresh = useCallback(async (runId: number) => {
     const next = await productionApi.detail(runId);
@@ -98,6 +138,8 @@ export function ProductionTakeDrawer({
         storyboardItemId: item.id,
         idempotencyKey: `storyboard-item-${item.id}-${crypto.randomUUID()}`,
         prompt: item.videoPrompt || item.content || undefined,
+        modelId: modelId ? Number(modelId) : undefined,
+        workflowProfileId: profileId ? Number(profileId) : undefined,
         firstFrameImageUrl: item.firstFrameImageUrl,
         lastFrameImageUrl: item.lastFrameImageUrl,
         duration: item.duration || undefined,
@@ -192,15 +234,50 @@ export function ProductionTakeDrawer({
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {!detail ? (
-            <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
-              <div className="text-sm font-medium">准备生成 3 个候选视频</div>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                这会创建一个可恢复的 ProductionRun，不会覆盖现有 Legacy 视频字段。
-              </p>
-              <Button variant="video" className="w-full" onClick={() => void start()} disabled={loading || !item}>
-                {loading ? <Loader2 className="animate-spin" /> : <Clapperboard />}
-                启动三候选生产
-              </Button>
+            <div className="space-y-4">
+              <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
+                <div className="text-sm font-medium">准备生成 3 个候选视频</div>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  这会创建一个可恢复的 ProductionRun，不会覆盖现有 Legacy 视频字段。
+                </p>
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground" htmlFor="prod-video-model">视频模型</label>
+                  <Select value={modelId} onValueChange={v => setModelId(v ?? "")} items={videoModels.map(m => ({ value: String(m.id), label: m.name }))}>
+                    <SelectTrigger id="prod-video-model" className="w-full">
+                      <SelectValue placeholder={videoModels.length ? "选择视频模型" : "暂无可用视频模型"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {videoModels.map(m => (
+                          <SelectItem key={m.id} value={String(m.id)}>{m.name}{m.defaultModel ? "（默认）" : ""}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground" htmlFor="prod-video-profile">工作流 Profile（可选）</label>
+                  <Select value={profileId} onValueChange={v => setProfileId(v ?? "")} items={[{ value: "", label: "跟随模型默认配置" }, ...profiles.map(p => ({ value: String(p.id), label: `${p.name}（${p.purpose ?? p.code}）` }))]}>
+                    <SelectTrigger id="prod-video-profile" className="w-full">
+                      <SelectValue placeholder="跟随模型默认配置" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="">跟随模型默认配置</SelectItem>
+                        {profiles.map(p => (
+                          <SelectItem key={p.id} value={String(p.id)}>{p.name}（{p.purpose ?? p.code}）</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="video" className="w-full" onClick={() => void start()} disabled={loading || !item || !modelId}>
+                  {loading ? <Loader2 className="animate-spin" /> : <Clapperboard />}
+                  启动三候选生产
+                </Button>
+              </div>
             </div>
           ) : (
             <>
@@ -271,11 +348,21 @@ export function ProductionTakeDrawer({
                           {qcLabels[take.qcStatus]}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-16 w-28 items-center justify-center overflow-hidden rounded-lg bg-muted/30 border border-border/20">
-                          <PlayCircle className="h-5 w-5 text-muted-foreground/50" />
+                      {take.videoUrl ? (
+                        <video
+                          controls
+                          preload="metadata"
+                          src={resolveMediaUrl(take.videoUrl) ?? undefined}
+                          poster={resolveMediaUrl(take.coverUrl) ?? undefined}
+                          className="h-40 w-full rounded-lg border border-border/20 bg-background/70"
+                        />
+                      ) : (
+                        <div className="flex h-16 items-center justify-between gap-2 rounded-lg bg-muted/30 border border-border/20 px-3 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-2"><PlayCircle className="h-4 w-4" />{take.videoErrorMsg ? "生成失败" : "视频尚未生成"}</span>
+                          {take.videoErrorMsg && <span className="truncate max-w-40" title={take.videoErrorMsg}>{take.videoErrorMsg}</span>}
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                      )}
+                      <div className="flex items-center gap-2">
                           <Button variant="outline" size="xs" onClick={() => void updateQc(take.id, "PASS")} disabled={isWorking}>
                             {isWorking ? <Loader2 className="animate-spin" /> : <Check />} 通过
                           </Button>
@@ -287,7 +374,6 @@ export function ProductionTakeDrawer({
                               选用
                             </Button>
                           )}
-                        </div>
                       </div>
                       {take.qcNote && <p className="text-[11px] text-muted-foreground">{take.qcNote}</p>}
                     </div>

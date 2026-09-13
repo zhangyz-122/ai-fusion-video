@@ -22,4 +22,15 @@ export const capabilityApi = {
   /** 按模型类型查询能力目录（已启用与待接入），任一登录用户可调用 */
   catalog: (modelType: number) =>
     http.get<never, CapabilityCatalogItem[]>(`/api/ai/capability/catalog?modelType=${modelType}`),
+
+  /** 查询启用的视频工作流 Profile 选项 */
+  videoProfiles: () => http.get<never, VideoProfileOption[]>("/api/ai/capability/video-profiles"),
 };
+
+/** 视频工作流 Profile 选项（公共只读，已脱敏） */
+export interface VideoProfileOption {
+  id: number;
+  code: string;
+  name: string;
+  purpose: string | null;
+}

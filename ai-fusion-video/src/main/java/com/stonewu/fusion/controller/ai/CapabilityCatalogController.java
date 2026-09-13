@@ -2,6 +2,7 @@ package com.stonewu.fusion.controller.ai;
 
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.ai.vo.CapabilityCatalogItemVO;
+import com.stonewu.fusion.controller.ai.vo.VideoProfileOptionVO;
 import com.stonewu.fusion.service.ai.CapabilityCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,5 +29,11 @@ public class CapabilityCatalogController {
     @GetMapping("/catalog")
     public CommonResult<List<CapabilityCatalogItemVO>> catalog(@RequestParam("modelType") Integer modelType) {
         return CommonResult.success(capabilityCatalogService.getCatalog(modelType));
+    }
+
+    @Operation(summary = "查询启用的视频工作流 Profile 选项")
+    @GetMapping("/video-profiles")
+    public CommonResult<List<VideoProfileOptionVO>> videoProfiles() {
+        return CommonResult.success(capabilityCatalogService.getVideoProfiles());
     }
 }

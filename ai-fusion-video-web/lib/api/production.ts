@@ -45,6 +45,14 @@ export interface ProductionTake {
   takeIndex: number;
   qcStatus: ProductionQcStatus;
   qcNote: string | null;
+  /** 候选视频播放地址（来自 VideoItem，可能尚未生成） */
+  videoUrl: string | null;
+  /** 候选视频封面地址 */
+  coverUrl: string | null;
+  /** 底层 VideoItem 状态 */
+  videoStatus: number | null;
+  /** 底层 VideoItem 错误信息 */
+  videoErrorMsg: string | null;
   createTime: string;
   updateTime: string;
 }
