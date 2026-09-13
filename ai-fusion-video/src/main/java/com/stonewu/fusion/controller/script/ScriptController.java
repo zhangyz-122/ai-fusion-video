@@ -85,7 +85,8 @@ public class ScriptController {
         accessGuard.assertScript(id);
         Long userId = SecurityUtils.requireCurrentUserId();
         Long modelId = reqVO == null ? null : reqVO.getModelId();
-        return CommonResult.success(scriptAutoSplitService.startAutoSplit(id, userId, modelId));
+        Integer chunkChars = reqVO == null ? null : reqVO.getChunkChars();
+        return CommonResult.success(scriptAutoSplitService.startAutoSplit(id, userId, modelId, chunkChars));
     }
 
     @Operation(summary = "查询自动分块解析任务状态")
