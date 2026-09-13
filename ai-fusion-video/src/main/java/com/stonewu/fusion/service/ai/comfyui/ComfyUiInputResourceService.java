@@ -9,7 +9,6 @@ import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiUploadResult;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -128,8 +127,6 @@ public class ComfyUiInputResourceService {
     }
 
     private ImageBytes downloadHttp(ApiConfig apiConfig, String value) {
-        // SSRF 防护：入口处强制校验公网地址（红队 S-3 旁路 A）
-        SafeHttpDownloader.requirePublicUrl(value, "ComfyUI 图片 URL");
         URI uri;
         try {
             uri = URI.create(value);
@@ -139,26 +136,30 @@ public class ComfyUiInputResourceService {
         if (uri.getHost() == null) {
             throw new BusinessException(400, "ComfyUI 图片 URL 缺少主机");
         }
-        Request request = new Request.Builder().url(value).header("Accept", "image/*").get().build();
         OkHttpClient client = AiProxySupport.okHttpClient(baseClient, apiConfig);
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new BusinessException(502,
-                        "下载 ComfyUI 图片输入失败，HTTP " + response.code());
-            }
-            long length = response.body().contentLength();
-            if (length > MAX_IMAGE_BYTES) {
-                throw new BusinessException(400, "ComfyUI 单张输入图片不能超过 20MB");
-            }
-            byte[] bytes = readBounded(response.body().byteStream(), MAX_IMAGE_BYTES);
-            requireSize(bytes.length);
-            if (response.body().contentType() == null) {
-                throw new BusinessException(502, "ComfyUI 图片输入响应缺少 Content-Type");
-            }
-            String contentType = response.body().contentType().toString()
-                    .split(";", 2)[0].toLowerCase(Locale.ROOT);
-            requireImageContentType(contentType);
-            return new ImageBytes(bytes, contentType);
+        // SSRF 防护：SafeHttpDownloader 逐跳校验公网地址、关闭自动重定向并固定解析 IP（红队 S-1/S-2/S-3）
+        try {
+            return SafeHttpDownloader.fetch(client, value, "ComfyUI 图片 URL",
+                    url -> new Request.Builder().url(url).header("Accept", "image/*").get().build(),
+                    response -> {
+                        if (!response.isSuccessful() || response.body() == null) {
+                            throw new BusinessException(502,
+                                    "下载 ComfyUI 图片输入失败，HTTP " + response.code());
+                        }
+                        long length = response.body().contentLength();
+                        if (length > MAX_IMAGE_BYTES) {
+                            throw new BusinessException(400, "ComfyUI 单张输入图片不能超过 20MB");
+                        }
+                        byte[] bytes = readBounded(response.body().byteStream(), MAX_IMAGE_BYTES);
+                        requireSize(bytes.length);
+                        if (response.body().contentType() == null) {
+                            throw new BusinessException(502, "ComfyUI 图片输入响应缺少 Content-Type");
+                        }
+                        String contentType = response.body().contentType().toString()
+                                .split(";", 2)[0].toLowerCase(Locale.ROOT);
+                        requireImageContentType(contentType);
+                        return new ImageBytes(bytes, contentType);
+                    });
         } catch (IOException e) {
             throw new BusinessException(502,
                     "下载 ComfyUI 图片输入异常: " + StrUtil.blankToDefault(e.getMessage(), "I/O error"));
@@ -204,8 +205,6 @@ public class ComfyUiInputResourceService {
     }
 
     private MediaBytes downloadVideoHttp(ApiConfig apiConfig, String value) {
-        // SSRF 防护：入口处强制校验公网地址（红队 S-3 旁路 A）
-        SafeHttpDownloader.requirePublicUrl(value, "ComfyUI 视频 URL");
         URI uri;
         try {
             uri = URI.create(value);
@@ -213,22 +212,28 @@ public class ComfyUiInputResourceService {
             throw new BusinessException(400, "ComfyUI 视频 URL 无效");
         }
         if (uri.getHost() == null) throw new BusinessException(400, "ComfyUI 视频 URL 缺少主机");
-        Request request = new Request.Builder().url(value).header("Accept", "video/*").get().build();
         OkHttpClient client = AiProxySupport.okHttpClient(baseClient, apiConfig);
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                throw new BusinessException(502, "下载 ComfyUI 视频输入失败，HTTP " + response.code());
-            }
-            if (response.body().contentLength() > MAX_VIDEO_BYTES) {
-                throw new BusinessException(400, "ComfyUI 单个输入视频不能超过 512MB");
-            }
-            byte[] bytes = readBounded(response.body().byteStream(), MAX_VIDEO_BYTES);
-            requireVideoSize(bytes.length);
-            String contentType = response.body().contentType() == null
-                    ? "video/mp4"
-                    : response.body().contentType().toString().split(";", 2)[0].toLowerCase(Locale.ROOT);
-            requireVideoContentType(contentType);
-            return new MediaBytes(bytes, contentType);
+        // SSRF 防护：SafeHttpDownloader 逐跳校验公网地址、关闭自动重定向并固定解析 IP（红队 S-1/S-2/S-3）
+        try {
+            return SafeHttpDownloader.fetch(client, value, "ComfyUI 视频 URL",
+                    url -> new Request.Builder().url(url).header("Accept", "video/*").get().build(),
+                    response -> {
+                        if (!response.isSuccessful() || response.body() == null) {
+                            throw new BusinessException(502,
+                                    "下载 ComfyUI 视频输入失败，HTTP " + response.code());
+                        }
+                        if (response.body().contentLength() > MAX_VIDEO_BYTES) {
+                            throw new BusinessException(400, "ComfyUI 单个输入视频不能超过 512MB");
+                        }
+                        byte[] bytes = readBounded(response.body().byteStream(), MAX_VIDEO_BYTES);
+                        requireVideoSize(bytes.length);
+                        String contentType = response.body().contentType() == null
+                                ? "video/mp4"
+                                : response.body().contentType().toString().split(";", 2)[0]
+                                        .toLowerCase(Locale.ROOT);
+                        requireVideoContentType(contentType);
+                        return new MediaBytes(bytes, contentType);
+                    });
         } catch (IOException e) {
             throw new BusinessException(502,
                     "下载 ComfyUI 视频输入异常: " + StrUtil.blankToDefault(e.getMessage(), "I/O error"));

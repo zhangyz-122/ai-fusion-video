@@ -215,9 +215,15 @@ public class FileUploadController {
             requirePublicUploadStorage();
         }
 
+        Path tempFile = null;
         try {
-            String storedUrl = mediaStorageService.storeBytes(
-                    file.getBytes(), "assistant/" + inputType, extension);
+            // 流式落盘：不再把最大 100MB 的文件整体读入堆（红队 P-4 内存放大）
+            tempFile = Files.createTempFile("afv-assistant-", "." + extension);
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            String storedUrl = mediaStorageService.storeFile(
+                    tempFile, "assistant/" + inputType, extension);
             if (AiModelMultimodalCapabilities.TRANSPORT_BASE64.equals(normalizedTransport)) {
                 log.info("[FileUpload] 助手回显资源上传成功: modelId={}, type={}, size={}KB, url={}",
                         modelId, inputType, file.getSize() / 1024, storedUrl);
@@ -233,6 +239,14 @@ public class FileUploadController {
         } catch (IOException e) {
             log.error("[FileUpload] 助手输入上传失败", e);
             throw new BusinessException("上传失败: " + e.getMessage());
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException cleanupError) {
+                    log.warn("[FileUpload] 临时文件清理失败: {}", tempFile, cleanupError);
+                }
+            }
         }
     }
 
