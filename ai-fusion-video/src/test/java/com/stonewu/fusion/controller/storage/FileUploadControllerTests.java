@@ -11,14 +11,18 @@ import com.stonewu.fusion.service.system.SystemConfigService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class FileUploadControllerTests {
@@ -94,6 +98,112 @@ class FileUploadControllerTests {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("后端资源公网地址");
 
+        verifyNoInteractions(mediaStorageService);
+    }
+
+    // ---- SW-T19(P0):/upload 上传链路加固（红队 A-3 / A-4 / A-6） ----
+
+    private static final byte[] PNG_MAGIC = new byte[]{
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00};
+
+    private static final byte[] GIF_MAGIC = new byte[]{
+            'G', 'I', 'F', '8', '9', 'a', 0x00, 0x00};
+
+    @Test
+    void uploadRejectsSubDirectoryTraversalAttempts() {
+        for (String subDir : List.of(
+                "../../etc",
+                "..\\..\\windows",
+                "/etc",
+                "C:\\Windows",
+                "a/../b",
+                "images/../..")) {
+            MockMultipartFile file = new MockMultipartFile(
+                    "file", "x.png", "image/png", PNG_MAGIC);
+            assertThatThrownBy(() -> controller.upload(file, subDir))
+                    .as("subDir %s 必须被拒绝", subDir)
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("非法存储子目录");
+        }
+        verifyNoInteractions(mediaStorageService);
+    }
+
+    @Test
+    void uploadAcceptsNormalSubDirectoryAndStreamsToStoreFile() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "photo.png", "image/png", PNG_MAGIC);
+        when(mediaStorageService.storeFile(any(Path.class), eq("art-refs"), eq("png")))
+                .thenReturn("/media/art-refs/abc.png");
+
+        var result = controller.upload(file, "art-refs");
+
+        assertThat(result.getData()).isEqualTo("/media/art-refs/abc.png");
+        // 流式路径：不再调用 storeBytes（红队 P-4 内存放大修复的配套断言）
+        verify(mediaStorageService).storeFile(any(Path.class), eq("art-refs"), eq("png"));
+        verifyNoMoreInteractions(mediaStorageService);
+    }
+
+    @Test
+    void uploadDerivesExtensionFromContentTypeInsteadOfFilename() {
+        // 红队 A-4 攻击载荷：x.html + Content-Type: image/png → 落盘必须是 .png 而非 .html
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "payload.html", "image/png", PNG_MAGIC);
+        when(mediaStorageService.storeFile(any(Path.class), eq("uploads"), eq("png")))
+                .thenReturn("/media/uploads/abc.png");
+
+        var result = controller.upload(file, "uploads");
+
+        assertThat(result.getData()).isEqualTo("/media/uploads/abc.png");
+        verify(mediaStorageService).storeFile(any(Path.class), eq("uploads"), eq("png"));
+    }
+
+    @Test
+    void uploadRejectsFileWhoseBytesDoNotMatchDeclaredImageType() {
+        // 伪造 PNG：Content-Type 声明 image/png 但内容是 HTML
+        MockMultipartFile fakePng = new MockMultipartFile(
+                "file", "x.png", "image/png", "<html><script>alert(1)</script></html>".getBytes());
+
+        assertThatThrownBy(() -> controller.upload(fakePng, "uploads"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("与声明的图片格式不符");
+        verifyNoInteractions(mediaStorageService);
+    }
+
+    @Test
+    void uploadRejectsContentAndTypeMismatchAcrossImageFormats() {
+        // WebP 字节 + Content-Type: image/gif → 扩展名/类型绑定与魔数双重校验必须同时拦下
+        byte[] webpBytes = new byte[]{
+                'R', 'I', 'F', 'F', 0x00, 0x00, 0x00, 0x00, 'W', 'E', 'B', 'P', 'V', 'P'};
+        MockMultipartFile mismatched = new MockMultipartFile(
+                "file", "x.gif", "image/gif", webpBytes);
+
+        assertThatThrownBy(() -> controller.upload(mismatched, "uploads"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("与声明的图片格式不符");
+        verifyNoInteractions(mediaStorageService);
+    }
+
+    @Test
+    void uploadAcceptsGifMagicForGifContentType() {
+        MockMultipartFile gif = new MockMultipartFile(
+                "file", "anim.gif", "image/gif", GIF_MAGIC);
+        when(mediaStorageService.storeFile(any(Path.class), eq("uploads"), eq("gif")))
+                .thenReturn("/media/uploads/abc.gif");
+
+        var result = controller.upload(gif, "uploads");
+
+        assertThat(result.getData()).isEqualTo("/media/uploads/abc.gif");
+        verify(mediaStorageService).storeFile(any(Path.class), eq("uploads"), eq("gif"));
+    }
+
+    @Test
+    void uploadRejectsUnsupportedContentType() {
+        MockMultipartFile html = new MockMultipartFile(
+                "file", "page.html", "text/html", "<html></html>".getBytes());
+
+        assertThatThrownBy(() -> controller.upload(html, "uploads"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅支持图片格式");
         verifyNoInteractions(mediaStorageService);
     }
 

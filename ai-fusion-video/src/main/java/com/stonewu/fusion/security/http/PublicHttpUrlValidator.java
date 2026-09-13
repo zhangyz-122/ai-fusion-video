@@ -1,5 +1,6 @@
 package com.stonewu.fusion.security.http;
 
+import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
@@ -30,6 +31,7 @@ public final class PublicHttpUrlValidator {
 
     /**
      * 仅当 URL 为 http(s) 协议且主机名（含全部 DNS 解析结果）均为公网地址时返回 true。
+     * 抛业务异常的入口见 {@link SafeHttpDownloader#requirePublicUrl(String, String)}。
      */
     public static boolean isAllowedPublicHttpUrl(String value) {
         return isAllowedPublicHttpUrl(value, SYSTEM_RESOLVER);
@@ -94,7 +96,15 @@ public final class PublicHttpUrlValidator {
             return false;
         }
         if (address instanceof Inet6Address) {
-            return !isIpv6UniqueLocal(address) && !isIpv4CompatibleIpv6(address);
+            return !isIpv6UniqueLocal(address)
+                    && !isIpv4CompatibleIpv6(address)
+                    && !isTunnelledPrivateIpv4(address);
+        }
+        // CGNAT 共享地址段（RFC 6598，100.64.0.0/10）：Java 不视为私有地址，
+        // 但该段普遍用于运营商内部网络与 Tailscale 等主机间组网，不属于公网
+        if (address instanceof Inet4Address) {
+            byte[] bytes = address.getAddress();
+            return !(bytes[0] == 100 && (bytes[1] & 0xC0) == 0x40);
         }
         return true;
     }
@@ -124,5 +134,44 @@ public final class PublicHttpUrlValidator {
         } catch (UnknownHostException e) {
             return true;
         }
+    }
+
+    /**
+     * 拦截嵌入内网 IPv4 的隧道地址：6to4（2002::/16，嵌入 IPv4 位于第 2-5 字节）
+     * 与 NAT64（64:ff9b::/96，嵌入 IPv4 位于末 4 字节）。在具备对应路由的网络中，
+     * 此类地址可落地到内网 IPv4，按嵌入的 IPv4 是否公网判定。
+     */
+    private static boolean isTunnelledPrivateIpv4(InetAddress address) {
+        byte[] bytes = address.getAddress();
+        if (bytes.length != 16) {
+            return false;
+        }
+        if ((bytes[0] & 0xFF) == 0x20 && (bytes[1] & 0xFF) == 0x02) {
+            return !isPublicIpv4Bytes(bytes, 2);
+        }
+        if ((bytes[0] & 0xFF) == 0x00 && (bytes[1] & 0xFF) == 0x64
+                && (bytes[2] & 0xFF) == 0xFF && (bytes[3] & 0xFF) == 0x9B
+                && isZeroRegion(bytes, 4, 12)) {
+            return !isPublicIpv4Bytes(bytes, 12);
+        }
+        return false;
+    }
+
+    private static boolean isPublicIpv4Bytes(byte[] bytes, int offset) {
+        try {
+            return isPublicAddress(InetAddress.getByAddress(
+                    new byte[]{bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]}));
+        } catch (UnknownHostException e) {
+            return false;
+        }
+    }
+
+    private static boolean isZeroRegion(byte[] bytes, int from, int to) {
+        for (int i = from; i < to; i++) {
+            if (bytes[i] != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 }

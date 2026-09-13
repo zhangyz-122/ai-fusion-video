@@ -4,6 +4,7 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiNativeClient;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiUploadResult;
+import okhttp3.OkHttpClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -21,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -122,5 +124,54 @@ class ComfyUiInputResourceServiceTests {
                 new ByteArrayInputStream(body), 8, "ComfyUI 单张输入图片不能超过 20MB"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不能超过 20MB");
+    }
+
+    @Test
+    void downloadHttpRejectsLoopbackInternalAndMetadataUrls() {
+        ComfyUiInputResourceService service = new ComfyUiInputResourceService(nativeClient);
+        ApiConfig apiConfig = ApiConfig.builder().id(7L).build();
+
+        for (String url : List.of(
+                "http://127.0.0.1:9200/_cat/indices",
+                "http://169.254.169.254/latest/meta-data/",
+                "http://100.100.100.200/latest/meta-data/",
+                "http://192.168.1.9/image.png",
+                "http://10.0.0.5/image.png",
+                "http://[fd00::5]/image.png")) {
+            assertThatThrownBy(() -> service.uploadImages(apiConfig, "task", "referenceImages", List.of(url)))
+                    .as("图片输入 %s 必须被 SSRF 防护拒绝", url)
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("SSRF 防护拒绝");
+        }
+        verifyNoInteractions(nativeClient);
+    }
+
+    @Test
+    void downloadVideoHttpRejectsLoopbackInternalAndMetadataUrls() {
+        ComfyUiInputResourceService service = new ComfyUiInputResourceService(nativeClient);
+        ApiConfig apiConfig = ApiConfig.builder().id(7L).build();
+
+        for (String url : List.of(
+                "http://127.0.0.1:8081/view?filename=clip.mp4",
+                "http://172.16.0.9/clip.mp4",
+                "http://100.100.100.200/latest/meta-data/",
+                "http://localhost/clip.mp4")) {
+            assertThatThrownBy(() -> service.uploadVideos(apiConfig, "task", "referenceVideos", List.of(url)))
+                    .as("视频输入 %s 必须被 SSRF 防护拒绝", url)
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("SSRF 防护拒绝");
+        }
+        verifyNoInteractions(nativeClient);
+    }
+
+    @Test
+    void baseClientDoesNotFollowRedirects() throws Exception {
+        // 红队 S-1：首跳校验后经 302 跳向内网的绕过，必须通过关闭自动重定向阻断
+        var field = ComfyUiInputResourceService.class.getDeclaredField("baseClient");
+        field.setAccessible(true);
+        OkHttpClient client = (OkHttpClient) field.get(new ComfyUiInputResourceService(nativeClient));
+
+        assertThat(client.followRedirects()).isFalse();
+        assertThat(client.followSslRedirects()).isFalse();
     }
 }

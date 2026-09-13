@@ -143,4 +143,33 @@ class PublicHttpUrlValidatorTests {
         assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("https://[2606:2800:220:1:248:1893:25c8:1946]/"))
                 .isTrue();
     }
+
+    @Test
+    void rejectsTunnelledIpv6EmbeddingPrivateIpv4() {
+        // 6to4（2002::/16）嵌入回环/内网 IPv4，在具备 6to4 路由的网络可落地内网（红队 S-4a）
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://[2002:7f00:1::]/image.png")).isFalse();
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://[2002:a00:1::]/image.png")).isFalse();
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://[2002:c0a8:101::]/image.png")).isFalse();
+        // NAT64（64:ff9b::/96）嵌入内网 IPv4
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://[64:ff9b::7f00:1]/image.png")).isFalse();
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://[64:ff9b::c0a8:1]/image.png")).isFalse();
+    }
+
+    @Test
+    void acceptsTunnelledIpv6EmbeddingPublicIpv4() {
+        // 嵌入公网 IPv4 的隧道地址按 IPv4 判定放行
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://[2002:5db8:d001::]/image.png")).isTrue();
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://[64:ff9b::5db8:d001]/image.png")).isTrue();
+    }
+
+    @Test
+    void rejectsCgnatSharedAddressSpace() {
+        // RFC 6598（100.64.0.0/10）：云元数据（如阿里云 100.100.100.200）与 Tailscale 内网都在此段
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://100.100.100.200/latest/meta-data/"))
+                .isFalse();
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://100.64.0.1/image.png")).isFalse();
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://100.127.255.254/image.png")).isFalse();
+        // 段外仍按原规则处理
+        assertThat(PublicHttpUrlValidator.isAllowedPublicHttpUrl("http://101.1.2.3/image.png")).isTrue();
+    }
 }

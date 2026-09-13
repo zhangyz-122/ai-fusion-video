@@ -599,3 +599,17 @@ T10 发现的六条 UI 缺陷逐一修复,每项单独提交(分支 `swarm/a3-de
    @Value 解析由 Spring 承担,自测无增量价值。
 2. `stale-hours<=0` 选择 fail-fast 抛 IllegalArgumentException:0/负值会使阈值落在未来、回收器首轮即把
    全部进行中任务标记失败,属配置事故,宁可启动失败也不静默破坏数据。
+
+---
+
+# SW-T17/T18/T19(P0 安全修复)需要决策的问题
+
+分支:swarm/p0-security-fix(基于 swarm/a5-redteam)。提交:7fdf1d6(SW-T17)/ 3f623fc(SW-T18)/ e663749(SW-T19)。日期:2026-09-14。
+
+1. **api-config 管理端密钥回显 UX(SW-T17)**:ApiConfigRespVO 已删除 apiKey/appSecret/proxyPassword。updateApiConfig 本就是"null=不修改"语义,后端安全;但 ai-models 设置页编辑表单中三个密钥字段将不再回显旧值。如需回显,按红队建议做 `sk-***last4` 脱敏回显(需后端出掩码字段+前端配合),当前实现选择"不回显"。
+2. **内网模型端点产出 URL 会被拒(SW-T18)**:MediaStorageService.downloadAndStore 现在要求模型返回的 imageUrl/videoUrl 为公网地址。若存在部署在内网的自建 openai_compatible/ComfyUI(如 http://192.168.x.x 返回内网素材链接),持久化会失败。判定:安全优先,属预期;确有此场景时建议把 video.compose.allowed-hosts 的管理员白名单范式推广到 MediaStorageService,而不是放开校验。
+3. **ComfyUI 输入 URL 遇 302 显式失败(SW-T18)**:为最小侵入(该文件正被音频改造占用),downloadHttp/downloadVideoHttp 只做了入口校验+关闭自动重定向,返回 302 的公网源会得到 502 而非跟随。如需跟随,后续在该文件引入 SafeHttpDownloader 逐跳复检。
+4. **CGNAT 100.64.0.0/10 纳入拦截(超出红队报告清单,SW-T18)**:该段覆盖云元数据(阿里云 100.100.100.200)与 Tailscale 类主机间组网,Java 不视为私有。若未来有以该段为"公网出口"的部署环境需回退此条判定。
+5. **assistant-upload 仍为 getBytes 全量入堆(P-4 残留)**:本次流式化只覆盖 /upload;assistant-upload(类型受常量白名单约束)维持原状,建议在 P-4 任务统一处理。
+6. **uitest token 实机验证受限**:本环境 MySQL/Redis 仅在 docker 网络内且禁用 docker,无法起实例做实机验证;/get、/list 的 ADMIN 拒绝已由权限矩阵反射测试+全局 @EnableMethodSecurity 覆盖,合并后建议在 8081 平台用 uitest 账号实测一次。
+7. **全量回归结果**:714 例(含新增 37 例安全用例),2 失败均为 base 存量(AgentScopeGaDependencyContractTests.sourceTreeContainsNoObsoleteV1Symbol 指向 ApplicationTimeZoneInitializerTests.java、ProjectServiceTests.listAccessibleByUserUsesCurrentTeamScope,TASK.md 此前已记录在无本分支的 HEAD 复现);39 错误全部为 integration/*IT 与 AgentPersistenceMigrationIT 的 Redis/MySQL 连接失败(本机基础设施未运行,环境性)。FlywayMigrationNamingTests 通过。

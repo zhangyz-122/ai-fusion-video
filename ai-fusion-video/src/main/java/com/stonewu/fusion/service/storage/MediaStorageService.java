@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.storage;
 
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.entity.storage.StorageConfig;
+import com.stonewu.fusion.security.http.SafeHttpDownloader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,12 @@ public class MediaStorageService {
         // 已经是本地路径（/media/...）则跳过
         if (remoteUrl.startsWith("/media/")) {
             return remoteUrl;
+        }
+
+        // SSRF 防护（红队 S-3 旁路 B）：模型返回的 URL 可能指向内网，
+        // 统一在门面入口校验公网地址；重定向逐跳复检由各策略的下载通道负责
+        if (remoteUrl.startsWith("http://") || remoteUrl.startsWith("https://")) {
+            SafeHttpDownloader.requirePublicUrl(remoteUrl, "远程媒体 URL");
         }
 
         StorageConfig config = storageConfigService.getDefaultConfig();

@@ -19,10 +19,7 @@ public class ApiConfigRespVO {
     private String proxyHost;
     private Integer proxyPort;
     private String proxyUsername;
-    private String proxyPassword;
-    private String apiKey;
     private String appId;
-    private String appSecret;
     private Long modelId;
     private Integer status;
     private String remark;

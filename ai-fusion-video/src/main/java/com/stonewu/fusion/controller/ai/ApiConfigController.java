@@ -81,6 +81,7 @@ public class ApiConfigController {
     @GetMapping("/get")
     @Operation(summary = "获取API配置详情")
     @Parameter(name = "id", description = "配置ID", required = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<ApiConfigRespVO> get(@RequestParam("id") Long id) {
         ApiConfig config = apiConfigService.getById(id);
         return success(config == null ? null : ApiConfigConvert.INSTANCE.convert(config));
@@ -97,6 +98,7 @@ public class ApiConfigController {
 
     @GetMapping("/list")
     @Operation(summary = "获取启用的API配置列表")
+    @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<List<ApiConfigRespVO>> list() {
         return success(ApiConfigConvert.INSTANCE.convertList(apiConfigService.getEnabledList()));
     }

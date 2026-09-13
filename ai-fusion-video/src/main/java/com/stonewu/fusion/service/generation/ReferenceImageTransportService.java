@@ -9,6 +9,7 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.security.http.PublicHttpUrlValidator;
+import com.stonewu.fusion.security.http.SafeHttpDownloader;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
@@ -16,7 +17,6 @@ import com.stonewu.fusion.service.system.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -183,20 +183,19 @@ public class ReferenceImageTransportService {
             return new BinaryResource(resource.bytes(), normalizeMimeType(resource.mimeType(), source));
         }
         if (isHttpUrl(source)) {
-            if (!PublicHttpUrlValidator.isAllowedPublicHttpUrl(source)) {
-                throw new BusinessException("参考图 URL 指向本机、回环或内网地址，已被安全策略禁止拉取");
-            }
-            Request request = new Request.Builder().url(source).get()
-                    .addHeader("Accept", "image/*,*/*;q=0.8").build();
+            // SSRF 防护：逐跳校验公网地址并关闭自动重定向（红队 S-1/S-2 基础版）
             OkHttpClient client = apiConfig == null
                     ? httpClient : AiProxySupport.okHttpClient(httpClient, apiConfig);
-            try (Response response = client.newCall(request).execute()) {
-                if (!response.isSuccessful() || response.body() == null) {
-                    throw new BusinessException("下载参考图失败: HTTP " + response.code());
-                }
-                return new BinaryResource(response.body().bytes(),
-                        normalizeMimeType(response.header("Content-Type"), source));
-            }
+            return SafeHttpDownloader.fetch(client, source, "参考图 URL",
+                    url -> new Request.Builder().url(url).get()
+                            .addHeader("Accept", "image/*,*/*;q=0.8").build(),
+                    response -> {
+                        if (!response.isSuccessful() || response.body() == null) {
+                            throw new BusinessException("下载参考图失败: HTTP " + response.code());
+                        }
+                        return new BinaryResource(response.body().bytes(),
+                                normalizeMimeType(response.header("Content-Type"), source));
+                    });
         }
         throw new BusinessException("参考图地址不可访问: " + source);
     }
