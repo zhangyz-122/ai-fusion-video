@@ -156,6 +156,15 @@ export const scriptApi = {
   fallbackParse: (id: number) =>
     http.post<never, Script>(`/api/script/${id}/fallback-parse`),
 
+  /** 长文本自动分块解析（章节感知分块，逐块 AI 转剧本） */
+  autoSplitNovel: (id: number, modelId?: number) =>
+    http.post<never, string>(`/api/script/${id}/auto-split`, modelId ? { modelId } : {}),
+
+  /** 查询自动分块解析任务状态 */
+  autoSplitStatus: (
+    id: number,
+  ) => http.get<never, { parsingStatus: number; parsingProgress: string | null; totalEpisodes: number }>(`/api/script/${id}/auto-split`),
+
   // ========== 分集 ==========
 
   /** 获取分集列表 */

@@ -1,6 +1,8 @@
 package com.stonewu.fusion.controller.script;
 
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.controller.script.vo.AutoSplitReqVO;
+import com.stonewu.fusion.controller.script.vo.AutoSplitStatusVO;
 import com.stonewu.fusion.controller.script.vo.EpisodeCreateReqVO;
 import com.stonewu.fusion.controller.script.vo.EpisodeUpdateReqVO;
 import com.stonewu.fusion.controller.script.vo.SceneCreateReqVO;
@@ -12,7 +14,9 @@ import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.project.ProjectAccessGuard;
+import com.stonewu.fusion.service.script.ScriptAutoSplitService;
 import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -32,6 +36,7 @@ public class ScriptController {
 
     private final ScriptService scriptService;
     private final ProjectAccessGuard accessGuard;
+    private final ScriptAutoSplitService scriptAutoSplitService;
 
     // ========== 剧本 ==========
 
@@ -71,6 +76,28 @@ public class ScriptController {
     public CommonResult<Script> fallbackParse(@PathVariable Long id) {
         accessGuard.assertScript(id);
         return CommonResult.success(scriptService.fallbackParseStructure(id));
+    }
+
+    @Operation(summary = "长文本自动分块解析（章节感知分块，逐块 AI 转剧本）")
+    @PostMapping("/{id}/auto-split")
+    public CommonResult<String> autoSplit(@PathVariable Long id,
+                                          @RequestBody(required = false) AutoSplitReqVO reqVO) {
+        accessGuard.assertScript(id);
+        Long userId = SecurityUtils.requireCurrentUserId();
+        Long modelId = reqVO == null ? null : reqVO.getModelId();
+        return CommonResult.success(scriptAutoSplitService.startAutoSplit(id, userId, modelId));
+    }
+
+    @Operation(summary = "查询自动分块解析任务状态")
+    @GetMapping("/{id}/auto-split")
+    public CommonResult<AutoSplitStatusVO> autoSplitStatus(@PathVariable Long id) {
+        accessGuard.assertScript(id);
+        Script script = scriptService.getById(id);
+        AutoSplitStatusVO vo = new AutoSplitStatusVO();
+        vo.setParsingStatus(script.getParsingStatus());
+        vo.setParsingProgress(script.getParsingProgress());
+        vo.setTotalEpisodes(script.getTotalEpisodes());
+        return CommonResult.success(vo);
     }
 
     // ========== 分集 ==========

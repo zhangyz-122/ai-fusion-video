@@ -160,3 +160,12 @@
 - `PUT /api/storyboard/scene` 对 episodeId 变更**静默忽略**（响应与库值均为旧值），场次无法移动分集（C03）。
 - `AgentMessageAllocator.append` 投影恢复存在 (conversation_id, message_order) 唯一键竞态，导致 AgentRunMaintenance 每 5 秒 DataIntegrityViolation（日志增强后已可定位，I02/运行时范围）。
 - 用户数据清理：重复"第1集"已删除；215 万字原文属于小说而非剧本，建议用户改用小说转剧本流程或按集拆分后导入。
+
+## 2026-09-13 新功能：长文本自动分块解析（用户反馈落地）
+
+- 端点：`POST /api/script/{id}/auto-split`（可选 modelId，缺省默认对话模型）+ `GET /api/script/{id}/auto-split`（进度）。
+- 机制：`ScriptAutoSplitService` 按章节（第X章/Chapter）→ 段落边界确定性分块（≤6000 字/块），逐块调用文本模型改写为结构化场次 JSON（含对白），自动落库为分集+场次；单块转换失败时原文兜底保存为该块场景，绝不丢字。与模型上下文大小无关，本地小模型亦可稳定运行。
+- 前端：故事转剧本对话框对超 3 万字文本自动切换"自动分块解析"模式，3 秒轮询进度。
+- 排障教训：MySQL `LENGTH()` 返回字节而非字符——中文文本长度判断一律用 `CHAR_LENGTH()`；mysql 批量客户端输出会对反斜杠翻倍，分析 JSON 转义必须以 DB `HEX()` 为准。
+- 实测：脚本 3（4928 字）端到端通过（本地 qwen2.5:14b，9 秒/块，4→1 集重建后已用兜底恢复原四集结构）；脚本 5（约 72 万字小说，170 块）已启动本地模型自动分块，后台运行中（约 30-90 分钟），进度可经 `/api/script/5/auto-split` 查询。
+- 注意：自动分块运行于内存线程，backend 重启会中断当前任务（重跑即可）；分块上限 400 块（约 240 万字）。
