@@ -241,7 +241,7 @@ export default function ProjectAssetsPage() {
     <div className="flex min-h-[680px] w-full flex-1 flex-col gap-5">
       <header className="flex shrink-0 flex-wrap items-end justify-between gap-4 px-1">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">资产管理</h1>
+          <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">资产管理</h1>
           <p className="mt-1 text-sm text-muted-foreground">角色、场景与道具</p>
         </div>
         <div className="flex items-center gap-2">
