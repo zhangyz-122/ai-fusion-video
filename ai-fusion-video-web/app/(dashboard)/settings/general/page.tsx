@@ -28,6 +28,7 @@ import {
   setIgnoredVersion,
 } from "@/lib/version-update";
 import { containerVariants, itemVariants, settingsTypography } from "../_shared";
+import { SystemStatusSection } from "./_components/system-status-section";
 
 interface SystemConfigs {
   site_base_url: string;
@@ -923,6 +924,9 @@ cd ai-fusion-video
             </p>
           </div>
           </motion.div>
+
+          {/* 系统状态：仅管理员可见（数据端点要求管理员权限） */}
+          {isAdmin ? <SystemStatusSection /> : null}
         </>
       )}
     </motion.div>
