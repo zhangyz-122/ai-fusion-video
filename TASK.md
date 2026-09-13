@@ -1,9 +1,9 @@
 <<<<<<< HEAD
-<<<<<<< HEAD
 # 冲刺任务 T1:后端缺陷修复:消息投影竞态 + 场次移动分集静默忽略
-=======
+
+---
+
 # 冲刺任务 T6:仪表盘 B04 深化:真实快捷入口与明细跳转
->>>>>>> sprint/T6-dashboard-deepen
 =======
 # 冲刺任务 T9:安全加固 M03:上传与执行面收口
 >>>>>>> sprint/T9-security-hardening
@@ -12,7 +12,6 @@
 
 
 ## 目标
-<<<<<<< HEAD
 <<<<<<< HEAD
 修复两个已诊断的后端缺陷。
 
@@ -36,7 +35,9 @@
 ## 验收
 - 新增单测覆盖竞态重试与 episodeId 变更;./mvnw compile 通过;
   相关 StoryboardServiceTests 全绿。
-=======
+
+---
+
 1. 快捷动作四卡片改为真实能力入口(生图→/generate/images、
    视频→/generate/videos、声音→/generate/audios、生产→/production)。
 2. "进行中与待办"条目点击深链细化:SCRIPT_PARSE→/projects/{id}(剧本页)、
@@ -49,7 +50,6 @@
   不改 app-header/sidebar-nav(导航已预置)。
 ## 验收
 - tsc/eslint/build 通过;全部入口真实可达(手动冒烟)。
->>>>>>> sprint/T6-dashboard-deepen
 =======
 1. 上传/导入校验收口:检查所有接收文件或 URL 的端点
    (图片上传、参考图 URL 拉取、工作流导入)的类型/大小/内网地址限制;
@@ -76,7 +76,6 @@
 5. 遇到与其他任务冲突的公共需求(导航/公共组件),记录到 TASK.md 末尾,不要自行改动。
 
 <<<<<<< HEAD
-<<<<<<< HEAD
 ## 决策点与执行记录(T1 子代理追加,2026-09-13)
 
 ### 决策1:缺陷2 修复需要例外触碰 StoryboardSceneUpdateReqVO 与 StoryboardConvert(需任务群确认)
@@ -98,7 +97,9 @@
 - `./mvnw compile` 通过。
 - StoryboardServiceTests 16/16 绿(含新增 3 个 updateScene 用例);新增 AgentMessageAllocatorTests 3/3 绿;AgentMessageServiceTests 2/2 绿。
 - 全量 service 包测试:498 个用例,仅 2 个与本次改动无关的失败——ProjectServiceTests(在未含本改动的基线上同样失败,系存量缺陷)与 ProjectWorkspaceCacheTests(依赖 MySQL 的上下文测试,任务书规定的跳过清单)。
-=======
+
+---
+
 ---
 
 ## T6 完成记录(2026-09-13)
@@ -146,7 +147,6 @@
     workspace-overview(projectId=3) → episodes=4,计数接口真实有数。
   - uitest:/dashboard、/production 均 200;activity.running=[](空态路径),项目计数 0/0 正常返回。
   - `/projects/5/scripts` 返回 500:即上述第 1 条基线既有问题,与本任务改动无关。
->>>>>>> sprint/T6-dashboard-deepen
 =======
 ## 决策与遗留记录(T9 执行后追加,2026-09-13)
 
