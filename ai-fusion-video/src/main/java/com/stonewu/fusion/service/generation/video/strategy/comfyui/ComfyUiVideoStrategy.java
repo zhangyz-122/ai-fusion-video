@@ -48,65 +48,104 @@ public class ComfyUiVideoStrategy implements VideoGenerationStrategy {
     public String submit(VideoTask task) {
         AiModel model = requireModel(task);
         ComfyUiExecutionContext context = executor.resolveContext(model, task.getWorkflowVersionId());
-        ComfyUiPreparedSubmission submission = executor.prepare(
-                context, task.getTaskId(), videoValues(task, model));
         List<VideoItem> items = videoGenerationService.listItems(task.getId());
         if (items.isEmpty()) {
             throw new BusinessException(400, "视频任务缺少生成条目");
         }
-        for (VideoItem item : items) {
-            item.setPlatformTaskId(submission.promptId());
-            videoGenerationService.updateItem(item);
+
+        List<String> promptIds = new ArrayList<>(items.size());
+        try {
+            for (int index = 0; index < items.size(); index++) {
+                Map<String, Object> values = videoValues(task, model);
+                // 当前已发布工作流没有 batch/count 输出绑定。沿用同一个 VideoTask，
+                // 为每个既有 VideoItem 提交一个独立 ComfyUI job，保证 count=3 真正对应 3 个候选。
+                values.put("count", 1);
+                values.put("seed", candidateSeed(task, index));
+                String taskKey = items.size() == 1
+                        ? task.getTaskId()
+                        : task.getTaskId() + "-candidate-" + (index + 1);
+                ComfyUiPreparedSubmission submission = executor.prepare(
+                        context, taskKey, values);
+                VideoItem item = items.get(index);
+                item.setPlatformTaskId(submission.promptId());
+                videoGenerationService.updateItem(item);
+                executor.submit(submission);
+                promptIds.add(submission.promptId());
+            }
+        } catch (RuntimeException e) {
+            // 如果批量提交中途失败，尽量取消已经入队的远端 job，避免留下孤儿推理。
+            for (String promptId : promptIds) {
+                try {
+                    executor.cancel(context, promptId);
+                } catch (RuntimeException cancelError) {
+                    log.warn("[ComfyUI Video] 清理部分提交任务失败: promptId={}", promptId, cancelError);
+                }
+            }
+            throw e;
         }
-        executor.submit(submission);
-        log.info("[ComfyUI Video] 已提交: taskId={}, promptId={}, workflowVersionId={}",
-                task.getTaskId(), submission.promptId(), task.getWorkflowVersionId());
-        return submission.promptId();
+        String platformTaskId = promptIds.size() == 1
+                ? promptIds.get(0)
+                : JSONUtil.toJsonStr(promptIds);
+        log.info("[ComfyUI Video] 已提交: taskId={}, promptIds={}, workflowVersionId={}",
+                task.getTaskId(), promptIds, task.getWorkflowVersionId());
+        return platformTaskId;
     }
 
     @Override
     public void poll(String platformTaskId, VideoTask task) {
         AiModel model = requireModel(task);
         ComfyUiExecutionContext context = executor.resolveContext(model, task.getWorkflowVersionId());
-        ComfyUiJobResult job = executor.waitForJob(
-                context, platformTaskId, pollInterval(model), timeout(model));
-        List<ComfyUiStoredOutput> outputs = executor.storeOutputs(context, job);
-        List<ComfyUiStoredOutput> videos = outputs.stream()
-                .filter(output -> "video".equals(output.mediaType())
-                        && "primary".equals(output.role()))
-                .toList();
-        List<ComfyUiStoredOutput> covers = outputs.stream()
-                .filter(output -> "image".equals(output.mediaType())
-                        && "cover".equals(output.role()))
-                .toList();
         List<VideoItem> items = videoGenerationService.listItems(task.getId());
-        if (videos.size() < items.size()) {
+        List<String> promptIds = parsePlatformTaskIds(platformTaskId);
+        if (promptIds.size() != items.size()) {
             throw new BusinessException(502,
-                    "ComfyUI 返回视频数量不足，期望 " + items.size() + "，实际 " + videos.size());
+                    "ComfyUI 任务数量与生成条目不一致，期望 " + items.size() + "，实际 " + promptIds.size());
         }
+
+        int successCount = 0;
         for (int index = 0; index < items.size(); index++) {
+            String promptId = promptIds.get(index);
+            ComfyUiJobResult job = executor.waitForJob(
+                    context, promptId, pollInterval(model), timeout(model));
+            List<ComfyUiStoredOutput> outputs = executor.storeOutputs(context, job);
+            List<ComfyUiStoredOutput> videos = outputs.stream()
+                    .filter(output -> "video".equals(output.mediaType())
+                            && "primary".equals(output.role()))
+                    .toList();
+            List<ComfyUiStoredOutput> covers = outputs.stream()
+                    .filter(output -> "image".equals(output.mediaType())
+                            && "cover".equals(output.role()))
+                    .toList();
+            if (videos.isEmpty()) {
+                throw new BusinessException(502,
+                        "ComfyUI 未返回第 " + (index + 1) + " 个候选视频");
+            }
             VideoItem item = items.get(index);
-            ComfyUiStoredOutput video = videos.get(index);
-            item.setPlatformTaskId(platformTaskId);
+            ComfyUiStoredOutput video = videos.get(0);
+            item.setPlatformTaskId(promptId);
             item.setVideoUrl(video.url());
             item.setFileSize(video.size());
             item.setDuration(task.getDuration());
             if (!covers.isEmpty()) {
-                item.setCoverUrl(covers.get(Math.min(index, covers.size() - 1)).url());
+                item.setCoverUrl(covers.get(0).url());
             }
             item.setStatus(1);
             item.setErrorMsg(null);
             videoGenerationService.updateItem(item);
+            successCount++;
+            task.setSuccessCount(successCount);
+            videoGenerationService.update(task);
         }
-        task.setSuccessCount(items.size());
-        videoGenerationService.update(task);
     }
 
     @Override
     public boolean cancel(String platformTaskId, VideoTask task) {
-        return executor.cancel(
-                executor.resolveContext(requireModel(task), task.getWorkflowVersionId()),
-                platformTaskId);
+        ComfyUiExecutionContext context = executor.resolveContext(requireModel(task), task.getWorkflowVersionId());
+        boolean cancelled = false;
+        for (String promptId : parsePlatformTaskIds(platformTaskId)) {
+            cancelled |= executor.cancel(context, promptId);
+        }
+        return cancelled;
     }
 
     @Override
@@ -142,6 +181,7 @@ public class ComfyUiVideoStrategy implements VideoGenerationStrategy {
             values.put("lastFrame", task.getLastFrameImageUrl());
         }
         List<String> images = parseList(task.getReferenceImageUrls());
+        values.put("referenceImageCount", images.size());
         if (!images.isEmpty()) values.put("referenceImages", images);
         List<String> videos = parseList(task.getReferenceVideoUrls());
         if (!videos.isEmpty()) values.put("referenceVideos", videos);
@@ -195,5 +235,25 @@ public class ComfyUiVideoStrategy implements VideoGenerationStrategy {
 
     private long randomSeed() {
         return ThreadLocalRandom.current().nextLong(Long.MAX_VALUE);
+    }
+
+    private long candidateSeed(VideoTask task, int index) {
+        long base = task.getSeed() != null ? task.getSeed() : randomSeed();
+        return base + index;
+    }
+
+    private List<String> parsePlatformTaskIds(String platformTaskId) {
+        if (StrUtil.isBlank(platformTaskId)) {
+            throw new BusinessException(502, "ComfyUI 平台任务 ID 为空");
+        }
+        String value = platformTaskId.trim();
+        if (!value.startsWith("[")) {
+            return List.of(value);
+        }
+        try {
+            return new ArrayList<>(JSONUtil.parseArray(value).toList(String.class));
+        } catch (RuntimeException e) {
+            throw new BusinessException(502, "ComfyUI 平台任务 ID 列表不是合法 JSON 数组");
+        }
     }
 }

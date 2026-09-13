@@ -303,7 +303,13 @@ public class VideoGenerationConsumer {
                 || workflow.getActiveVersionId() == null) {
             throw new BusinessException("ComfyUI 工作流已禁用或没有已发布版本");
         }
-        var version = comfyUiWorkflowService.requireVersion(workflow.getActiveVersionId());
+        var version = task.getWorkflowVersionId() == null
+                ? comfyUiWorkflowService.requireVersion(workflow.getActiveVersionId())
+                : comfyUiWorkflowService.requireVersion(task.getWorkflowVersionId());
+        if (!workflow.getId().equals(version.getWorkflowId())
+                || !Boolean.TRUE.equals(version.getPublished())) {
+            throw new BusinessException("视频任务固定的 ComfyUI 工作流版本与模型不匹配或未发布");
+        }
         task.setWorkflowVersionId(version.getId());
     }
 

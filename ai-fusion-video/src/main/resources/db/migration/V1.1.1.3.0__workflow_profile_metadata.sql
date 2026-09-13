@@ -1,0 +1,21 @@
+CREATE TABLE `afv_workflow_profile` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `code` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '稳定的逻辑 Profile 标识',
+  `name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Profile 名称',
+  `workflow_id` bigint NOT NULL COMMENT '指向已有 ComfyUI 工作流，不复制执行图',
+  `purpose` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '能力用途：I2V/FLF/INFINITETALK 等',
+  `capabilities_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '语义能力元数据',
+  `input_contract_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '语义输入契约',
+  `output_contract_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '语义输出契约',
+  `dependency_manifest_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '节点、模型和二进制依赖清单',
+  `runtime_requirements_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '运行时约束',
+  `status` int NOT NULL DEFAULT '1' COMMENT '状态：0-禁用，1-启用',
+  `deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除标记',
+  `deleted_id` bigint NOT NULL DEFAULT '0' COMMENT '逻辑删除隔离标识',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE KEY `uk_workflow_profile_code` (`code`, `deleted_id`) USING BTREE,
+  KEY `idx_workflow_profile_workflow` (`workflow_id`, `status`),
+  KEY `idx_workflow_profile_purpose` (`purpose`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='逻辑工作流能力 Profile 元数据';

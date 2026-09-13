@@ -107,4 +107,40 @@ class ComfyUiVideoStrategyTests {
         verify(videoGenerationService).updateItem(item);
         verify(videoGenerationService).update(task);
     }
+
+    @Test
+    void submitFansOutExistingVideoItemsWhenPublishedWorkflowHasSingleOutput() {
+        task.setCount(3);
+        VideoItem first = VideoItem.builder().id(32L).taskId(11L).build();
+        VideoItem second = VideoItem.builder().id(33L).taskId(11L).build();
+        VideoItem third = VideoItem.builder().id(34L).taskId(11L).build();
+        List<VideoItem> items = List.of(first, second, third);
+        when(videoGenerationService.listItems(11L)).thenReturn(items);
+
+        ComfyUiPreparedSubmission firstSubmission = submission(UUID.randomUUID().toString());
+        ComfyUiPreparedSubmission secondSubmission = submission(UUID.randomUUID().toString());
+        ComfyUiPreparedSubmission thirdSubmission = submission(UUID.randomUUID().toString());
+        when(executor.prepare(eq(context), eq("video-task-candidate-1"), any(Map.class)))
+                .thenReturn(firstSubmission);
+        when(executor.prepare(eq(context), eq("video-task-candidate-2"), any(Map.class)))
+                .thenReturn(secondSubmission);
+        when(executor.prepare(eq(context), eq("video-task-candidate-3"), any(Map.class)))
+                .thenReturn(thirdSubmission);
+
+        String result = strategy.submit(task);
+
+        assertThat(result)
+                .contains(firstSubmission.promptId(), secondSubmission.promptId(), thirdSubmission.promptId());
+        assertThat(first.getPlatformTaskId()).isEqualTo(firstSubmission.promptId());
+        assertThat(second.getPlatformTaskId()).isEqualTo(secondSubmission.promptId());
+        assertThat(third.getPlatformTaskId()).isEqualTo(thirdSubmission.promptId());
+        verify(executor).submit(firstSubmission);
+        verify(executor).submit(secondSubmission);
+        verify(executor).submit(thirdSubmission);
+    }
+
+    private ComfyUiPreparedSubmission submission(String promptId) {
+        return new ComfyUiPreparedSubmission(
+                context, promptId, new ObjectMapper().createObjectNode());
+    }
 }

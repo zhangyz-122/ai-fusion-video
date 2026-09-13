@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.generation.video.consumer;
 
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.entity.ai.ComfyUiWorkflow;
+import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import com.stonewu.fusion.entity.generation.VideoItem;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.infrastructure.queue.RedisTaskQueue;
@@ -162,6 +164,57 @@ class VideoGenerationConsumerTests {
         VideoTask createdTask = taskCaptor.getValue();
         assertThat(createdTask.getWatermark()).isFalse();
         assertThat(createdTask.getGenerateAudio()).isTrue();
+    }
+
+    @Test
+    void submitTaskPreservesProductionPinnedWorkflowVersion() {
+        RedisTaskQueue taskQueue = mock(RedisTaskQueue.class);
+        VideoGenerationService videoGenerationService = mock(VideoGenerationService.class);
+        AiModelService aiModelService = mock(AiModelService.class);
+        ComfyUiWorkflowService workflowService = mock(ComfyUiWorkflowService.class);
+        GenerationModelCapabilityService capabilityService = mock(GenerationModelCapabilityService.class);
+
+        AiModel model = AiModel.builder()
+                .id(101L)
+                .status(1)
+                .modelType(3)
+                .comfyuiWorkflowId(11L)
+                .build();
+        when(aiModelService.getById(101L)).thenReturn(model);
+        when(workflowService.requireWorkflow(11L)).thenReturn(ComfyUiWorkflow.builder()
+                .id(11L).status(1).activeVersionId(22L).build());
+        when(workflowService.requireVersion(22L)).thenReturn(ComfyUiWorkflowVersion.builder()
+                .id(22L).workflowId(11L).published(true).build());
+        when(videoGenerationService.create(any(VideoTask.class))).thenAnswer(invocation -> {
+            VideoTask created = invocation.getArgument(0);
+            created.setId(201L);
+            return created;
+        });
+
+        VideoGenerationConsumer consumer = new VideoGenerationConsumer(
+                taskQueue,
+                videoGenerationService,
+                aiModelService,
+                mock(ApiConfigService.class),
+                capabilityService,
+                mock(ReferenceImageTransportService.class),
+                mock(VideoGenerationStrategyRouter.class),
+                mock(MediaStorageService.class),
+                mock(VideoFrameExtractor.class),
+                workflowService);
+
+        VideoTask task = VideoTask.builder()
+                .modelId(101L)
+                .workflowVersionId(22L)
+                .prompt("pinned workflow")
+                .count(1)
+                .build();
+        consumer.submitTask(task);
+
+        ArgumentCaptor<VideoTask> taskCaptor = ArgumentCaptor.forClass(VideoTask.class);
+        verify(videoGenerationService).create(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getWorkflowVersionId()).isEqualTo(22L);
+        consumer.shutdownWorkerExecutor();
     }
 
     @Test
