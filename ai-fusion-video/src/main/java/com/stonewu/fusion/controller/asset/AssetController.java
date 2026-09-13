@@ -10,6 +10,7 @@ import com.stonewu.fusion.convert.asset.AssetConvert;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.asset.AssetService;
+import com.stonewu.fusion.service.project.ProjectAccessGuard;
 import com.stonewu.fusion.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,6 +34,7 @@ import java.util.Map;
 public class AssetController {
 
     private final AssetService assetService;
+    private final ProjectAccessGuard accessGuard;
 
     // ========== 元数据 ==========
 
@@ -54,6 +56,7 @@ public class AssetController {
     @Operation(summary = "获取资产详情")
     @GetMapping("/{id}")
     public CommonResult<Asset> get(@PathVariable Long id) {
+        accessGuard.assertAsset(id);
         return CommonResult.success(assetService.getById(id));
     }
 
@@ -62,12 +65,14 @@ public class AssetController {
     public CommonResult<List<Asset>> list(@RequestParam Long projectId,
                                           @RequestParam(required = false) String type,
                                           @RequestParam(required = false) String keyword) {
+        accessGuard.assertProject(projectId);
         return CommonResult.success(assetService.listByProject(projectId, type, keyword));
     }
 
     @Operation(summary = "按项目查询资产及其所有子资产")
     @GetMapping("/list-with-items")
     public CommonResult<List<Map<String, Object>>> listWithItems(@RequestParam Long projectId) {
+        accessGuard.assertProject(projectId);
         return CommonResult.success(assetService.listWithItemsByProject(projectId));
     }
 
@@ -93,6 +98,7 @@ public class AssetController {
     @Operation(summary = "创建资产")
     @PostMapping
     public CommonResult<Asset> create(@Valid @RequestBody AssetCreateReqVO reqVO) {
+        accessGuard.assertProject(reqVO.getProjectId());
         Asset asset = AssetConvert.INSTANCE.convert(reqVO);
         // userId 由后端决定，owner 归属由 service 按当前团队绑定
         asset.setUserId(SecurityUtils.getCurrentUserId());
@@ -102,6 +108,7 @@ public class AssetController {
     @Operation(summary = "更新资产")
     @PutMapping
     public CommonResult<Asset> update(@Valid @RequestBody AssetUpdateReqVO reqVO) {
+        accessGuard.assertAsset(reqVO.getId());
         Asset asset = AssetConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(assetService.update(asset));
     }
@@ -109,6 +116,7 @@ public class AssetController {
     @Operation(summary = "删除资产")
     @DeleteMapping("/{id}")
     public CommonResult<Boolean> delete(@PathVariable Long id) {
+        accessGuard.assertAsset(id);
         assetService.delete(id);
         return CommonResult.success(true);
     }
@@ -118,18 +126,21 @@ public class AssetController {
     @Operation(summary = "获取子资产详情")
     @GetMapping("/item/{id}")
     public CommonResult<AssetItem> getItem(@PathVariable Long id) {
+        accessGuard.assertAssetItem(id);
         return CommonResult.success(assetService.getItemById(id));
     }
 
     @Operation(summary = "获取子资产列表")
     @GetMapping("/{assetId}/items")
     public CommonResult<List<AssetItem>> listItems(@PathVariable Long assetId) {
+        accessGuard.assertAsset(assetId);
         return CommonResult.success(assetService.listItems(assetId));
     }
 
     @Operation(summary = "创建子资产")
     @PostMapping("/item")
     public CommonResult<AssetItem> createItem(@Valid @RequestBody AssetItemCreateReqVO reqVO) {
+        accessGuard.assertAsset(reqVO.getAssetId());
         AssetItem item = AssetConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(assetService.createItem(item));
     }
@@ -137,6 +148,7 @@ public class AssetController {
     @Operation(summary = "更新子资产")
     @PutMapping("/item")
     public CommonResult<AssetItem> updateItem(@Valid @RequestBody AssetItemUpdateReqVO reqVO) {
+        accessGuard.assertAssetItem(reqVO.getId());
         AssetItem item = AssetConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(assetService.updateItem(item));
     }
@@ -144,6 +156,7 @@ public class AssetController {
     @Operation(summary = "删除子资产")
     @DeleteMapping("/item/{id}")
     public CommonResult<Boolean> deleteItem(@PathVariable Long id) {
+        accessGuard.assertAssetItem(id);
         assetService.deleteItem(id);
         return CommonResult.success(true);
     }

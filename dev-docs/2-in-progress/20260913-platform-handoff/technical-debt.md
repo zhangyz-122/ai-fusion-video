@@ -22,8 +22,16 @@
 1. **端点守卫缺失（已修）**：此前项目读写接口完全无校验，任何登录用户可改/删任何人项目，属真实漏洞。
 2. **共享默认团队语义（设计决策，待确认）**：注册用户默认加入首个用户的"默认团队"（`getRequiredSingleTeam`），同团队成员按设计可见彼此个人项目。本地"单团队"部署下这是预期；若要面向多用户隔离，需改为注册即建个人团队（类似 `initializeAdmin`），属产品决策，未擅改。
 
-### 仍待审计（M01-01，下一批）
+### 仍待审计（M01-01 剩余部分）
 
-- Script / Storyboard / Asset 等其余按 projectId 直取的控制器端点均未接入 `canAccessProject`（当前仅 ProjectController 接入）；需统一补齐读写守卫。
-- 生成、存储、成员管理等控制器同类排查。
+- ~~Script / Storyboard / Asset 控制器~~：已在本批接入（见下）。
+- Production 控制器（run/take/qc/select/compose）尚未接入守卫：需经 ProductionRun → step/storyboardItem → project 链路解析，留作下一片。
+- 生成历史（/api/generation/image 等）已按用户隔离（实测 uitest 仅见本人记录），但生成与存储管理类端点仍建议全面排查。
 - 测试账号 uitest（已建独立团队 uitest-team、项目 id=6）保留作回归凭据。
+
+### 2026-09-13 补充：Script / Storyboard / Asset 内容守卫（M01-01 第一批）
+
+- 新增 `ProjectAccessGuard` 组件：把 script/episode/scene、storyboard/episode/scene/item、asset/item 解析回所属项目后统一校验 `canAccessProject`，实体不存在时明确报"不存在"。
+- 三个控制器全部内容端点接入守卫（剧本 15、分镜 30、资产 13 处）；批量排序逐条校验；创建类端点按 VO 中的归属 ID 校验。
+- 新增 `ProjectAccessGuardTests`（5 例，链路解析+拒绝/放行）；`ProjectControllerAccessGuardTests`（7 例）保留。
+- 遗留说明：守卫加在控制器层而非服务层，Agent 工具与内部流水线（无 HTTP 安全上下文）不受影响，其自身已有 ownership 校验（如 PR-006、项目工具的 canAccessProject）。

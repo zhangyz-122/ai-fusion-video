@@ -17,6 +17,7 @@ import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
+import com.stonewu.fusion.service.project.ProjectAccessGuard;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
 import com.stonewu.fusion.service.storyboard.VideoComposeService;
 import com.stonewu.fusion.service.storyboard.dto.StoryboardItemAssetsPatch;
@@ -42,24 +43,28 @@ public class StoryboardController {
 
     private final StoryboardService storyboardService;
     private final VideoComposeService videoComposeService;
+    private final ProjectAccessGuard accessGuard;
 
     // ========== 分镜脚本 ==========
 
     @Operation(summary = "获取分镜详情")
     @GetMapping("/{id}")
     public CommonResult<Storyboard> get(@PathVariable Long id) {
+        accessGuard.assertStoryboard(id);
         return CommonResult.success(storyboardService.getById(id));
     }
 
     @Operation(summary = "按项目获取唯一分镜")
     @GetMapping("/project/{projectId}")
     public CommonResult<Storyboard> getByProject(@PathVariable Long projectId) {
+        accessGuard.assertProject(projectId);
         return CommonResult.success(storyboardService.getByProjectId(projectId));
     }
 
     @Operation(summary = "更新分镜")
     @PutMapping
     public CommonResult<Storyboard> update(@Valid @RequestBody StoryboardUpdateReqVO reqVO) {
+        accessGuard.assertStoryboard(reqVO.getId());
         Storyboard storyboard = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.update(storyboard));
     }
@@ -67,6 +72,7 @@ public class StoryboardController {
     @Operation(summary = "清空分镜内部内容")
     @PostMapping("/{id}/clearContent")
     public CommonResult<Boolean> clearContent(@PathVariable Long id) {
+        accessGuard.assertStoryboard(id);
         storyboardService.clearContent(id);
         return CommonResult.success(true);
     }
@@ -74,12 +80,14 @@ public class StoryboardController {
     @Operation(summary = "使用剧本原文兜底生成分镜结构")
     @PostMapping("/{id}/fallback-generate")
     public CommonResult<StoryboardStatistics> fallbackGenerate(@PathVariable Long id) {
+        accessGuard.assertStoryboard(id);
         return CommonResult.success(storyboardService.fallbackGenerateFromScript(id));
     }
 
     @Operation(summary = "获取分镜概览统计")
     @GetMapping("/{storyboardId}/statistics")
     public CommonResult<StoryboardStatistics> getStatistics(@PathVariable Long storyboardId) {
+        accessGuard.assertStoryboard(storyboardId);
         return CommonResult.success(storyboardService.getStatistics(storyboardId));
     }
 
@@ -88,18 +96,21 @@ public class StoryboardController {
     @Operation(summary = "获取分镜集列表")
     @GetMapping("/{storyboardId}/episodes")
     public CommonResult<List<StoryboardEpisode>> listEpisodes(@PathVariable Long storyboardId) {
+        accessGuard.assertStoryboard(storyboardId);
         return CommonResult.success(storyboardService.listEpisodes(storyboardId));
     }
 
     @Operation(summary = "获取分镜集详情")
     @GetMapping("/episode/{id}")
     public CommonResult<StoryboardEpisode> getEpisode(@PathVariable Long id) {
+        accessGuard.assertStoryboardEpisode(id);
         return CommonResult.success(storyboardService.getEpisodeById(id));
     }
 
     @Operation(summary = "创建分镜集")
     @PostMapping("/episode")
     public CommonResult<StoryboardEpisode> createEpisode(@Valid @RequestBody StoryboardEpisodeCreateReqVO reqVO) {
+        accessGuard.assertStoryboard(reqVO.getStoryboardId());
         StoryboardEpisode episode = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.createEpisode(episode));
     }
@@ -107,6 +118,7 @@ public class StoryboardController {
     @Operation(summary = "更新分镜集")
     @PutMapping("/episode")
     public CommonResult<StoryboardEpisode> updateEpisode(@Valid @RequestBody StoryboardEpisodeUpdateReqVO reqVO) {
+        accessGuard.assertStoryboardEpisode(reqVO.getId());
         StoryboardEpisode episode = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.updateEpisode(episode));
     }
@@ -114,6 +126,7 @@ public class StoryboardController {
     @Operation(summary = "删除分镜集")
     @DeleteMapping("/episode/{id}")
     public CommonResult<Boolean> deleteEpisode(@PathVariable Long id) {
+        accessGuard.assertStoryboardEpisode(id);
         storyboardService.deleteEpisode(id);
         return CommonResult.success(true);
     }
@@ -129,6 +142,7 @@ public class StoryboardController {
     @PutMapping("/episode/{id}/bindScriptEpisode")
     public CommonResult<StoryboardEpisode> bindScriptEpisode(@PathVariable Long id,
                                                              @Valid @RequestBody StoryboardEpisodeBindReqVO reqVO) {
+        accessGuard.assertStoryboardEpisode(id);
         return CommonResult.success(storyboardService.bindScriptEpisode(id, reqVO.getScriptEpisodeId()));
     }
 
@@ -141,6 +155,7 @@ public class StoryboardController {
     @Operation(summary = "清空分镜集内容")
     @PostMapping("/episode/{id}/clearContent")
     public CommonResult<Boolean> clearEpisodeContent(@PathVariable Long id) {
+        accessGuard.assertStoryboardEpisode(id);
         storyboardService.clearEpisodeContent(id);
         return CommonResult.success(true);
     }
@@ -148,6 +163,7 @@ public class StoryboardController {
     @Operation(summary = "提交本集合成视频任务（异步）")
     @PostMapping("/episode/{id}/compose-video")
     public CommonResult<String> composeEpisodeVideo(@PathVariable Long id) {
+        accessGuard.assertStoryboardEpisode(id);
         Long userId = requireCurrentUserId();
         return CommonResult.success(videoComposeService.submitCompose(id, userId));
     }
@@ -157,24 +173,32 @@ public class StoryboardController {
     @Operation(summary = "获取分镜场次列表（按集）")
     @GetMapping("/episode/{episodeId}/scenes")
     public CommonResult<List<StoryboardScene>> listScenesByEpisode(@PathVariable Long episodeId) {
+        accessGuard.assertStoryboardEpisode(episodeId);
         return CommonResult.success(storyboardService.listScenesByEpisode(episodeId));
     }
 
     @Operation(summary = "获取分镜场次列表（按分镜）")
     @GetMapping("/{storyboardId}/scenes")
     public CommonResult<List<StoryboardScene>> listScenesByStoryboard(@PathVariable Long storyboardId) {
+        accessGuard.assertStoryboard(storyboardId);
         return CommonResult.success(storyboardService.listScenesByStoryboard(storyboardId));
     }
 
     @Operation(summary = "获取分镜场次详情")
     @GetMapping("/scene/{id}")
     public CommonResult<StoryboardScene> getScene(@PathVariable Long id) {
+        accessGuard.assertStoryboardScene(id);
         return CommonResult.success(storyboardService.getSceneById(id));
     }
 
     @Operation(summary = "创建分镜场次")
     @PostMapping("/scene")
     public CommonResult<StoryboardScene> createScene(@Valid @RequestBody StoryboardSceneCreateReqVO reqVO) {
+        if (reqVO.getStoryboardId() != null) {
+            accessGuard.assertStoryboard(reqVO.getStoryboardId());
+        } else {
+            accessGuard.assertStoryboardEpisode(reqVO.getEpisodeId());
+        }
         StoryboardScene scene = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.createScene(scene));
     }
@@ -182,6 +206,7 @@ public class StoryboardController {
     @Operation(summary = "更新分镜场次")
     @PutMapping("/scene")
     public CommonResult<StoryboardScene> updateScene(@Valid @RequestBody StoryboardSceneUpdateReqVO reqVO) {
+        accessGuard.assertStoryboardScene(reqVO.getId());
         StoryboardScene scene = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.updateScene(scene));
     }
@@ -189,6 +214,7 @@ public class StoryboardController {
     @Operation(summary = "删除分镜场次")
     @DeleteMapping("/scene/{id}")
     public CommonResult<Boolean> deleteScene(@PathVariable Long id) {
+        accessGuard.assertStoryboardScene(id);
         storyboardService.deleteScene(id);
         return CommonResult.success(true);
     }
@@ -198,24 +224,28 @@ public class StoryboardController {
     @Operation(summary = "获取分镜条目列表（按分镜）")
     @GetMapping("/{storyboardId}/items")
     public CommonResult<List<StoryboardItem>> listItems(@PathVariable Long storyboardId) {
+        accessGuard.assertStoryboard(storyboardId);
         return CommonResult.success(storyboardService.listItems(storyboardId));
     }
 
     @Operation(summary = "获取分镜条目列表（按场次）")
     @GetMapping("/scene/{sceneId}/items")
     public CommonResult<List<StoryboardItem>> listItemsByScene(@PathVariable Long sceneId) {
+        accessGuard.assertStoryboardScene(sceneId);
         return CommonResult.success(storyboardService.listItemsByScene(sceneId));
     }
 
     @Operation(summary = "获取分镜条目详情")
     @GetMapping("/item/{id}")
     public CommonResult<StoryboardItem> getItem(@PathVariable Long id) {
+        accessGuard.assertStoryboardItem(id);
         return CommonResult.success(storyboardService.getItemById(id));
     }
 
     @Operation(summary = "创建分镜条目")
     @PostMapping("/item")
     public CommonResult<StoryboardItem> createItem(@Valid @RequestBody StoryboardItemCreateReqVO reqVO) {
+        accessGuard.assertStoryboard(reqVO.getStoryboardId());
         StoryboardItem item = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.createItem(item));
     }
@@ -223,6 +253,7 @@ public class StoryboardController {
     @Operation(summary = "更新分镜条目")
     @PutMapping("/item")
     public CommonResult<StoryboardItem> updateItem(@Valid @RequestBody StoryboardItemUpdateReqVO reqVO) {
+        accessGuard.assertStoryboardItem(reqVO.getId());
         StoryboardItem item = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.updateItem(item));
     }
@@ -232,6 +263,7 @@ public class StoryboardController {
     public CommonResult<StoryboardItem> updateItemAssets(
             @PathVariable Long id,
             @Valid @RequestBody StoryboardItemAssetsUpdateReqVO reqVO) {
+        accessGuard.assertStoryboardItem(id);
         StoryboardItemAssetsPatch patch = new StoryboardItemAssetsPatch(
                 reqVO.isCharacterIdsPresent(),
                 reqVO.getCharacterIds(),
@@ -254,6 +286,7 @@ public class StoryboardController {
     @PutMapping("/item/{id}/updateFrame")
     public CommonResult<StoryboardItem> updateItemFrame(@PathVariable Long id,
                                                        @Valid @RequestBody StoryboardFrameUpdateReqVO reqVO) {
+        accessGuard.assertStoryboardItem(id);
         return CommonResult.success(storyboardService.updateItemFrame(
                 id,
                 reqVO.getFrameType(),
@@ -265,6 +298,7 @@ public class StoryboardController {
     @Operation(summary = "删除分镜条目")
     @DeleteMapping("/item/{id}")
     public CommonResult<Boolean> deleteItem(@PathVariable Long id) {
+        accessGuard.assertStoryboardItem(id);
         storyboardService.deleteItem(id);
         return CommonResult.success(true);
     }
@@ -273,6 +307,7 @@ public class StoryboardController {
     @PostMapping("/{storyboardId}/items/batch")
     public CommonResult<Boolean> batchCreate(@PathVariable Long storyboardId,
                                              @RequestBody List<StoryboardItemCreateReqVO> reqVOList) {
+        accessGuard.assertStoryboard(storyboardId);
         List<StoryboardItem> items = StoryboardConvert.INSTANCE.convertCreateList(reqVOList);
         items.forEach(item -> item.setStoryboardId(storyboardId));
         storyboardService.batchCreateItems(items);
@@ -282,6 +317,7 @@ public class StoryboardController {
     @Operation(summary = "批量更新分镜条目排序")
     @PostMapping("/items/batch-sort")
     public CommonResult<Boolean> batchUpdateSort(@Valid @RequestBody StoryboardItemSortReqVO reqVO) {
+        accessGuard.assertStoryboardItems(reqVO.getIds());
         storyboardService.batchUpdateItemSort(reqVO.getIds());
         return CommonResult.success(true);
     }
