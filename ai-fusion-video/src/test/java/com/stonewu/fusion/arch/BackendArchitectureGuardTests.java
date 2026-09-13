@@ -54,8 +54,6 @@ class BackendArchitectureGuardTests {
 
     /** key=模块内 POSIX 相对路径,value=当前行数(只许减少;跌破 800 行必须移出白名单)。 */
     private static final Map<String, Integer> LINE_BUDGET_WHITELIST = Map.of(
-            "src/main/java/com/stonewu/fusion/service/generation/image/strategy/support/OpenAiCompatibleImageProtocolSupport.java",
-            1132,
             "src/main/java/com/stonewu/fusion/service/ai/run/DurableAgentWaitingStateService.java",
             963,
             "src/main/java/com/stonewu/fusion/service/ai/run/DefaultRunExecutionSupervisor.java",
