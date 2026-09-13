@@ -75,3 +75,8 @@ SW-T16|P3|Dev-A|Production 状态机 enum 化:RUN/STEP/QC 的 String 常量集�
   COST: S-M(0.5-1 天;注意 API 出入参仍序列化为原字符串)。
   RISK: 低;enum name 与存量 DB 值逐一核对。
   DEPENDENCIES: 无;与 SW-T08 性能扫描结论互不阻塞。
+
+## 红队 R1 升级条目(2026-09-14)
+SW-T17|P0|Dev-Sec|API 密钥泄露:/get、/list 补 @PreAuthorize admin;RespVO 脱敏(不回传 apiKey/appSecret/proxyPassword);实体 @ToString.Exclude|ApiConfigController、ApiConfigRespVO、ApiConfig|uitest 调 /get 拿不到密钥
+SW-T18|P0|Dev-Sec|SSRF 旁路封堵:ComfyUiInputResourceService.downloadHttp/downloadVideoHttp 与 LocalStorageStrategy.store 接入 PublicHttpUrlValidator;OkHttp 关闭自动重定向或重定向后重校验;统一 VideoCompose 漂移的第二套校验|上述两服务+VideoComposeService|内网 URL 全链路拒绝
+SW-T19|P0|Dev-Sec|上传链路:subDir 路径穿越 sanitize;扩展名与 Content-Type 绑定白名单;魔数校验;大小流式处理(不 getBytes 入堆)|LocalStorageStrategy、上传端点|穿越/XSS/内存三向用例全拒
