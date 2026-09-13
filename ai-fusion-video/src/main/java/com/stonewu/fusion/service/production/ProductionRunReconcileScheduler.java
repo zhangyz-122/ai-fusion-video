@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -90,9 +91,11 @@ public class ProductionRunReconcileScheduler {
 
     /** 直接查表取任务状态，绕过 videoTask 缓存，避免回收/竞态场景读到过期状态。 */
     private Map<Long, Integer> loadTaskStatuses(Iterable<Long> videoTaskIds) {
+        List<Long> ids = new ArrayList<>();
+        videoTaskIds.forEach(ids::add);
         return videoTaskMapper.selectList(new LambdaQueryWrapper<VideoTask>()
                         .select(VideoTask::getId, VideoTask::getStatus)
-                        .in(VideoTask::getId, videoTaskIds))
+                        .in(VideoTask::getId, ids))
                 .stream()
                 .collect(Collectors.toMap(VideoTask::getId, VideoTask::getStatus));
     }
