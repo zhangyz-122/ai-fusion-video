@@ -171,7 +171,7 @@ export default function DashboardPage() {
       animate="visible"
     >
       {/* ========== 问候 ========== */}
-      <motion.div variants={itemVariants} className="mb-8">
+      <motion.div variants={itemVariants} className="mb-6 lg:mb-8">
         <h1 className="text-2xl font-bold tracking-tight">
           {getGreeting()}，
           <span className="bg-linear-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
@@ -184,7 +184,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* ========== 统计 ========== */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6 lg:mb-8">
         {/* 项目 */}
         <StatCard
           label="项目"
@@ -296,7 +296,7 @@ export default function DashboardPage() {
       {/* ========== 快捷能力入口 ========== */}
       <motion.div
         variants={itemVariants}
-        className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:mb-8"
       >
         <QuickAction
           icon={Images}
@@ -333,12 +333,12 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* ========== 进行中与待办 ========== */}
-      <motion.div variants={itemVariants} className="mb-8">
+      <motion.div variants={itemVariants} className="mb-6 lg:mb-8">
         <ActivitySection />
       </motion.div>
 
       {/* ========== 最近项目 ========== */}
-      <motion.div variants={itemVariants} className="mb-8">
+      <motion.div variants={itemVariants} className="mb-6 lg:mb-8">
         <RecentProjects projects={recentProjects} />
       </motion.div>
 

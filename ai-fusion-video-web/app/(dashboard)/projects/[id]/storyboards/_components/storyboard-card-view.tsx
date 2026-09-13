@@ -156,7 +156,7 @@ const CardItemUI = memo(
               {...attributes}
               {...listeners}
               className={cn(
-                "absolute top-2 left-1/2 -translate-x-1/2 p-1.5 rounded-md bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 cursor-grab hover:bg-black/60 transition-all z-20",
+                "absolute top-2 left-1/2 -translate-x-1/2 p-1.5 rounded-md bg-black/40 backdrop-blur-sm opacity-40 lg:opacity-0 lg:group-hover:opacity-100 cursor-grab hover:bg-black/60 transition-all z-20",
                 isOverlay && "cursor-grabbing opacity-100 bg-black/60",
                 isDragging && "opacity-0"
               )}
@@ -479,7 +479,7 @@ export function StoryboardCardView({
       >
         <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {/* 修改 Grid 列数，解决卡片太小的问题 */}
-          <div className="grid gap-4 md:gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+          <div className="grid gap-4 md:gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))" }}>
             {items.map((item, idx) => (
               <SortableCardItem
                 key={item.id}

@@ -22,7 +22,7 @@ export function SectionHeader({
       {action && (
         <button
           onClick={action.onClick}
-          className="text-xs text-muted-foreground/50 hover:text-foreground flex items-center gap-0.5 transition-colors"
+          className="inline-flex min-h-11 -mr-2 items-center gap-0.5 px-2 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
         >
           {action.label}
           <ArrowRight className="h-3 w-3" />

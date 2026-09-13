@@ -134,11 +134,11 @@ export default function ProjectOverviewPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8 px-6 py-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6 lg:space-y-8 px-5 py-4 lg:px-6 lg:py-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <p className="text-sm text-muted-foreground">这部剧</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{project?.name || "未命名"}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight break-all">{project?.name || "未命名"}</h1>
           <p className="text-sm text-muted-foreground">写 → 定 → 拆 → 拍 → 剪。当前只做下一步。</p>
         </div>
         <Link className={buttonVariants()} href={next.href}>

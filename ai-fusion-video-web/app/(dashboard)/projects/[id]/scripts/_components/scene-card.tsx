@@ -200,8 +200,8 @@ export function SceneCard({
       )}
     >
       {/* 场次头部 */}
-      <div className="px-5 pt-4 pb-3">
-        <div className="flex items-center gap-3 mb-2">
+      <div className="px-4 sm:px-5 pt-4 pb-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-2">
           {/* 场号 */}
           <div className="flex items-center gap-1.5 shrink-0">
             <Hash className="h-3.5 w-3.5 text-muted-foreground" />
@@ -274,7 +274,7 @@ export function SceneCard({
               }}
               disabled={saving || !dirty}
               className={cn(
-                "ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium",
+                "ml-auto flex items-center gap-1.5 px-3 py-2 lg:py-1.5 rounded-lg text-xs font-medium",
                 "bg-primary text-primary-foreground",
                 "hover:opacity-90 active:scale-95 transition-all",
                 saving && "opacity-50 cursor-not-allowed",
@@ -296,8 +296,9 @@ export function SceneCard({
                 e.stopPropagation();
                 onDelete();
               }}
-              className="p-1.5 rounded-lg opacity-0 group-hover/card:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+              className="p-2.5 lg:p-1.5 rounded-lg opacity-100 lg:opacity-0 lg:group-hover/card:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
               title="删除场次"
+              aria-label={`删除场次 ${localScene.sceneNumber || ""}`}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -333,7 +334,7 @@ export function SceneCard({
       </div>
 
       {/* 场景描述 */}
-      <div className="px-5 pb-3">
+      <div className="px-4 sm:px-5 pb-3">
         <div className="border-l-2 border-primary/20 pl-3 py-0.5">
           <InlineEdit
             value={localScene.sceneDescription || ""}
@@ -348,7 +349,7 @@ export function SceneCard({
 
       {/* 对白/动作列表 */}
       {localDialogues.length > 0 && (
-        <div className="px-5 pb-3 space-y-1">
+        <div className="px-4 sm:px-5 pb-3 space-y-1">
           {localDialogues.map((d, i) => (
             <div
               key={i}
@@ -389,7 +390,7 @@ export function SceneCard({
       )}
 
       {/* 添加元素按钮 */}
-      <div className="px-5 pb-4 flex items-center gap-2 flex-wrap">
+      <div className="px-4 sm:px-5 pb-4 flex items-center gap-2 flex-wrap">
         {[
           { type: 1, label: "添加对白", icon: MessageSquare },
           { type: 2, label: "添加动作", icon: Eye },

@@ -55,7 +55,7 @@ export function AssetGrid({ assets, projectMap, onOpen, onDelete }: AssetGridPro
                 {meta.label}
               </div>
 
-              {/* 删除（移入回收站） */}
+              {/* 删除（移入回收站）：触摸端常显,桌面保持 hover 显隐 */}
               <button
                 type="button"
                 title="移入回收站"
@@ -65,12 +65,12 @@ export function AssetGrid({ assets, projectMap, onOpen, onDelete }: AssetGridPro
                   onDelete(asset);
                 }}
                 className={cn(
-                  "absolute top-2 right-2 rounded-lg bg-black/40 p-1.5 text-white/80 backdrop-blur-sm",
-                  "opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-white",
+                  "absolute top-2 right-2 rounded-lg bg-black/40 p-2.5 lg:p-1.5 text-white/80 backdrop-blur-sm",
+                  "opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-150 hover:text-white",
                   "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                 )}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4 lg:h-3.5 lg:w-3.5" />
               </button>
 
               {/* 悬浮跳转提示 */}

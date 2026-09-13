@@ -25,7 +25,8 @@ export function MainContentFrame({
   return (
     <div
       className={cn(
-        "w-full px-5 pb-20 lg:px-6 lg:pb-3",
+        // 移动端底部安全高度由布局层 pb-14(底部 Tab 栏)承担,这里仅保留内容间距
+        "w-full px-5 pb-4 lg:px-6 lg:pb-3",
         fullHeight
           ? "flex min-h-0 grow basis-0 flex-col"
           : "min-h-full shrink-0",

@@ -26,7 +26,10 @@ function SceneInsertIndicator({
     <div
       className={cn(
         "absolute left-1/2 -translate-x-1/2 -translate-y-1/2 -top-[10px] z-10 transition-opacity duration-150",
-        visible ? "opacity-100" : "opacity-0 pointer-events-none"
+        // 触摸端没有 hover:插入按钮降透明度常显,桌面保持 hover 显隐
+        visible
+          ? "opacity-100"
+          : "opacity-50 lg:opacity-0 lg:pointer-events-none"
       )}
     >
       <button
@@ -237,7 +240,7 @@ export function SceneList({
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-5">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5">
       {/* 分集标题 - 可编辑 */}
       <EditableTitle
         value={activeEpisode.title || ""}
