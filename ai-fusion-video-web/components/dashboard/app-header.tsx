@@ -53,6 +53,14 @@ const menuItems = [
     iconColor: "text-orange-500",
   },
   {
+    icon: Film,
+    label: "剪辑交付",
+    href: "/projects",
+    gradient:
+          "radial-gradient(circle, rgba(16,185,129,0.15) 0%, rgba(5,150,105,0.06) 50%, rgba(4,120,87,0) 85%, rgba(4,120,87,0) 100%)",
+    iconColor: "text-emerald-500",
+    },
+    {
     icon: Clapperboard,
     label: "生产中心",
     href: "/production",
