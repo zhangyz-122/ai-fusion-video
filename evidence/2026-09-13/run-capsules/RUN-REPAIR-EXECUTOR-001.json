@@ -1,0 +1,64 @@
+{
+  "runId": "RUN-REPAIR-EXECUTOR-001",
+  "capability": "production-repair-executor",
+  "status": "VERIFIED",
+  "scope": {
+    "source": "existing ProductionStep.videoTaskId",
+    "submission": "existing VideoGenerationConsumer.submitTask",
+    "queue": "existing RedisTaskQueue",
+    "workflowVersion": "copied from source VideoTask and revalidated by consumer",
+    "newArchitecture": false
+  },
+  "codeEvidence": {
+    "executor": "ai-fusion-video/src/main/java/com/stonewu/fusion/service/production/ProductionRepairExecutor.java",
+    "serviceEndpoint": "POST /api/production/runs/{runId}/repair",
+    "lineageFields": [
+      "replacement_video_task_id",
+      "replacement_execution_ref",
+      "ProductionStep.videoTaskId",
+      "ProductionStep.executionRef",
+      "ProductionStep.attempt"
+    ],
+    "migration": "V1.1.1.9.0__production_repair_execution.sql"
+  },
+  "testEvidence": {
+    "repairExecutorTests": 3,
+    "productionRunServiceTests": 7,
+    "repairRouterTests": 4,
+    "technicalQcTests": 4,
+    "result": "PASS",
+    "coverage": [
+      "copy source task and submit through existing consumer",
+      "record submission failure without advancing source step",
+      "reject already submitted plan",
+      "service-level repeat call does not submit twice"
+    ]
+  },
+  "runtimeEvidence": {
+    "backendImageRebuilt": true,
+    "flywayVersion": "1.1.1.9.0",
+    "backendHealth": "healthy",
+    "realComfyFailureRecoveryE2E": {
+      "status": "PASS",
+      "productionRunId": 5,
+      "sourceVideoTaskId": 27,
+      "replacementVideoTaskId": 28,
+      "failure": "ComfyUI unavailable at host.docker.internal:8188",
+      "repairAttemptId": 1,
+      "repairRoute": "RETRY_SAME_WORKFLOW",
+      "repairAttemptStatus": "SUBMITTED",
+      "replacementTaskStatus": "SUCCESS",
+      "replacementSuccessCount": 3,
+      "replacementCount": 3,
+      "productionStepStatus": "SUCCEEDED",
+      "takeIds": [4, 5, 6],
+      "qcResultIds": [4, 5, 6],
+      "qcStatus": "PASS",
+      "selectedTakeId": 4,
+      "composedVideoUrl": "/media/videos/2e29aa8aee0c4bd883fe7206aefed7dd.mp4",
+      "composedVideoHttpStatus": 200
+    },
+    "redisRestartRecoveryE2E": "NOT_RUN"
+  },
+  "nextAction": "Complete WAN_I2V_STANDARD formal-input E3 and add Redis restart recovery evidence."
+}

@@ -1,0 +1,9 @@
+{
+  "test": "RT03_RESUME_NO_DUPLICATE_SUBMISSION",
+  "status": "PASS",
+  "promptId": "c163f6db-9aa8-4650-a467-32831a7bceef",
+  "firstHistoryQuery": true,
+  "secondHistoryQuery": true,
+  "resubmitted": false,
+  "queueAfterQueries": { "queue_running": [], "queue_pending": [] }
+}

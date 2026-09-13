@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-09-13T01:03:05+08:00",
+  "root": "C:\\AI-T8-video-onekey\\ComfyUI\\custom_nodes",
+  "directoryCount": 232,
+  "loadStatus": { "importFailed": ["ComfyUI_RH_DreamID-V"], "warningsObserved": ["ComfyUI-Impact-Pack: SAM2 unavailable", "ComfyUI_LayerStyle: guidedFilter unavailable", "AnimateDiffEvo: no motion models found", "WAS Node Suite: ffmpeg_bin_path not set" ] },
+  "relevantNodes": [
+    { "name": "ComfyUI-WanVideoWrapper", "commit": "088128b2", "status": "LOADED" },
+    { "name": "ComfyUI-Wan22FMLF", "commit": "7140cd2", "status": "LOADED" },
+    { "name": "ComfyUI-WanVideoStartEndFrames", "commit": "340b4f0", "status": "LOADED" },
+    { "name": "ComfyUI-VideoHelperSuite", "commit": "4ee72c0", "status": "LOADED" },
+    { "name": "ComfyUI-KJNodes", "commit": "6ab7e81", "status": "LOADED" },
+    { "name": "ComfyUI-SolAttn_triton", "commit": "842c4ea", "status": "LOADED_NOT_OBSERVED_ACTIVE" },
+    { "name": "ComfyUI-GGUF", "commit": "6ea2651", "status": "LOADED" },
+    { "name": "comfyui-minimax-h3-audio-T8", "commit": "NOT_GIT_COMMIT_IN_RUNTIME", "status": "LOADED" }
+  ],
+  "sourceLog": "C:\\AI-T8-video-onekey\\comfy_restart_dynamic.err.log"
+}

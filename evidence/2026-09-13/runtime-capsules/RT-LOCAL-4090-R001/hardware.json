@@ -1,0 +1,12 @@
+{
+  "gpu": [{
+    "name": "NVIDIA GeForce RTX 4090",
+    "vramMiB": 24564,
+    "driver": "616.56",
+    "cudaDevice": "cuda:0",
+    "cudaMalloc": "cudaMallocAsync",
+    "observedAt": "2026-09-13T01:00:00+08:00"
+  }],
+  "nvidiaSmi": { "temperatureC": 37, "utilizationPercent": 5, "memoryUsedMiB": 21532, "memoryTotalMiB": 24564 },
+  "system": { "ramTotalBytes": 102857719808, "ramFreeBytes": 36087812096, "cpu": "Intel(R) Core(TM) i9-14900KF", "os": "Windows 11" }
+}

@@ -1,0 +1,43 @@
+{
+  "source": "C:\\Users\\ASUS\\Documents\\Codex\\2026-08-27\\referenced-chatgpt-conversation-this-is-an\\outputs\\UniversalDirector_V1.1.json",
+  "sourceFormat": "UI_FORMAT_MULTI_BRANCH",
+  "extractionMethod": "work/extract_universal_director.mjs",
+  "runtimeRevision": "RT-LOCAL-4090-R002",
+  "workflows": [
+    {
+      "workflowVersion": "WF-WAN-I2V-STANDARD@V001",
+      "file": "WAN_I2V_STANDARD.json",
+      "purpose": "single-purpose image-to-video",
+      "nodeCount": 13,
+      "bindings": { "prompt": "205.positive_prompt", "firstFrame": "207.image", "width": "212.width", "height": "212.height", "numFrames": "212.num_frames", "seed": "213.seed", "output": "215.images" },
+      "modelStack": ["WanVideo\\Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors", "wanvideo\\Wan2_1_VAE_bf16.safetensors", "umt5-xxl-enc-bf16.safetensors", "clip_vision_h.safetensors"],
+      "customNodes": ["ComfyUI-WanVideoWrapper", "ComfyUI-VideoHelperSuite", "ComfyUI-KJNodes"],
+      "preflight": { "status": "VERIFIED_RUNTIME_E3", "httpStatus": 200, "reason": "formal input submitted and H.264 MP4 emitted after correcting local checkpoint quantization binding" },
+      "runCapsule": "../run-capsules/RUN-WAN-I2V-STANDARD-001.json"
+    },
+    {
+      "workflowVersion": "WF-WAN-FLF-STANDARD@V001",
+      "file": "WAN_FLF_STANDARD.json",
+      "purpose": "first-frame/last-frame continuity",
+      "nodeCount": 15,
+      "bindings": { "prompt": "205.positive_prompt", "firstFrame": "207.image", "lastFrame": "208.image", "width": "212.width", "height": "212.height", "numFrames": "212.num_frames", "seed": "213.seed", "output": "215.images" },
+      "modelStack": ["WanVideo\\Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors", "wanvideo\\Wan2_1_VAE_bf16.safetensors", "umt5-xxl-enc-bf16.safetensors", "clip_vision_h.safetensors"],
+      "customNodes": ["ComfyUI-WanVideoWrapper", "ComfyUI-VideoHelperSuite", "ComfyUI-KJNodes"],
+      "preflight": { "status": "VERIFIED_RUNTIME_E3", "httpStatus": 200, "reason": "formal start/end inputs submitted and H.264 MP4 emitted after correcting local checkpoint quantization binding" },
+      "runCapsule": "../run-capsules/RUN-WAN-FLF-STANDARD-001.json"
+    },
+    {
+      "workflowVersion": "WF-WAN-INFINITETALK@V001",
+      "file": "WAN_INFINITETALK.json",
+      "purpose": "audio-first talking portrait",
+      "nodeCount": 15,
+      "bindings": { "characterImage": "310.image", "audio": "301.audio", "prompt": "308.positive_prompt", "width": "313.width", "height": "313.height", "numFrames": "304.num_frames/313.num_frames", "seed": "314.seed", "output": "316.images" },
+      "modelStack": ["WanVideo\\InfiniteTalk\\Wan2_1-InfiniTetalk-Single_fp16.safetensors", "WanVideo\\Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors", "wanvideo\\Wan2_1_VAE_bf16.safetensors", "umt5-xxl-enc-bf16.safetensors", "clip_vision_h.safetensors", "wav2vec2\\wav2vec2-chinese-base_fp16.safetensors"],
+      "customNodes": ["ComfyUI-WanVideoWrapper", "ComfyUI-VideoHelperSuite"],
+      "externalDependencies": ["FFmpeg", "SoX or equivalent audio tooling"],
+      "preflight": { "status": "VERIFIED_RUNTIME_SMOKE", "httpStatus": 200, "reason": "local wav2vec2 loader and all Wan model references resolved; smoke output emitted" },
+      "runCapsule": "../run-capsules/RUN-WAN-INFINITETALK-001.json"
+    }
+  ],
+  "admissionRules": ["API_FORMAT_VALID", "OUTPUT_NODE_DECLARED", "BINDINGS_DECLARED", "DEPENDENCIES_DECLARED", "MODEL_STACK_DECLARED", "RUNTIME_PINNED"]
+}

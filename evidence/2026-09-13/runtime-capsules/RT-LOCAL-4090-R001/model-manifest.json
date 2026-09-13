@@ -1,0 +1,20 @@
+{
+  "capturedAt": "2026-09-13T01:03:05+08:00",
+  "activeRuntimeRoot": "C:\\AI-T8-video-onekey\\ComfyUI\\models",
+  "activeFileCount": 74,
+  "activeApiVisible": {
+    "diffusion_models": ["minimax_h3_fl2va_int8_convrot.safetensors", "minimax_h3_ref2va_pruned_int8_convrot.safetensors", "minimax_h3_hybrid_fl2va_ref2va_b25-49-int8.safetensors"],
+    "text_encoders": ["qwen3vl_32b_minimax_h3_int8_convrot.safetensors", "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"],
+    "vae": ["minimax_h3_video_vae_fp16.safetensors", "minimax_h3_audio_vae_fp32.safetensors"],
+    "loras": ["minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors", "MysticXXX_MMH3-V1.safetensors"],
+    "clip_vision": []
+  },
+  "wanFilesDiscoveredOutsideActiveRoot": [
+    { "path": "C:\\Users\\ASUS\\AppData\\Local\\Comfy-Desktop\\ComfyUI-Shared\\models\\diffusion_models\\WanVideo\\Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors", "sizeBytes": 16993877896 },
+    { "path": "C:\\Users\\ASUS\\AppData\\Local\\Comfy-Desktop\\ComfyUI-Shared\\models\\diffusion_models\\WanVideo\\InfiniteTalk\\Wan2_1-InfiniTetalk-Single_fp16.safetensors", "sizeBytes": 5125258232 },
+    { "path": "C:\\Users\\ASUS\\AppData\\Local\\Comfy-Desktop\\ComfyUI-Shared\\models\\text_encoders\\umt5-xxl-enc-bf16.safetensors", "sizeBytes": 11361845464 },
+    { "path": "C:\\Users\\ASUS\\AppData\\Local\\Comfy-Desktop\\ComfyUI-Shared\\models\\vae\\wanvideo\\Wan2_1_VAE_bf16.safetensors", "sizeBytes": 253806278 },
+    { "path": "C:\\Users\\ASUS\\AppData\\Local\\Comfy-Desktop\\ComfyUI-Shared\\models\\clip_vision\\clip_vision_h.safetensors", "sizeBytes": 1264219396 }
+  ],
+  "hashPolicy": "Not computed in this capture; large-file SHA256 is a follow-up for the promoted Golden Runtime."
+}

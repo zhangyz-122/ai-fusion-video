@@ -1,0 +1,27 @@
+{
+  "runtimeRevision": "RT-LOCAL-4090-R001",
+  "capturedAt": "2026-09-13T01:03:05+08:00",
+  "status": "E3_FOR_API_SMOKE_ONLY",
+  "host": { "os": "Windows 11", "runtimeRoot": "C:\\AI-T8-video-onekey", "apiBase": "http://127.0.0.1:8188" },
+  "comfyui": { "version": "0.33.0", "python": "3.12.10", "pytorch": "2.10.0+cu130", "cuda": "13.0", "argv": ["C:\\AI-T8-video-onekey\\main.py", "--base-directory", ".\\ComfyUI", "--auto-launch", "--preview-method", "auto", "--cuda-malloc"] },
+  "attentionBackends": {
+    "pytorch_sdp": "AVAILABLE",
+    "xformers": "INSTALLED_AVAILABLE_NOT_OBSERVED_ACTIVE",
+    "flash_attn": "INSTALLED_AVAILABLE_NOT_OBSERVED_ACTIVE",
+    "sageattn": "ACTIVE",
+    "sol_attn": "INSTALLED_NOT_OBSERVED_ACTIVE",
+    "block_sparse_attn": "FAILED_FALLBACK"
+  },
+  "mediaTools": { "ffmpeg": "9.0.1", "ffprobe": "9.0.1", "sox": "MISSING_FROM_PATH" },
+  "modelSearch": {
+    "activeRoot": "C:\\AI-T8-video-onekey\\ComfyUI\\models",
+    "activeApiObservation": "H3 model lists only; clip_vision list empty",
+    "sharedWanRoot": "C:\\Users\\ASUS\\AppData\\Local\\Comfy-Desktop\\ComfyUI-Shared\\models",
+    "sharedWanRootStatus": "FILES_PRESENT_BUT_NOT_IN_ACTIVE_RUNTIME_LIST"
+  },
+  "startupLog": "C:\\AI-T8-video-onekey\\comfy_restart_dynamic.err.log",
+  "customNodesManifest": "custom-nodes.json",
+  "modelManifest": "model-manifest.json",
+  "smoke": { "RT01": "PASS", "RT02": "PASS_EXPECTED_REJECTION", "RT03": "PASS", "RT04": "PASS_EXPECTED_REJECTION" },
+  "workflowPreflight": { "WAN_I2V_STANDARD": "BLOCKED", "WAN_FLF_STANDARD": "BLOCKED", "WAN_INFINITETALK": "BLOCKED" }
+}

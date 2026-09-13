@@ -1,0 +1,55 @@
+{
+  "runId": "RUN-SEEDVR2-HD-001",
+  "workflowCode": "seedvr2_hd_video_upscale",
+  "workflowVersion": 1,
+  "modelCode": "seedvr2_hd_video_upscale_model",
+  "runtime": {
+    "comfyUiApi": "http://127.0.0.1:8188",
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "device": "cuda:0",
+    "attentionBackend": "sdpa"
+  },
+  "input": {
+    "path": "C:\\AI-T8-video-onekey\\ComfyUI\\output\\MiniMaxH3\\OpenVDN\\ref_audio_00001_.mp4",
+    "width": 736,
+    "height": 416,
+    "durationSeconds": 1.625,
+    "frames": 39,
+    "contentType": "video/mp4"
+  },
+  "promptId": "c0450085-9c86-4ef5-a652-9e9e3378d807",
+  "status": "VERIFIED",
+  "outputs": [
+    {
+      "path": "C:\\AI-T8-video-onekey\\ComfyUI\\output\\Fusion\\SeedVR2_HD_1080P_00001-audio.mp4",
+      "width": 1910,
+      "height": 1080,
+      "durationSeconds": 1.625,
+      "frames": 39,
+      "videoCodec": "h264",
+      "audioCodec": "aac",
+      "sha256": "4119E7C8F7C9FF795E3642E11FDB831732DBD23EDC9CF9A2689D16B577A9BA45"
+    },
+    {
+      "path": "C:\\AI-T8-video-onekey\\ComfyUI\\output\\Fusion\\SeedVR2_HD_1080P_00001.mp4",
+      "width": 1910,
+      "height": 1080,
+      "durationSeconds": 1.625,
+      "frames": 39,
+      "videoCodec": "h264",
+      "sha256": "C7CEC999550E17521A9AAA3B81735442CE130EE37E317BD09B4832D02F97C2A9"
+    }
+  ],
+  "modelFiles": {
+    "dit": {
+      "path": "C:\\AI-T8-video-onekey\\ComfyUI\\models\\SEEDVR2\\seedvr2_ema_3b_fp8_e4m3fn.safetensors",
+      "bytes": 3391544696,
+      "sha256": "3BF1E43EBEDD570E7E7A0B1B60D6A02E105978F505C8128A241CDE99A8240CFF"
+    },
+    "vae": {
+      "path": "C:\\AI-T8-video-onekey\\ComfyUI\\models\\SEEDVR2\\ema_vae_fp16.safetensors",
+      "bytes": 501324814,
+      "sha256": "20678548F420D98D26F11442D3528F8B8C94E57EE046EF93DBB7633DA8612CA1"
+    }
+  }
+}

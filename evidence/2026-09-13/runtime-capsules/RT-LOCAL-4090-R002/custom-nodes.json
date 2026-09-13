@@ -1,0 +1,11 @@
+{
+  "capturedAt": "2026-09-13T12:55:07+08:00",
+  "root": "C:\\AI-T8-video-onekey\\ComfyUI\\custom_nodes",
+  "relevantNodes": [
+    { "name": "ComfyUI-WanVideoWrapper", "status": "LOADED" },
+    { "name": "ComfyUI-VideoHelperSuite", "status": "LOADED" },
+    { "name": "ComfyUI-KJNodes", "status": "LOADED" }
+  ],
+  "otherWarnings": ["ComfyUI-SAM3 environment missing", "face restoration models not found", "matrix-nio missing"],
+  "sourceLog": "C:\\AI-T8-video-onekey\\comfy_restart_dynamic.err.log"
+}

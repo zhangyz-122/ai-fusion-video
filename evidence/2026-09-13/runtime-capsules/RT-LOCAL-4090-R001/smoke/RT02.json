@@ -1,0 +1,9 @@
+{
+  "test": "RT02_MISSING_DEPENDENCY",
+  "status": "PASS_EXPECTED_REJECTION",
+  "workflow": "unknown custom node __codex_missing_node__",
+  "httpStatus": 400,
+  "error": { "type": "missing_node_type", "message": "Node '__codex_missing_node__' not found. The custom node may not be installed." },
+  "promptId": null,
+  "nodeErrors": {}
+}

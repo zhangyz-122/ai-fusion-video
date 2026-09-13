@@ -1,0 +1,101 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+      "device": "default",
+      "type": "minimax"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "input.png",
+      "upload": "image"
+    }
+  },
+  "5": {
+    "class_type": "MiniMaxH3StillConditioningT8",
+    "inputs": {
+      "clip": ["2", 0],
+      "video_vae": ["3", 0],
+      "prompt": "Edit <Picture 1> into a pure 2D Chinese donghua animation frame. Preserve the reference character identity, key silhouette and visual anchor. Keep clean black line art, flat color blocks, restrained cel shading, coherent scene geometry, no live action, no 2.5D, no photorealism, no text, no subtitles, no watermark, no readable writing.",
+      "canvas_mode": "from_edit_image",
+      "width": 1344,
+      "height": 768,
+      "target_mode": "direct_1_frame",
+      "reference_strength": 0.999,
+      "audio_target": "generate_and_discard",
+      "strict_prompt_tags": true,
+      "ref_image_size": "match",
+      "edit_image": ["4", 0]
+    }
+  },
+  "6": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 123456789
+    }
+  },
+  "7": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "conditioning": ["5", 0],
+      "model": ["1", 0]
+    }
+  },
+  "8": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "9": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "denoise": 1,
+      "model": ["1", 0],
+      "scheduler": "beta",
+      "steps": 4
+    }
+  },
+  "10": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "guider": ["7", 0],
+      "noise": ["6", 0],
+      "sampler": ["8", 0],
+      "sigmas": ["9", 0],
+      "latent_image": ["5", 1]
+    }
+  },
+  "11": {
+    "class_type": "MiniMaxH3StillDecodeT8",
+    "inputs": {
+      "av_latent": ["10", 0],
+      "video_vae": ["3", 0],
+      "frame_selection": "middle",
+      "frame_index": 0
+    }
+  },
+  "12": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "MiniMaxH3_T8_Donghua_Edit",
+      "images": ["11", 0]
+    }
+  }
+}

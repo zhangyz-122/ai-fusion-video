@@ -1,0 +1,11 @@
+{
+  "runId": "RUN-WAN-FLF-STANDARD-001",
+  "workflowVersion": "WF-WAN-FLF-STANDARD@V001",
+  "runtimeRevision": "RT-LOCAL-4090-R002",
+  "status": "VERIFIED_E3",
+  "execution_ref": "c5d29b02-07e8-4662-90c1-633d07d6f4c8",
+  "submitted": true,
+  "preflight": { "httpStatus": 200, "nodeErrors": [], "modelBindingCorrection": "fp8_e4m3fn (local checkpoint is not scaled)", "startInput": "learned_latent_twopass_i2va_upstream_parity_v2_exp_00062.png", "endInput": "learned_latent_twopass_i2va_upstream_parity_v2_exp_00061.png" },
+  "output": { "path": "C:\\AI-T8-video-onekey\\ComfyUI\\output\\Codex\\PR009_WAN_FLF_STANDARD_E3_00001.mp4", "videoCodec": "h264", "audioCodec": null, "width": 416, "height": 240, "frameRate": 16, "videoDurationSec": 1.0625, "sizeBytes": 221389, "sha256": "68171B5584B39C1293369F4A87C2F67F25FEE9E51EACA1ED26E94B7E32851E8B" },
+  "wallTimeMs": 21042
+}

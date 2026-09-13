@@ -1,0 +1,119 @@
+{
+  "13": {
+    "class_type": "SeedVR2LoadVAEModel",
+    "inputs": {
+      "cache_model": false,
+      "decode_tiled": true,
+      "decode_tile_overlap": 128,
+      "decode_tile_size": 1024,
+      "device": "cuda:0",
+      "encode_tiled": true,
+      "encode_tile_overlap": 128,
+      "encode_tile_size": 1024,
+      "model": "ema_vae_fp16.safetensors",
+      "offload_device": "cpu",
+      "tile_debug": "false"
+    }
+  },
+  "14": {
+    "class_type": "SeedVR2LoadDiTModel",
+    "inputs": {
+      "attention_mode": "sdpa",
+      "blocks_to_swap": 0,
+      "cache_model": false,
+      "device": "cuda:0",
+      "model": "seedvr2_ema_3b_fp8_e4m3fn.safetensors",
+      "offload_device": "none",
+      "swap_io_components": false
+    }
+  },
+  "21": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "input.mp4"
+    }
+  },
+  "22": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "21",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "SeedVR2VideoUpscaler",
+    "inputs": {
+      "batch_size": 5,
+      "color_correction": "lab",
+      "dit": [
+        "14",
+        0
+      ],
+      "enable_debug": false,
+      "image": [
+        "22",
+        0
+      ],
+      "latent_noise_scale": 0.0,
+      "max_resolution": 1920,
+      "offload_device": "cpu",
+      "prepend_frames": 0,
+      "resolution": 1080,
+      "seed": 42,
+      "temporal_overlap": 2,
+      "uniform_batch_size": true,
+      "vae": [
+        "13",
+        0
+      ]
+    }
+  },
+  "24": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "audio": [
+        "22",
+        1
+      ],
+      "bit_depth": [
+        "22",
+        3
+      ],
+      "fps": [
+        "22",
+        2
+      ],
+      "images": [
+        "10",
+        0
+      ]
+    }
+  },
+  "23": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "audio": [
+        "22",
+        1
+      ],
+      "crf": 19,
+      "filename_prefix": "Fusion/SeedVR2_HD_1080P",
+      "format": "video/h264-mp4",
+      "frame_rate": [
+        "22",
+        2
+      ],
+      "images": [
+        "10",
+        0
+      ],
+      "loop_count": 0,
+      "pingpong": false,
+      "pix_fmt": "yuv420p",
+      "save_metadata": true,
+      "save_output": true
+    }
+  }
+}

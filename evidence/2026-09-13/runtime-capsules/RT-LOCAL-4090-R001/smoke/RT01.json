@@ -1,0 +1,10 @@
+{
+  "test": "RT01_API_SUBMISSION",
+  "status": "PASS",
+  "workflow": "LoadImage -> SaveImage",
+  "httpStatus": 200,
+  "promptId": "c163f6db-9aa8-4650-a467-32831a7bceef",
+  "historyStatus": "success",
+  "output": { "filename": "codex_smoke_RT01_00001_.png", "path": "C:\\AI-T8-video-onekey\\ComfyUI\\output\\codex_smoke_RT01_00001_.png", "sizeBytes": 855384 },
+  "nodeErrors": {}
+}

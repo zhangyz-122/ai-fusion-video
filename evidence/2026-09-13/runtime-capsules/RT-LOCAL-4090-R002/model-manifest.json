@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-09-13T12:55:07+08:00",
+  "activeRuntimeRoot": "C:\\AI-T8-video-onekey\\ComfyUI\\models",
+  "activeFileCount": 96,
+  "wanDependencyResolution": "PASS",
+  "files": [
+    { "relativePath": "diffusion_models/WanVideo/Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors", "sizeBytes": 16993877896 },
+    { "relativePath": "diffusion_models/WanVideo/InfiniteTalk/Wan2_1-InfiniTetalk-Single_fp16.safetensors", "sizeBytes": 5125258232 },
+    { "relativePath": "vae/wanvideo/Wan2_1_VAE_bf16.safetensors", "sizeBytes": 253806278 },
+    { "relativePath": "text_encoders/umt5-xxl-enc-bf16.safetensors", "sizeBytes": 11361845464 },
+    { "relativePath": "clip_vision/clip_vision_h.safetensors", "sizeBytes": 1264219396 },
+    { "relativePath": "wav2vec2/wav2vec2-chinese-base_fp16.safetensors", "sizeBytes": 190115368 }
+  ],
+  "hashPolicy": "Hashes omitted for unchanged large runtime files; workflow output hash is recorded in RUN-WAN-I2V-STANDARD-001."
+}

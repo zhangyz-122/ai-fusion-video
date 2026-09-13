@@ -1,0 +1,25 @@
+{
+  "runtimeRevision": "RT-LOCAL-4090-R002",
+  "capturedAt": "2026-09-13T12:55:07+08:00",
+  "status": "E3_WAN_I2V_VERIFIED",
+  "host": { "os": "Windows 11", "runtimeRoot": "C:\\AI-T8-video-onekey", "apiBase": "http://127.0.0.1:8188" },
+  "comfyui": { "version": "0.33.0", "python": "3.12.10", "pytorch": "2.10.0+cu130", "cuda": "13.0", "gpu": "NVIDIA GeForce RTX 4090", "vramMb": 24564, "argv": ["C:\\AI-T8-video-onekey\\main.py", "--base-directory", ".\\ComfyUI", "--enable-manager", "--auto-launch", "--preview-method", "auto", "--cuda-malloc"] },
+  "attentionBackends": { "pytorch_sdp": "AVAILABLE", "xformers": "AVAILABLE", "flash_attn": "AVAILABLE", "sageattn": "OBSERVED_ACTIVE", "sol_attn": "AVAILABLE", "block_sparse_attn": "FAILED_FALLBACK" },
+  "mediaTools": { "ffmpeg": "9.0.1", "ffprobe": "9.0.1", "sox": "MISSING_FROM_PATH" },
+  "modelSearch": {
+    "activeRoot": "C:\\AI-T8-video-onekey\\ComfyUI\\models",
+    "activeFileCount": 96,
+    "wanDependenciesVisible": true,
+    "relevantFiles": [
+      "diffusion_models\\WanVideo\\Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors",
+      "diffusion_models\\WanVideo\\InfiniteTalk\\Wan2_1-InfiniTetalk-Single_fp16.safetensors",
+      "vae\\wanvideo\\Wan2_1_VAE_bf16.safetensors",
+      "text_encoders\\umt5-xxl-enc-bf16.safetensors",
+      "clip_vision\\clip_vision_h.safetensors",
+      "wav2vec2\\wav2vec2-chinese-base_fp16.safetensors"
+    ]
+  },
+  "customNodes": { "ComfyUI-WanVideoWrapper": "LOADED", "ComfyUI-VideoHelperSuite": "LOADED", "ComfyUI-KJNodes": "LOADED" },
+  "smoke": { "RT01": "PASS", "RT02": "PASS_EXPECTED_REJECTION", "RT03": "PASS", "RT04": "PASS_EXPECTED_REJECTION" },
+  "workflowPreflight": { "WAN_I2V_STANDARD": "VERIFIED_RUNTIME_E3", "WAN_FLF_STANDARD": "NOT_RUN", "WAN_INFINITETALK": "VERIFIED_RUNTIME_E3" }
+}

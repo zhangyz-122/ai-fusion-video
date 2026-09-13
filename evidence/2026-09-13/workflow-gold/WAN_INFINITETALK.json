@@ -1,0 +1,265 @@
+{
+  "301": {
+    "_meta": {
+      "title": "DIALOGUE_AUDIO"
+    },
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "h3_voice_ref_wangtianwei.wav",
+      "upload": null
+    }
+  },
+  "302": {
+    "_meta": {
+      "title": "Wav2VecModelLoader"
+    },
+    "class_type": "Wav2VecModelLoader",
+    "inputs": {
+      "model": "wav2vec2-chinese-base_fp16.safetensors",
+      "base_precision": "fp16",
+      "load_device": "main_device"
+    }
+  },
+  "304": {
+    "_meta": {
+      "title": "MultiTalkWav2VecEmbeds"
+    },
+    "class_type": "MultiTalkWav2VecEmbeds",
+    "inputs": {
+      "normalize_loudness": true,
+      "num_frames": 17,
+      "fps": 25,
+      "audio_scale": 1,
+      "audio_cfg_scale": 1,
+      "multi_audio_type": "para",
+      "add_noise_floor": false,
+      "smooth_transients": false,
+      "wav2vec_model": [
+        "302",
+        0
+      ],
+      "audio_1": [
+        "301",
+        0
+      ]
+    }
+  },
+  "305": {
+    "_meta": {
+      "title": "MultiTalkModelLoader"
+    },
+    "class_type": "MultiTalkModelLoader",
+    "inputs": {
+      "model": "WanVideo\\InfiniteTalk\\Wan2_1-InfiniTetalk-Single_fp16.safetensors"
+    }
+  },
+  "306": {
+    "_meta": {
+      "title": "WanVideoVAELoader"
+    },
+    "class_type": "WanVideoVAELoader",
+    "inputs": {
+      "model_name": "wanvideo\\Wan2_1_VAE_bf16.safetensors",
+      "precision": "bf16",
+      "use_cpu_cache": false,
+      "verbose": false
+    }
+  },
+  "307": {
+    "_meta": {
+      "title": "WanVideoModelLoader"
+    },
+    "class_type": "WanVideoModelLoader",
+    "inputs": {
+      "model": "WanVideo\\Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors",
+      "base_precision": "fp16_fast",
+      "quantization": "fp8_e4m3fn",
+      "load_device": "offload_device",
+      "attention_mode": "sageattn",
+      "rms_norm_function": "default",
+      "multitalk_model": [
+        "305",
+        0
+      ]
+    }
+  },
+  "308": {
+    "_meta": {
+      "title": "WanVideoTextEncodeCached"
+    },
+    "class_type": "WanVideoTextEncodeCached",
+    "inputs": {
+      "model_name": "umt5-xxl-enc-bf16.safetensors",
+      "precision": "bf16",
+      "positive_prompt": "close-up cinematic portrait, natural speaking motion, stable identity, subtle expression and mouth movement, pure 2D Chinese donghua, no text, no subtitles, no watermark",
+      "negative_prompt": "blurry, distorted mouth, duplicate face, low quality, text, watermark",
+      "quantization": "disabled",
+      "use_disk_cache": true,
+      "device": "gpu"
+    }
+  },
+  "309": {
+    "_meta": {
+      "title": "CLIPVisionLoader"
+    },
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "clip_vision_h.safetensors"
+    }
+  },
+  "310": {
+    "_meta": {
+      "title": "TALKING_REFERENCE"
+    },
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "character_1.png",
+      "upload": "image"
+    }
+  },
+  "311": {
+    "_meta": {
+      "title": "ImageResizeKJv2"
+    },
+    "class_type": "ImageResizeKJv2",
+    "inputs": {
+      "width": 416,
+      "height": 240,
+      "upscale_method": "lanczos",
+      "keep_proportion": "stretch",
+      "pad_color": 2,
+      "crop_position": "center",
+      "divisible_by": 0,
+      "device": "cpu",
+      "image": [
+        "310",
+        0
+      ]
+    }
+  },
+  "312": {
+    "_meta": {
+      "title": "WanVideoClipVisionEncode"
+    },
+    "class_type": "WanVideoClipVisionEncode",
+    "inputs": {
+      "strength_1": 1,
+      "strength_2": 1,
+      "crop": "center",
+      "combine_embeds": "average",
+      "force_offload": true,
+      "tiles": 0,
+      "ratio": 0.5,
+      "clip_vision": [
+        "309",
+        0
+      ],
+      "image_1": [
+        "311",
+        0
+      ]
+    }
+  },
+  "313": {
+    "_meta": {
+      "title": "WanVideoImageToVideoMultiTalk"
+    },
+    "class_type": "WanVideoImageToVideoMultiTalk",
+    "inputs": {
+      "width": 416,
+      "height": 240,
+      "frame_window_size": 81,
+      "motion_frame": 9,
+      "force_offload": false,
+      "colormatch": "disabled",
+      "tiled_vae": false,
+      "mode": "infinitetalk",
+      "output_path": "",
+      "vae": [
+        "306",
+        0
+      ],
+      "start_image": [
+        "311",
+        0
+      ],
+      "clip_embeds": [
+        "312",
+        0
+      ],
+      "num_frames": 17
+    }
+  },
+  "314": {
+    "_meta": {
+      "title": "WanVideoSampler"
+    },
+    "class_type": "WanVideoSampler",
+    "inputs": {
+      "steps": 6,
+      "cfg": 1,
+      "shift": 11,
+      "seed": 161803398,
+      "control_after_generate": "fixed",
+      "force_offload": true,
+      "scheduler": "dpm++_sde",
+      "riflex_freq_index": 0,
+      "denoise_strength": 1,
+      "batched_cfg": false,
+      "rope_function": "comfy",
+      "start_step": 0,
+      "end_step": -1,
+      "add_noise_to_samples": true,
+      "model": [
+        "307",
+        0
+      ],
+      "image_embeds": [
+        "313",
+        0
+      ],
+      "text_embeds": [
+        "308",
+        0
+      ],
+      "multitalk_embeds": [
+        "304",
+        0
+      ]
+    }
+  },
+  "315": {
+    "_meta": {
+      "title": "WanVideoPassImagesFromSamples"
+    },
+    "class_type": "WanVideoPassImagesFromSamples",
+    "inputs": {
+      "samples": [
+        "314",
+        0
+      ]
+    }
+  },
+  "316": {
+    "_meta": {
+      "title": "OUTPUT_UniversalDirector_TALKING"
+    },
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "frame_rate": 16,
+      "loop_count": 0,
+      "filename_prefix": "Codex/WAN_INFINITETALK",
+      "format": "video/h264-mp4",
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "315",
+        0
+      ],
+      "audio": [
+        "301",
+        0
+      ]
+    }
+  }
+}

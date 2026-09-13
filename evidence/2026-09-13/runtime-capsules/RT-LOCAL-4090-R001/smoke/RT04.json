@@ -1,0 +1,9 @@
+{
+  "test": "RT04_CONTROLLED_FAILURE",
+  "status": "PASS_EXPECTED_REJECTION",
+  "workflow": "LoadImage with __codex_missing_input__.png",
+  "httpStatus": 400,
+  "error": { "type": "prompt_outputs_failed_validation", "message": "Prompt outputs failed validation" },
+  "promptId": null,
+  "nodeErrors": { "1": { "type": "custom_validation_failed", "details": "image - Invalid image file: __codex_missing_input__.png" } }
+}

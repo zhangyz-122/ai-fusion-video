@@ -1,0 +1,11 @@
+{
+  "runId": "RUN-WAN-I2V-STANDARD-001",
+  "workflowVersion": "WF-WAN-I2V-STANDARD@V001",
+  "runtimeRevision": "RT-LOCAL-4090-R002",
+  "status": "VERIFIED_E3",
+  "execution_ref": "e1d188bf-9a2f-45a1-8fbb-9b630189d0f5",
+  "submitted": true,
+  "preflight": { "httpStatus": 200, "nodeErrors": [], "modelBindingCorrection": "fp8_e4m3fn (local checkpoint is not scaled)", "input": "learned_latent_twopass_i2va_upstream_parity_v2_exp_00062.png" },
+  "output": { "path": "C:\\AI-T8-video-onekey\\ComfyUI\\output\\Codex\\PR009_WAN_I2V_STANDARD_E3_00001.mp4", "videoCodec": "h264", "audioCodec": null, "width": 416, "height": 240, "frameRate": 16, "videoDurationSec": 1.0625, "sizeBytes": 149815, "sha256": "19F99715DCBECC88758F5DB89D88C147F99C0A193B711573BD5DE463C5B3B590" },
+  "wallTimeMs": 38942
+}

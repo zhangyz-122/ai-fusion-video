@@ -1,0 +1,12 @@
+{
+  "runId": "RUN-WAN-INFINITETALK-001",
+  "workflowVersion": "WF-WAN-INFINITETALK@V001",
+  "runtimeRevision": "RT-LOCAL-4090-R001",
+  "status": "VERIFIED_RUNTIME_SMOKE",
+  "execution_ref": "3d77817e-5a43-42f3-97da-f26d881f834e",
+  "submitted": true,
+  "preflight": { "httpStatus": 200, "nodeErrors": {}, "localWav2Vec2": "wav2vec2-chinese-base_fp16.safetensors", "modelRefsResolved": true },
+  "inputOverride": { "audio": "infinitetalk_smoke.wav", "image": "image.png" },
+  "output": { "path": "C:\\AI-T8-video-onekey\\ComfyUI\\output\\Codex\\WAN_INFINITETALK_00001-audio.mp4", "videoCodec": "h264", "audioCodec": "aac", "width": 416, "height": 240, "videoDurationSec": 5.0625, "audioDurationSec": 5.056, "sizeBytes": 361722, "sha256": "4D72C9A3B31BC8F4F7017DD4B6BEAAE3BB404DFC180E036CD0BD446C6BDB9B80" },
+  "wallTimeMs": 34614
+}

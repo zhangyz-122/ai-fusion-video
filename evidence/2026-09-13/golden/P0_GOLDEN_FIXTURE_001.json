@@ -1,0 +1,47 @@
+{
+  "goldenId": "P0_GOLDEN_FIXTURE_001",
+  "status": "FIXTURE_DEFINED_NOT_RUN",
+  "scope": {
+    "projectId": 1,
+    "storyboardId": 1,
+    "episodeId": 2,
+    "shotIds": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+    "shotCount": 12,
+    "candidateCountPerShot": 3,
+    "totalCandidateMinimum": 36
+  },
+  "executionPolicy": {
+    "defaultProfile": "WAN_I2V_STANDARD",
+    "continuityProfile": "WAN_FLF_STANDARD",
+    "dialogueProfile": "WAN_INFINITETALK",
+    "runtimeRevision": "RT-LOCAL-4090-R002",
+    "preserveExistingArchitecture": true,
+    "reuseExistingVideoTaskQueue": true,
+    "doNotOverwriteLegacyMedia": true
+  },
+  "acceptanceGates": [
+    { "id": "G01", "name": "shot coverage", "assert": "12 storyboard items enter ProductionRun exactly once" },
+    { "id": "G02", "name": "candidate fanout", "assert": "every shot reaches VideoTask.count=3 and success_count=3" },
+    { "id": "G03", "name": "take ingestion", "assert": "every shot has exactly 3 idempotent ProductionTakes and VideoItems" },
+    { "id": "G04", "name": "technical QC", "assert": "all selected candidates have technical PASS with structured ffprobe metrics" },
+    { "id": "G05", "name": "selection", "assert": "each shot has one QC-approved selectedTakeId owned by Production" },
+    { "id": "G06", "name": "compose", "assert": "selected takes compose through existing VideoComposeService and return HTTP 200 MP4" },
+    { "id": "G07", "name": "idempotency", "assert": "replaying start/reconcile/select/compose creates no duplicate run, take, or output lineage" },
+    { "id": "G08", "name": "runtime recovery", "assert": "one ComfyUI failure and one Redis restart recover without losing step lineage" },
+    { "id": "G09", "name": "legacy compatibility", "assert": "legacy-only and mixed legacy/Production inputs both compose successfully" },
+    { "id": "G10", "name": "evidence", "assert": "Run Capsule records run IDs, workflow/profile versions, hashes, QC, outputs, and failure/recovery refs" }
+  ],
+  "fixtureInputs": {
+    "sourceSelection": "existing afv_storyboard_item rows ordered by storyboard_id, episode, scene, sort_order, id",
+    "observedShotIds": [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+    "requiredInputFields": ["prompt", "firstFrame", "width", "height", "fps", "seed"],
+    "optionalInputFields": ["lastFrame", "referenceAudios"]
+  },
+  "evidence": {
+    "existingSingleShotRun": "RUN-REPAIR-EXECUTOR-001",
+    "wanI2vSmoke": "RUN-WAN-I2V-STANDARD-001",
+    "wanFlfSmoke": "RUN-WAN-FLF-STANDARD-001",
+    "wanInfiniteTalkSmoke": "RUN-WAN-INFINITETALK-001"
+  },
+  "nextAction": "Implement a bounded runner against existing Production APIs, execute the 12-shot fixture, and publish the final Golden Run Capsule."
+}
