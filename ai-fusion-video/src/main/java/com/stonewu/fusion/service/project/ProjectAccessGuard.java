@@ -10,8 +10,10 @@ import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
+import com.stonewu.fusion.entity.production.ProductionRun;
 import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
+import com.stonewu.fusion.mapper.production.ProductionRunMapper;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.script.ScriptMapper;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
@@ -41,6 +43,7 @@ public class ProjectAccessGuard {
     private final StoryboardItemMapper storyboardItemMapper;
     private final AssetMapper assetMapper;
     private final AssetItemMapper assetItemMapper;
+    private final ProductionRunMapper productionRunMapper;
 
     public void assertProject(Long projectId) {
         boolean allowed = projectId != null
@@ -109,6 +112,12 @@ public class ProjectAccessGuard {
         AssetItem item = itemId == null ? null : assetItemMapper.selectById(itemId);
         requireEntity(item != null, "子资产不存在: " + itemId);
         assertAsset(item.getAssetId());
+    }
+
+    public void assertProductionRun(Long runId) {
+        ProductionRun run = runId == null ? null : productionRunMapper.selectById(runId);
+        requireEntity(run != null, "生产运行不存在: " + runId);
+        assertProject(run.getProjectId());
     }
 
     private void requireEntity(boolean present, String message) {

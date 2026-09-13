@@ -5,6 +5,7 @@ import com.stonewu.fusion.controller.production.vo.ProductionQcUpdateReqVO;
 import com.stonewu.fusion.controller.production.vo.ProductionStartReqVO;
 import com.stonewu.fusion.service.production.ProductionRunDetail;
 import com.stonewu.fusion.service.production.ProductionRunService;
+import com.stonewu.fusion.service.project.ProjectAccessGuard;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -23,28 +24,33 @@ import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 public class ProductionController {
 
     private final ProductionRunService productionRunService;
+    private final ProjectAccessGuard accessGuard;
 
     @Operation(summary = "启动分镜条目生产（固定生成3个候选）")
     @PostMapping("/runs")
     public CommonResult<ProductionRunDetail> start(@Valid @RequestBody ProductionStartReqVO request) {
+        accessGuard.assertStoryboardItem(request.getStoryboardItemId());
         return CommonResult.success(productionRunService.start(request, requireCurrentUserId()));
     }
 
     @Operation(summary = "查询生产运行")
     @GetMapping("/runs/{runId}")
     public CommonResult<ProductionRunDetail> detail(@PathVariable Long runId) {
+        accessGuard.assertProductionRun(runId);
         return CommonResult.success(productionRunService.detail(runId, requireCurrentUserId()));
     }
 
     @Operation(summary = "同步现有视频任务结果为候选视频")
     @PostMapping("/runs/{runId}/reconcile")
     public CommonResult<ProductionRunDetail> reconcile(@PathVariable Long runId) {
+        accessGuard.assertProductionRun(runId);
         return CommonResult.success(productionRunService.reconcile(runId, requireCurrentUserId()));
     }
 
     @Operation(summary = "执行一次受限生产修复")
     @PostMapping("/runs/{runId}/repair")
     public CommonResult<ProductionRunDetail> repair(@PathVariable Long runId) {
+        accessGuard.assertProductionRun(runId);
         return CommonResult.success(productionRunService.repair(runId, requireCurrentUserId()));
     }
 
@@ -54,6 +60,7 @@ public class ProductionController {
             @PathVariable Long runId,
             @PathVariable Long takeId,
             @Valid @RequestBody ProductionQcUpdateReqVO request) {
+        accessGuard.assertProductionRun(runId);
         return CommonResult.success(productionRunService.updateQc(
                 runId, takeId, requireCurrentUserId(), request.getQcStatus(), request.getQcNote()));
     }
@@ -63,6 +70,7 @@ public class ProductionController {
     public CommonResult<ProductionRunDetail> selectTake(
             @PathVariable Long runId,
             @PathVariable Long takeId) {
+        accessGuard.assertProductionRun(runId);
         return CommonResult.success(productionRunService.selectTake(
                 runId, takeId, requireCurrentUserId()));
     }
@@ -70,6 +78,7 @@ public class ProductionController {
     @Operation(summary = "使用现有合成服务合成本集视频")
     @PostMapping("/runs/{runId}/compose")
     public CommonResult<String> compose(@PathVariable Long runId) {
+        accessGuard.assertProductionRun(runId);
         return CommonResult.success(productionRunService.compose(runId, requireCurrentUserId()));
     }
 }

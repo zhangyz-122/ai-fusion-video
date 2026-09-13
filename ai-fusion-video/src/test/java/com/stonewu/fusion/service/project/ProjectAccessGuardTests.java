@@ -5,12 +5,17 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.entity.asset.AssetItem;
+import com.stonewu.fusion.entity.production.ProductionRun;
 import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
+import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
+import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
+import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
+import com.stonewu.fusion.mapper.production.ProductionRunMapper;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.script.ScriptMapper;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
@@ -45,13 +50,14 @@ class ProjectAccessGuardTests {
         MapperBuilderAssistant assistant = new MapperBuilderAssistant(new MybatisConfiguration(), "");
         TableInfoHelper.initTableInfo(assistant, Script.class);
         TableInfoHelper.initTableInfo(assistant, ScriptEpisode.class);
-        TableInfoHelper.initTableInfo(assistant, com.stonewu.fusion.entity.script.ScriptSceneItem.class);
+        TableInfoHelper.initTableInfo(assistant, ScriptSceneItem.class);
         TableInfoHelper.initTableInfo(assistant, Storyboard.class);
-        TableInfoHelper.initTableInfo(assistant, com.stonewu.fusion.entity.storyboard.StoryboardEpisode.class);
-        TableInfoHelper.initTableInfo(assistant, com.stonewu.fusion.entity.storyboard.StoryboardScene.class);
+        TableInfoHelper.initTableInfo(assistant, StoryboardEpisode.class);
+        TableInfoHelper.initTableInfo(assistant, StoryboardScene.class);
         TableInfoHelper.initTableInfo(assistant, StoryboardItem.class);
         TableInfoHelper.initTableInfo(assistant, Asset.class);
         TableInfoHelper.initTableInfo(assistant, AssetItem.class);
+        TableInfoHelper.initTableInfo(assistant, ProductionRun.class);
     }
 
     @Mock
@@ -72,19 +78,18 @@ class ProjectAccessGuardTests {
     private AssetMapper assetMapper;
     @Mock
     private AssetItemMapper assetItemMapper;
+    @Mock
+    private ProductionRunMapper productionRunMapper;
 
+    private ProjectService projectService;
     private ProjectAccessGuard guard;
 
     @BeforeEach
     void setUp() {
-        ProjectService projectService = mock(ProjectService.class);
+        projectService = mock(ProjectService.class);
         guard = new ProjectAccessGuard(projectService, scriptMapper, scriptEpisodeMapper, scriptSceneItemMapper,
                 storyboardMapper, storyboardEpisodeMapper, storyboardSceneMapper, storyboardItemMapper,
-                assetMapper, assetItemMapper);
-    }
-
-    @BeforeEach
-    void login() {
+                assetMapper, assetItemMapper, productionRunMapper);
         SecurityContextHolder.getContext().setAuthentication(
                 new TestingAuthenticationToken(
                         new SecurityUserDetails(7L, "uitest", "n/a", 1, null, List.of()), null, "ROLE_USER"));
@@ -97,10 +102,6 @@ class ProjectAccessGuardTests {
 
     @Test
     void assertScriptDeniesWhenProjectInaccessible() {
-        ProjectService projectService = mock(ProjectService.class);
-        guard = new ProjectAccessGuard(projectService, scriptMapper, scriptEpisodeMapper, scriptSceneItemMapper,
-                storyboardMapper, storyboardEpisodeMapper, storyboardSceneMapper, storyboardItemMapper,
-                assetMapper, assetItemMapper);
         when(scriptMapper.selectById(11L)).thenReturn(Script.builder().id(11L).projectId(9L).build());
         when(projectService.canAccessProject(9L, 7L)).thenReturn(false);
 
@@ -111,10 +112,6 @@ class ProjectAccessGuardTests {
 
     @Test
     void assertScriptEpisodeResolvesThroughScriptToProject() {
-        ProjectService projectService = mock(ProjectService.class);
-        guard = new ProjectAccessGuard(projectService, scriptMapper, scriptEpisodeMapper, scriptSceneItemMapper,
-                storyboardMapper, storyboardEpisodeMapper, storyboardSceneMapper, storyboardItemMapper,
-                assetMapper, assetItemMapper);
         when(scriptEpisodeMapper.selectById(21L)).thenReturn(ScriptEpisode.builder().id(21L).scriptId(11L).build());
         when(scriptMapper.selectById(11L)).thenReturn(Script.builder().id(11L).projectId(9L).build());
         when(projectService.canAccessProject(9L, 7L)).thenReturn(true);
@@ -123,11 +120,7 @@ class ProjectAccessGuardTests {
     }
 
     @Test
-    void assertStoryboardItemResolvesThroughStoryboardToProject() {
-        ProjectService projectService = mock(ProjectService.class);
-        guard = new ProjectAccessGuard(projectService, scriptMapper, scriptEpisodeMapper, scriptSceneItemMapper,
-                storyboardMapper, storyboardEpisodeMapper, storyboardSceneMapper, storyboardItemMapper,
-                assetMapper, assetItemMapper);
+    void assertStoryboardItemsResolvesThroughStoryboardToProject() {
         when(storyboardItemMapper.selectById(31L)).thenReturn(StoryboardItem.builder().id(31L).storyboardId(12L).build());
         when(storyboardMapper.selectById(12L)).thenReturn(Storyboard.builder().id(12L).projectId(9L).build());
         when(projectService.canAccessProject(9L, 7L)).thenReturn(true);
@@ -137,15 +130,22 @@ class ProjectAccessGuardTests {
 
     @Test
     void assertAssetItemDeniesThroughAssetChain() {
-        ProjectService projectService = mock(ProjectService.class);
-        guard = new ProjectAccessGuard(projectService, scriptMapper, scriptEpisodeMapper, scriptSceneItemMapper,
-                storyboardMapper, storyboardEpisodeMapper, storyboardSceneMapper, storyboardItemMapper,
-                assetMapper, assetItemMapper);
         when(assetItemMapper.selectById(41L)).thenReturn(AssetItem.builder().id(41L).assetId(51L).build());
         when(assetMapper.selectById(51L)).thenReturn(Asset.builder().id(51L).projectId(9L).build());
         when(projectService.canAccessProject(9L, 7L)).thenReturn(false);
 
         assertThatThrownBy(() -> guard.assertAssetItem(41L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("无权访问该项目内容");
+    }
+
+    @Test
+    void assertProductionRunResolvesToProject() {
+        when(productionRunMapper.selectById(61L)).thenReturn(ProductionRun.builder()
+                .id(61L).projectId(9L).storyboardItemId(31L).build());
+        when(projectService.canAccessProject(9L, 7L)).thenReturn(false);
+
+        assertThatThrownBy(() -> guard.assertProductionRun(61L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("无权访问该项目内容");
     }

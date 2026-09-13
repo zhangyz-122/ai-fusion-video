@@ -24,10 +24,17 @@
 
 ### 仍待审计（M01-01 剩余部分）
 
-- ~~Script / Storyboard / Asset 控制器~~：已在本批接入（见下）。
-- Production 控制器（run/take/qc/select/compose）尚未接入守卫：需经 ProductionRun → step/storyboardItem → project 链路解析，留作下一片。
+- ~~Script / Storyboard / Asset 控制器~~：已接入（见下）。
+- ~~Production 控制器~~：已接入（见下）。
 - 生成历史（/api/generation/image 等）已按用户隔离（实测 uitest 仅见本人记录），但生成与存储管理类端点仍建议全面排查。
 - 测试账号 uitest（已建独立团队 uitest-team、项目 id=6）保留作回归凭据。
+
+### 2026-09-13 补充：Production 控制器守卫（M01-01 收口）
+
+- `ProjectAccessGuard` 新增 `assertProductionRun`：run → projectId 直接校验。
+- 7 个端点全部接入：start（按 VO 中 storyboardItemId 走镜头链路）、detail/reconcile/repair/qc/select/compose（按 runId）。
+- 实测：uitest 访问他人 run（id=5，属项目1）的详情/reconcile/compose 均拒绝；不存在的 run 明确报"生产运行不存在"。
+- 测试 54/54 通过（含 Production 全套回归）。
 
 ### 2026-09-13 补充：Script / Storyboard / Asset 内容守卫（M01-01 第一批）
 
