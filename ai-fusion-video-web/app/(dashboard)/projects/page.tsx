@@ -7,9 +7,7 @@ import {
   Plus,
   Search,
   FolderKanban,
-  MoreHorizontal,
   Clock,
-  Film,
   Trash2,
   Loader2,
 } from "lucide-react";
