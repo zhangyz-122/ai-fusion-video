@@ -114,6 +114,14 @@ export interface AssetPageResp {
   typeCounts: Record<string, number>;
 }
 
+/** 回收站分页响应（已删除资产，按删除时间倒序） */
+export interface RecycleBinPageResp {
+  records: Asset[];
+  total: number;
+  page: number;
+  size: number;
+}
+
 /** 带子资产的资产信息 */
 export interface AssetWithItems extends Asset {
   items: AssetItem[];
@@ -167,6 +175,26 @@ export const assetApi = {
 
   /** 删除资产 */
   delete: (id: number) => http.delete<never, boolean>(`/api/asset/${id}`),
+
+  // ========== 回收站（已删除资产） ==========
+
+  /** 分页查询当前用户可访问项目内的已删除资产（按删除时间倒序） */
+  listRecycleBin: (params?: { page?: number; size?: number }) => {
+    const searchParams = new URLSearchParams();
+    searchParams.set("page", String(params?.page ?? 1));
+    searchParams.set("size", String(params?.size ?? 20));
+    return http.get<never, RecycleBinPageResp>(
+      `/api/asset/recycle-bin?${searchParams.toString()}`,
+    );
+  },
+
+  /** 恢复已删除资产（置 deleted = 0，保留原 id） */
+  restoreRecycled: (id: number) =>
+    http.put<never, Asset>(`/api/asset/recycle-bin/${id}/restore`),
+
+  /** 彻底删除（物理删除）已删除资产 */
+  purgeRecycled: (id: number) =>
+    http.delete<never, boolean>(`/api/asset/recycle-bin/${id}`),
 
   // ========== 元数据 ==========
 

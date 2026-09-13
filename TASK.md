@@ -613,3 +613,95 @@ T10 发现的六条 UI 缺陷逐一修复,每项单独提交(分支 `swarm/a3-de
 5. **assistant-upload 仍为 getBytes 全量入堆(P-4 残留)**:本次流式化只覆盖 /upload;assistant-upload(类型受常量白名单约束)维持原状,建议在 P-4 任务统一处理。
 6. **uitest token 实机验证受限**:本环境 MySQL/Redis 仅在 docker 网络内且禁用 docker,无法起实例做实机验证;/get、/list 的 ADMIN 拒绝已由权限矩阵反射测试+全局 @EnableMethodSecurity 覆盖,合并后建议在 8081 平台用 uitest 账号实测一次。
 7. **全量回归结果**:714 例(含新增 37 例安全用例),2 失败均为 base 存量(AgentScopeGaDependencyContractTests.sourceTreeContainsNoObsoleteV1Symbol 指向 ApplicationTimeZoneInitializerTests.java、ProjectServiceTests.listAccessibleByUserUsesCurrentTeamScope,TASK.md 此前已记录在无本分支的 HEAD 复现);39 错误全部为 integration/*IT 与 AgentPersistenceMigrationIT 的 Redis/MySQL 连接失败(本机基础设施未运行,环境性)。FlywayMigrationNamingTests 通过。
+
+---
+
+---
+
+## SW-T05 执行记录(Dev-B,2026-09-14,分支 swarm/b1-recycle)
+
+### 变更文件
+后端(全部为追加,既有方法零改动):
+- `ai-fusion-video/src/main/java/com/stonewu/fusion/mapper/asset/AssetMapper.java`
+  (追加 4 个自定义 SQL:`selectDeletedPage` 分页查软删行/`selectDeletedById`/
+  `restoreById` 置 deleted=0/`deletePhysicallyById` 物理 DELETE)
+- `ai-fusion-video/src/main/java/com/stonewu/fusion/mapper/asset/AssetItemMapper.java`
+  (追加 `deletePhysicallyByAssetId`,彻底删除时物理清理子资产行)
+- `ai-fusion-video/src/main/java/com/stonewu/fusion/service/asset/AssetService.java`
+  (追加回收站段:`pageDeletedInAccessibleProjects`/`getDeletedById`/`restore`/`purge`,
+  恢复与彻底删除均 `@CacheEvict({"asset","assetItem"}, allEntries)+@Transactional`)
+- `ai-fusion-video/src/main/java/com/stonewu/fusion/controller/asset/AssetController.java`
+  (追加三端点,见下)
+- 测试(允许清单例外声明:任务验收要求单测):
+  - `src/test/java/com/stonewu/fusion/service/asset/AssetRecycleBinServiceTests.java`(7 例)
+  - `src/test/java/com/stonewu/fusion/controller/asset/AssetControllerRecycleBinTests.java`(9 例)
+  - `src/test/java/com/stonewu/fusion/mapper/asset/AssetRecycleBinMapperSqlTests.java`(6 例,
+    用 MyBatis 动态 SQL 解析器验证注解 SQL 契约,不依赖数据库)
+
+三个新端点(挂 /api/asset 下,与既有 /all、/list 同用"字面量优先于 {id}"路由机制):
+- `GET /api/asset/recycle-bin?page=&size=` 当前用户可访问项目内已删资产分页
+  (按 update_time 即删除时间倒序;项目范围 = projectService.listAccessibleByUser)
+- `PUT /api/asset/recycle-bin/{id}/restore` 恢复(置 deleted=0,保留原 id/子资产/引用)
+- `DELETE /api/asset/recycle-bin/{id}` 彻底删除(物理 DELETE 资产行 + 其全部子资产行)
+归属校验按 ProjectAccessGuard 模式:先经 getDeletedById 解析软删行(既有 selectById 被
+@TableLogic 过滤查不到),再 `accessGuard.assertProject(deleted.getProjectId())`,
+校验失败抛"无权访问该项目内容",service 动作不会执行。
+
+前端:
+- `ai-fusion-video-web/lib/api/asset.ts`(仅追加:RecycleBinPageResp 类型 +
+  listRecycleBin/restoreRecycled/purgeRecycled 三方法)
+- `app/(dashboard)/assets/page.tsx`(回收站状态改服务端数据:loadBin 分页循环加载
+  与 loadAssets 同上限;删除/恢复后双列表刷新;移除 useAuthStore/localStorage 依赖)
+- `app/(dashboard)/assets/_components/recycle-bin-view.tsx`(数据源 DeletedAssetRecord
+  快照 → Asset 实体;"删除于"取 updateTime(软删 UPDATE 经 ON UPDATE CURRENT_TIMESTAMP
+  自动刷新);提示文案改为"保留原 id";新增刷新按钮;彻底删除二次确认文案明确"物理删除")
+- `app/(dashboard)/assets/_components/recycle-bin-store.ts`(整文件删除)
+- `app/(dashboard)/assets/_components/utils.ts`(删除仅为快照恢复服务的
+  buildRestoreReq/propertiesToCreatePayload 死代码)
+
+### 关键决策
+1. 软删行触达方式:MyBatis-Plus @TableLogic 只对 BaseMapper 注入方法自动追加 deleted=0,
+   自定义注解 SQL 不受影响——回收站查询/恢复/物理删除全部走 AssetMapper 显式 SQL。
+   `selectDeletedPage` 的 `<script>` 文本块必须顶格(否则 MyBatis 不按动态 SQL 解析),
+   已由 AssetRecycleBinMapperSqlTests 契约测试固化。
+2. 彻底删除同时物理删除子资产行(afv_asset_item),避免主行删除后留下永久不可达的孤儿行;
+   媒体文件不做清理——与既有软删行为完全一致(既有 delete 从不清理文件),留档为产品决策点。
+3. 回收站可见范围 = 当前用户可访问项目(经 listAccessibleByUser 解析项目 id 集合后
+   IN 查询),与任务书"当前用户项目内"一致;无可访问项目时短路返回空页(避免 IN () 非法 SQL,
+   非兜底逻辑)。相比 T11 的 localStorage 方案,顺带覆盖了"从项目资产页删除"的资产(T11 遗留2)。
+4. 恢复语义:保留原 id(置 deleted=0),不是 T11 方案的"重建拿新 id";分镜等引用自动重连。
+5. 路由安全:GET /api/asset/recycle-bin 与 GET /api/asset/{id} 共存依赖 Spring 字面量优先,
+   与既有 /all、/list、/metadata/{assetType} 同机制;补充 PathPattern 比较器单测固化。
+
+### 验证结果
+- 后端:`./mvnw compile` 通过;新增 22 例单测全绿(service 7 + controller 9 + SQL 契约 6)。
+  全量 `./mvnw test`:694 例,仅 11 例失败且与基线完全一致(T9/T14 已归档:
+  AgentScopeGaDependencyContractTests 源码扫描、ProjectServiceTests.listAccessibleByUserUsesCurrentTeamScope,
+  及需 MySQL/Redis 的 FusionVideoApplicationTests/AiAgentToolRegistrationTests×7/ProjectWorkspaceCacheTests),
+  本任务改动 0 新增失败。
+- 前端:`tsc --noEmit` 0 错误;改动 4 文件 eslint 0 问题;`next build` 通过(exit 0);
+  dev server(3459,代理 8081)/assets 带 auth-token cookie 返回 200,
+  recycle-bin 调用已编入 SSR 与客户端 chunk。
+- 平台 8081 实测(旧镜像,不含本分支代码):
+  - 既有链路复现:创建资产 id=21(projectId=5)→ DELETE 成功 → GET /api/asset/21 返回
+    "资产不存在: 21"、listAll keyword 检索 total=0(软删行既有接口完全不可达,与 T11 结论一致);
+  - 新三端点:GET /recycle-bin 500(旧镜像落入 GET /{id} 的 Long 转换失败,集成后由字面量优先修复)、
+    PUT restore / DELETE 均为 404"资源未找到"——证明平台运行的是合并前代码。
+- 【集成者需补做的全链路实测】镜像重建后执行(测试数据已备好):
+  ① GET /api/asset/recycle-bin 应返回 total≥1,含 id=21(name=t05-recycle-fullchain-test,
+     本任务实测特意保留的软删行,T11 的 ids 12–20 残留也应一并可见);
+  ② PUT /api/asset/recycle-bin/21/restore → GET /api/asset/21 恢复可达;
+  ③ 再 DELETE /api/asset/21(软删)→ DELETE /api/asset/recycle-bin/21(物理删)→
+     数据库 afv_asset/afv_asset_item 中 id=21 应不存在;顺手可用同一端点清理 T11 残留;
+  ④ uitest 登录调用 ①应看不到 zhangyz 项目的已删资产(隔离校验)。
+
+### 遗留
+1. 【环境受限】宿主未发布 MySQL 43306/Redis 46379 且禁止 docker,本地无法起带库实例,
+   "删→回收站→恢复→彻底删"的后半段(回收站可见/恢复/物理删)只能在集成重建镜像后按上述
+   4 步实测;行为已由 22 例单测(含 SQL 契约与路由契约)覆盖。
+2. 【媒体文件】彻底删除不清理 /media 文件(与既有软删一致);若需要 GC,属独立的后端能力。
+3. 【无 projectId 的软删行】归属校验走 assertProject(projectId),projectId 为 null 的
+   历史软删行任何人都不可见/不可操作(不进回收站列表,也不能恢复/彻底删),如存在此类
+   脏数据需 DBA 侧处理。
+4. 【前端降级形态】合并前的前端若指向旧镜像,回收站 Tab 会提示"加载回收站失败"并显示空态
+   (GET 落到 /{id} 报 500),集成后自愈。
