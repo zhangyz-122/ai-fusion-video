@@ -528,3 +528,50 @@ T10 发现的六条 UI 缺陷逐一修复,每项单独提交(分支 `swarm/a3-de
   已按 现象/触发/影响/建议 落盘 swarm/BUGS.md。
 - 需要决策(不空等):SW-T06-01 的"降级语义 vs 认证依赖 Redis"矛盾,需 Supervisor/Architect 拍板
   修复方向(登录 503 透出/token 校验降级/接受现状仅留档)。
+
+---
+
+## SW-T10 执行记录与根因分析(2026-09-14,后端测试子代理追加)
+
+### 根因分析:ProjectServiceTests.listAccessibleByUserUsesCurrentTeamScope(修复产品代码,理由如下)
+- 失败:`TooManyActualInvocations: teamService.getCurrentTeamIdByUser(9L) — wanted 1 time but was 2`,
+  调用点 `ProjectService.listAccessibleByUser:87` 与 `accessibleProjectWrapper:95`。单跑/全量均稳定复现
+  (其他代理"单跑可能绿"应为旧代码状态差异;基线提交 6c81321 引入后确定性失败)。
+- 引入史:6c81321(enforce project access control)把 `listAccessibleByUser` 的团队分支改为委托新方法
+  `accessibleProjectWrapper(userId)`,但保留了自身 Null 检查用的 `getCurrentTeamIdByUser` 调用(用于路由到
+  带 @Cacheable 的 `listByOwner` 个人分支),导致团队用户每次列表请求重复查询两次团队 ID。
+- 判定:产品代码错了,测试是对的。`getCurrentTeamIdByUser` 内部有 `teamMemberMapper.selectOne` DB 查询
+  (无缓存),重复调用是纯浪费;且两次读取之间团队状态若变化,Null 检查与 wrapper 构建可能基于不同结果,
+  存在一致性隐患。修测试(verify times(2))等于把缺陷固化,故修产品。
+- 修法(最小):抽包私有 `teamScopedProjectWrapper(currentTeamId)` 共享构建逻辑;`listAccessibleByUser`
+  与 `accessibleProjectWrapper` 各自只查一次团队 ID 后传入。`page()` 行为不变;个人分支(含缓存路由)不变。
+
+### 变更文件
+- `ai-fusion-video/src/main/java/com/stonewu/fusion/service/project/ProjectService.java`:消除重复团队查询(见上)。
+- `ai-fusion-video/src/main/java/com/stonewu/fusion/service/generation/GenerationTaskReaper.java`:
+  STALE_HOURS 常量 → 构造参数 `@Value("${app.generation.reaper.stale-hours:2}")`(负/零 fail-fast);
+  `@Scheduled` 改 `fixedDelayString/initialDelayString` 读 `app.generation.reaper.fixed-delay-ms:600000`
+  与 `initial-delay-ms:60000`;TIMEOUT_MESSAGE 常量 → 构造期实例字段(文案随配置生成,默认值与原文案逐字一致)。
+  构造器注入模式与既有 `AgentScopeKernelLifecycle`/`AgentWorkspacePayloadService` 一致。
+- `ai-fusion-video/src/main/resources/application.yaml`:新增 `app.generation.reaper.{stale-hours,fixed-delay-ms,initial-delay-ms}`
+  默认值(2 / 600000 / 60000,与改造前硬编码完全一致,行为不变);保留原 CRLF 行尾未做全文件归一。
+- `ai-fusion-video/src/test/java/com/stonewu/fusion/service/generation/GenerationTaskReaperTests.java`:
+  `reaper()` 工厂补第 6 个构造参数 2(阈值显式化),断言文案不变。
+
+### 测试结果
+- `./mvnw test -Dtest=ProjectServiceTests`:8/8 绿(修复前 1 失败)。
+- `./mvnw test -Dtest=GenerationTaskReaperTests`:4/4 绿。
+- 全量 `./mvnw test`:673 例,Failures: 1, Errors: 9,全部为与本任务无关的存量问题:
+  - Errors(9):FusionVideoApplicationTests、AiAgentToolRegistrationTests(7)、ProjectWorkspaceCacheTests
+    —— 均为 ApplicationContext 加载失败(需 MySQL/Redis,本环境不可用,按任务约定跳过)。
+  - Failure(1):`AgentScopeGaDependencyContractTests.sourceTreeContainsNoObsoleteV1Symbol` —— 基线既有(T9/T14 已留档)。
+    本任务定位到其确切根因:禁止正则含裸词 `MysqlSession`,误命中
+    `ApplicationTimeZoneInitializerTests.java:24` 的方法名 `loadsApplicationAndMysqlSessionTimeZonesFromConfiguration`
+    (纯标识符误伤,非真实 V1 残留)。属 AgentScope GA 工作面文件,超出本任务允许边界未改动,建议该方法改名
+    (如 MySqlSession→大写 S 或拆词)即可转绿。
+
+### 决策与说明
+1. 回收器参数化未加新测试:验收为"行为不变",既有 4 例断言(含超时文案逐字比对)已覆盖默认值路径;
+   @Value 解析由 Spring 承担,自测无增量价值。
+2. `stale-hours<=0` 选择 fail-fast 抛 IllegalArgumentException:0/负值会使阈值落在未来、回收器首轮即把
+   全部进行中任务标记失败,属配置事故,宁可启动失败也不静默破坏数据。
