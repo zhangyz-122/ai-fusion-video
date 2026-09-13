@@ -1,18 +1,17 @@
-<<<<<<< HEAD
 # 冲刺任务 T1:后端缺陷修复:消息投影竞态 + 场次移动分集静默忽略
 
 ---
 
 # 冲刺任务 T6:仪表盘 B04 深化:真实快捷入口与明细跳转
-=======
+
+---
+
 # 冲刺任务 T9:安全加固 M03:上传与执行面收口
->>>>>>> sprint/T9-security-hardening
 
 基础分支:sprint/base(含导航与路由脚手架)。当前 worktree 即你的工作区。
 
 
 ## 目标
-<<<<<<< HEAD
 修复两个已诊断的后端缺陷。
 
 ### 缺陷1:AgentMessageAllocator 投影竞态
@@ -50,7 +49,9 @@
   不改 app-header/sidebar-nav(导航已预置)。
 ## 验收
 - tsc/eslint/build 通过;全部入口真实可达(手动冒烟)。
-=======
+
+---
+
 1. 上传/导入校验收口:检查所有接收文件或 URL 的端点
    (图片上传、参考图 URL 拉取、工作流导入)的类型/大小/内网地址限制;
    参考图 URL 禁止内网地址(127.0.0.1/10.x/172.16-31/192.168/hostMetadata)。
@@ -65,7 +66,6 @@
 - 不改生成策略与渲染逻辑;不改前端;不加数据库迁移。
 ## 验收
 - 新增单测:内网 URL 拒绝、超限 JSON 拒绝;既有测试全绿。
->>>>>>> sprint/T9-security-hardening
 
 
 ## 通用规则
@@ -75,7 +75,6 @@
 4. 完成后:确认编译/测试通过,把分支推送到远端或在任务群报告分支名,由集成者合并。
 5. 遇到与其他任务冲突的公共需求(导航/公共组件),记录到 TASK.md 末尾,不要自行改动。
 
-<<<<<<< HEAD
 ## 决策点与执行记录(T1 子代理追加,2026-09-13)
 
 ### 决策1:缺陷2 修复需要例外触碰 StoryboardSceneUpdateReqVO 与 StoryboardConvert(需任务群确认)
@@ -147,7 +146,9 @@
     workspace-overview(projectId=3) → episodes=4,计数接口真实有数。
   - uitest:/dashboard、/production 均 200;activity.running=[](空态路径),项目计数 0/0 正常返回。
   - `/projects/5/scripts` 返回 500:即上述第 1 条基线既有问题,与本任务改动无关。
-=======
+
+---
+
 ## 决策与遗留记录(T9 执行后追加,2026-09-13)
 
 ### 决策
@@ -185,4 +186,3 @@
   并用 `refs/holds/t2-backend-resilience-stash-b59a8344` 固定(防 gc)。
   T2 可在其 worktree 执行 `git stash apply b59a8344046d807097cffb0a0f11174549bf628a` 恢复,
   或直接从备份目录取回文件。本 worktree 状态已通过自身的 dangling stash 提交(b905fc05/3f0e1f72)完整还原。
->>>>>>> sprint/T9-security-hardening
