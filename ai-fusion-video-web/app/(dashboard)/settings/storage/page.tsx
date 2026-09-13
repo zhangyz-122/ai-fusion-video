@@ -760,13 +760,15 @@ export default function StoragePage() {
                       )}
                       <button
                         onClick={() => { setEditingStorageConfig(sc); setStorageDialogOpen(true); }}
-                        className="p-1.5 rounded-md text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100"
+                        aria-label="编辑存储配置"
+                        className="p-2.5 lg:p-1.5 rounded-md text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                       >
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => handleDeleteStorageConfig(sc.id)}
-                        className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                        aria-label="删除存储配置"
+                        className="p-2.5 lg:p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
