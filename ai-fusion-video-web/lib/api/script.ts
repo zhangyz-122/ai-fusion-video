@@ -137,6 +137,14 @@ export interface SceneUpdateReq {
 
 // ========== API ==========
 
+/** 自动分块解析状态 */
+export interface AutoSplitStatus {
+  /** 解析状态：0 未解析，1 进行中，2 完成，3 失败 */
+  parsingStatus: number;
+  parsingProgress: string | null;
+  totalEpisodes: number;
+}
+
 export const scriptApi = {
   /** 按项目获取唯一剧本 */
   getByProject: (projectId: number) =>
@@ -157,13 +165,15 @@ export const scriptApi = {
     http.post<never, Script>(`/api/script/${id}/fallback-parse`),
 
   /** 长文本自动分块解析（章节感知分块，逐块 AI 转剧本） */
-  autoSplitNovel: (id: number, modelId?: number) =>
-    http.post<never, string>(`/api/script/${id}/auto-split`, modelId ? { modelId } : {}),
+  autoSplitNovel: (id: number, modelId?: number, chunkChars?: number) =>
+    http.post<never, string>(`/api/script/${id}/auto-split`, {
+      ...(modelId ? { modelId } : {}),
+      ...(chunkChars ? { chunkChars } : {}),
+    }),
 
   /** 查询自动分块解析任务状态 */
-  autoSplitStatus: (
-    id: number,
-  ) => http.get<never, { parsingStatus: number; parsingProgress: string | null; totalEpisodes: number }>(`/api/script/${id}/auto-split`),
+  autoSplitStatus: (id: number) =>
+    http.get<never, AutoSplitStatus>(`/api/script/${id}/auto-split`),
 
   // ========== 分集 ==========
 
