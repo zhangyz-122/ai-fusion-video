@@ -528,3 +528,25 @@ T10 发现的六条 UI 缺陷逐一修复,每项单独提交(分支 `swarm/a3-de
   已按 现象/触发/影响/建议 落盘 swarm/BUGS.md。
 - 需要决策(不空等):SW-T06-01 的"降级语义 vs 认证依赖 Redis"矛盾,需 Supervisor/Architect 拍板
   修复方向(登录 503 透出/token 校验降级/接受现状仅留档)。
+
+## SW-T06-02/03 异常语义修复(swarm/b2-exceptions,2026-09-14)
+
+### 实施摘要
+- SW-T06-02:ProjectAccessGuard `requireEntity`→404、`assertAllowed`→403;ProjectController 四处
+  越权校验(访问/工作区概览/修改/删除/初始化)→403。全部走既有 `BusinessException(code,msg)`,
+  GlobalExceptionHandler 原有 code→HttpStatus 映射直接生效,业务文案逐字保留,前端无感。
+  最小侵入方案:未改 GlobalExceptionHandler、未给 BusinessException 加语义状态字段。
+- SW-T06-03:GlobalExceptionHandler 新增 `MethodArgumentTypeMismatchException` 处理器→400
+  (msg=`请求参数类型不匹配: <参数名>`),不再落入通用 500。
+- 测试:GlobalExceptionHandlerTests(6,新增)、ScriptControllerExceptionMappingTests(3,新增,
+  standalone MockMvc 复现 QA 三条请求)、ProjectAccessGuardTests(8,扩 code 断言+2 个 404 用例)、
+  ProjectControllerAccessGuardTests(8,扩 code 断言+1 个 MockMvc 403)、ScriptControllerSubtitleExportTests(3,回归)。
+
+### 需要决策(不空等,追加)
+1. 防枚举口径:当前越权 403、不存在 404,但业务文案本身区分"X 不存在: id"与"无权访问",
+   资源存在性对越权者可见。若要防枚举需同时统一文案(如一律 404"资源不存在或无权访问"),
+   影响前端错误提示,需 Supervisor/产品拍板;本次按 BUGS.md 主方案(403/404 分开)实施。
+2. 存量 500 语义未全量清理:仅覆盖 ProjectAccessGuard 全局模式+ProjectController(QA 复现路径);
+   其余 service/controller 中 `BusinessException("...不存在/失败")` 默认 500 的仍大量存在,
+   建议立技术债专项统一语义码,本次不扩面。
+3. SW-T06-03 的 400 文案格式(`请求参数类型不匹配: <参数名>`)如需 i18n/前端定制,待定。

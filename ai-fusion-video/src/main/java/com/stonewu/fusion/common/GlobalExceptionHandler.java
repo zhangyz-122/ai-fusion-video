@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -43,6 +44,17 @@ public class GlobalExceptionHandler {
     public CommonResult<?> handleBindException(BindException e) {
         String message = e.getBindingResult().getAllErrors().getFirst().getDefaultMessage();
         return CommonResult.error(400, message);
+    }
+
+    /**
+     * 查询参数 / 路径变量类型不匹配属于客户端请求错误，映射为 400，
+     * 避免落入通用 500 处理器造成服务端错误误报。
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public CommonResult<?> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
+        log.warn("请求参数类型不匹配: {}", e.getMessage());
+        return CommonResult.error(400, "请求参数类型不匹配: " + e.getName());
     }
 
     @ExceptionHandler(BadCredentialsException.class)

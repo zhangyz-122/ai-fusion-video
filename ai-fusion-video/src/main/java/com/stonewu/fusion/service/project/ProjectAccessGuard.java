@@ -122,13 +122,15 @@ public class ProjectAccessGuard {
 
     private void requireEntity(boolean present, String message) {
         if (!present) {
-            throw new BusinessException(message);
+            // 资源不存在使用 404 语义，由 GlobalExceptionHandler 映射 HTTP 状态；文案保持不变
+            throw new BusinessException(404, message);
         }
     }
 
     private void assertAllowed(boolean allowed) {
         if (!allowed) {
-            throw new BusinessException("无权访问该项目内容");
+            // 越权访问使用 403 语义，由 GlobalExceptionHandler 映射 HTTP 状态；文案保持不变
+            throw new BusinessException(403, "无权访问该项目内容");
         }
     }
 }
