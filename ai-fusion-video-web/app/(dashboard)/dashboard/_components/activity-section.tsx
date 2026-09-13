@@ -7,12 +7,18 @@ import { dashboardApi, type DashboardActivityItem } from "@/lib/api/dashboard";
 import { Button } from "@/components/ui/button";
 
 const kindLabels: Record<string, string> = {
+  SCRIPT_PARSE: "剧本解析",
   IMAGE_TASK: "生图任务",
   VIDEO_TASK: "生视频任务",
   PRODUCTION_RUN: "生产运行",
 };
 
+/** 按条目种类深链到对应编辑器或工作区 */
 function itemHref(item: DashboardActivityItem): string {
+  if (item.kind === "SCRIPT_PARSE") {
+    return item.projectId ? `/projects/${item.projectId}/scripts` : "/projects";
+  }
+  if (item.kind === "PRODUCTION_RUN") return "/production";
   if (item.kind === "IMAGE_TASK") return "/generate/image";
   if (item.kind === "VIDEO_TASK") return "/generate/video";
   if (item.projectId) return `/projects/${item.projectId}`;
