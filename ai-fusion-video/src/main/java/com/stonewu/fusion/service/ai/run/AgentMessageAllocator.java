@@ -7,6 +7,7 @@ import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.mapper.ai.AgentConversationMapper;
 import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,13 +17,17 @@ import java.util.Objects;
 
 /**
  * Serializes message-order allocation on the owning conversation row.
+ * <p>Duplicate projections resolve idempotently: a unique-key conflict is retried
+ * once against a refreshed counter, and a persistent conflict is treated as an
+ * already-persisted message instead of failing the caller.</p>
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AgentMessageAllocator {
 
-    /** Bounded retries when a concurrent writer wins the unique-key race. */
-    private static final int MAX_INSERT_ATTEMPTS = 3;
+    /** Initial insert plus one retry after re-reading the conversation counters. */
+    private static final int MAX_INSERT_ATTEMPTS = 2;
 
     private final AgentConversationMapper conversationMapper;
     private final AgentMessageMapper messageMapper;
@@ -49,10 +54,11 @@ public class AgentMessageAllocator {
                 break;
             } catch (DataIntegrityViolationException conflict) {
                 // (conversation_id, message_order) 或者 projection_key 撞唯一键:
-                // 重新锁定会话行并读取最新计数后重试,避免投影恢复与在线写入竞争时
-                // 计数器落后于已落库消息导致 DataIntegrityViolation 反复失败。
+                // 先重新锁定会话行并读取最新计数后重试一次; 若仍冲突, 说明同内容消息
+                // 已经落库(如投影恢复与在线写入重复投递), 跳过插入并返回已有顺序,
+                // 保证投递幂等且维护调度不会因重复投影反复失败。
                 if (attempt >= MAX_INSERT_ATTEMPTS) {
-                    throw conflict;
+                    return skipDuplicatedMessage(message, order, conflict);
                 }
                 conversation = lockConversation(conversationId);
                 messageCount = requireValidCount(conversation, conversationId);
@@ -68,6 +74,21 @@ public class AgentMessageAllocator {
         if (conversationMapper.updateById(conversation) != 1) {
             throw new IllegalStateException("Agent conversation counter update did not affect exactly one row");
         }
+        return order;
+    }
+
+    /**
+     * Treats a persistent unique-key conflict as an already-persisted message:
+     * keeps the conversation counters untouched and returns the conflicting order.
+     */
+    private long skipDuplicatedMessage(AgentMessage message,
+                                       long order,
+                                       DataIntegrityViolationException conflict) {
+        log.warn(
+                "Agent message insert still conflicts after retry; skipping as already "
+                        + "persisted: conversationId={}, attemptedOrder={}, runId={}, projectionKey={}, role={}",
+                message.getConversationId(), order, message.getRunId(),
+                message.getProjectionKey(), message.getRole(), conflict);
         return order;
     }
 

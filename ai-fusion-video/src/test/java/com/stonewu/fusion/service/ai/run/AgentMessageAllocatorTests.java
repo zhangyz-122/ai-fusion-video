@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -80,7 +79,7 @@ class AgentMessageAllocatorTests {
     }
 
     @Test
-    void appendRetriesWithRefreshedOrderWhenUniqueKeyConflicts() {
+    void appendRetriesOnceAfterConflictThenSucceeds() {
         AgentConversation stale = AgentConversation.builder()
                 .conversationId("conv-1")
                 .nextMessageOrder(5L)
@@ -120,7 +119,7 @@ class AgentMessageAllocatorTests {
     }
 
     @Test
-    void appendStopsAfterBoundedRetriesWhenConflictPersists() {
+    void appendSkipsDuplicatedProjectionAfterOneRetryInsteadOfThrowing() {
         AgentConversation conversation = AgentConversation.builder()
                 .conversationId("conv-1")
                 .nextMessageOrder(1L)
@@ -128,13 +127,57 @@ class AgentMessageAllocatorTests {
                 .build();
         when(conversationMapper.selectByConversationIdForUpdate("conv-1")).thenReturn(conversation);
         when(messageMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        List<Long> attemptedOrders = new ArrayList<>();
+        when(messageMapper.insert(any(AgentMessage.class))).thenAnswer(invocation -> {
+            attemptedOrders.add(invocation.<AgentMessage>getArgument(0).getMessageOrder());
+            throw new DataIntegrityViolationException("uk_agent_message_conv_order");
+        });
+
+        // 投影重复投递：一次重试后仍撞唯一键时按“已落库”处理，返回已有顺序且不再抛异常
+        long order = allocator.append("conv-1", AgentMessage.builder()
+                .role("assistant")
+                .runId("run-1")
+                .projectionKey("dup-projection-key")
+                .build());
+
+        assertThat(order).isEqualTo(2L);
+        // 重试上限 = 首次插入 + 一次重读计数后的重试
+        assertThat(attemptedOrders).containsExactly(1L, 2L);
+        verify(conversationMapper, times(2)).selectByConversationIdForUpdate("conv-1");
+        // 未新增消息，会话计数保持不变
+        verify(conversationMapper, never()).updateById(any(AgentConversation.class));
+        assertThat(conversation.getNextMessageOrder()).isEqualTo(1L);
+        assertThat(conversation.getMessageCount()).isEqualTo(0);
+    }
+
+    @Test
+    void appendIdempotentSkipKeepsProjectionRecoveryLoopAliveForMaintenanceScheduler() {
+        // 模拟维护调度（每 5 秒）反复恢复同一条已投影消息：重复投影必须幂等跳过，
+        // 维护链路 recoverTerminalBatch 不再因 DataIntegrityViolation 失败。
+        AgentConversation conversation = AgentConversation.builder()
+                .conversationId("conv-1")
+                .nextMessageOrder(9L)
+                .messageCount(8)
+                .build();
+        when(conversationMapper.selectByConversationIdForUpdate("conv-1")).thenReturn(conversation);
+        when(messageMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(
+                AgentMessage.builder().conversationId("conv-1").messageOrder(8L).build());
         when(messageMapper.insert(any(AgentMessage.class)))
                 .thenThrow(new DataIntegrityViolationException("uk_agent_message_conv_order"));
 
-        assertThatThrownBy(() -> allocator.append("conv-1", AgentMessage.builder().role("user").build()))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        long firstPass = allocator.append("conv-1", AgentMessage.builder()
+                .role("tool")
+                .runId("run-1")
+                .projectionKey("proj-1")
+                .build());
+        long secondPass = allocator.append("conv-1", AgentMessage.builder()
+                .role("tool")
+                .runId("run-1")
+                .projectionKey("proj-1")
+                .build());
 
-        verify(messageMapper, times(3)).insert(any(AgentMessage.class));
+        assertThat(firstPass).isEqualTo(secondPass).isEqualTo(10L);
+        verify(messageMapper, times(4)).insert(any(AgentMessage.class));
         verify(conversationMapper, never()).updateById(any(AgentConversation.class));
     }
 }
