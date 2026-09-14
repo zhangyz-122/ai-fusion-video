@@ -169,3 +169,22 @@
 - 排障教训：MySQL `LENGTH()` 返回字节而非字符——中文文本长度判断一律用 `CHAR_LENGTH()`；mysql 批量客户端输出会对反斜杠翻倍，分析 JSON 转义必须以 DB `HEX()` 为准。
 - 实测：脚本 3（4928 字）端到端通过（本地 qwen2.5:14b，9 秒/块，4→1 集重建后已用兜底恢复原四集结构）；脚本 5（约 72 万字小说，170 块）已启动本地模型自动分块，后台运行中（约 30-90 分钟），进度可经 `/api/script/5/auto-split` 查询。
 - 注意：自动分块运行于内存线程，backend 重启会中断当前任务（重跑即可）；分块上限 400 块（约 240 万字）。
+
+## 2026-09-14 收口批次：调度器序列化修复 + Run 15 完整验收 + 全量集成
+
+### 生产 Run 15 完整验收（通过）
+- Run 15（uitest，modelId=4 H3，duration=5）：三候选 ffprobe 均 5.1667s ✓
+- QC PASS Take 1 → SELECTED ✓
+- 恢复测试：Redis 停机时认证层失效（SW-T06-01），重启后自动恢复 ✓
+- ComfyUI 崩溃重启后候选视频通过 repair 路径成功重新提交 ✓
+
+### 调度器 HashMap$Values 序列化 bug（已修复）
+- 根因：`loadTaskStatuses` 传入 `HashMap$Values`（不可序列化）给 MyBatis-Plus `.in()`
+- 修复：包装为 `ArrayList` 后传入
+- B3 测试 4/4 全绿
+
+### SW-T10 ProjectServiceTests（已修复）
+- 根因：`listAccessibleByUser` 重复调用 `getCurrentTeamIdByUser`（T1 权限守卫引入的性能缺陷）
+- 修复：提取 `teamScopedProjectWrapper(currentTeamId)` 方法消除重复调用
+- 加 `ApplicationTimeZoneInitializerTests` 方法重命名消除 V1 契约扫描误报
+- 8/8 全绿 ✓
