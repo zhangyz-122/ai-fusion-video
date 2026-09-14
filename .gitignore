@@ -41,3 +41,6 @@ ai-fusion-video/data/
 .superpowers/
 .gemini/
 
+
+# E2E temporary local artifacts (DB backups, jar, logs)
+.e2e-backup/
