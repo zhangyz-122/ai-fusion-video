@@ -127,6 +127,13 @@ export default function StoryboardTabPage() {
     refreshStoryboardData,
   } = useStoryboardData({ projectId, sidebarSelection, sidebarSelectionRef });
 
+  // 以 ref 镜像最新 sceneGroups：下方 effect 中仅用其做"已加载数据是否存在该场次"的判断，
+  // 不应随 sceneGroups 更新重新执行（否则 loadSceneGroups -> setSceneGroups 会循环触发）
+  const sceneGroupsRef = useRef(sceneGroups);
+  useEffect(() => {
+    sceneGroupsRef.current = sceneGroups;
+  }, [sceneGroups]);
+
   // ========== AI 生成与首尾帧 pipeline 动作 ==========
 
   const {
@@ -235,7 +242,7 @@ export default function StoryboardTabPage() {
       sidebarSelection.type === "scene" &&
       sidebarSelection.sceneId
     ) {
-      const sceneExists = sceneGroups.some(
+      const sceneExists = sceneGroupsRef.current.some(
         (g) => g.scene.id === sidebarSelection.sceneId
       );
       // 同一集且场次已存在于数据中：直接滚动
@@ -586,7 +593,6 @@ export default function StoryboardTabPage() {
       {/* 中栏：按场次分组的分镜内容 */}
       <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="flex-1 flex flex-col min-w-0">
         {/* 工具栏 */}
-<<<<<<< HEAD
         <StoryboardToolbar
           projectName={project?.name}
           sceneCount={sceneGroups.length}
@@ -602,7 +608,7 @@ export default function StoryboardTabPage() {
           runningComposeEpisodeIds={runningComposeEpisodeIds}
           onComposeEpisode={handleComposeEpisodeVideo}
           onPreviewComposedVideo={setComposedPreviewUrl}
-          viewMode={viewMode}
+          viewMode={effectiveViewMode}
           onViewModeChange={handleSetViewMode}
           rightSheetOpen={rightSheetOpen}
           onRightSheetOpenChange={setRightSheetOpen}
@@ -631,7 +637,7 @@ export default function StoryboardTabPage() {
           activeSceneId={activeSceneId}
           onSelectScene={setActiveSceneId}
           sceneRefs={sceneRefs}
-          viewMode={viewMode}
+          viewMode={effectiveViewMode}
           selectedItemId={selectedItemId}
           onSelectItem={handleSelectItem}
           onUpdateItemField={handleUpdateItemField}
@@ -643,292 +649,6 @@ export default function StoryboardTabPage() {
           assetLookup={assetLookup}
           onEditAssets={handleEditAssets}
         />
-=======
-        <div className="px-4 md:px-5 py-3 border-b border-border/20 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 max-w-[60%]">
-            <Sheet open={leftSheetOpen} onOpenChange={setLeftSheetOpen}>
-              <SheetTrigger
-                render={
-                  <button
-                    className="xl:hidden flex h-11 w-11 -ml-2 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors shrink-0"
-                    aria-label="打开分镜目录"
-                  >
-                    <Menu className="h-5 w-5" />
-                  </button>
-                }
-              />
-              <SheetContent side="left" className="w-full sm:w-[300px] p-0 border-r-0 flex flex-col pt-12">
-                <StoryboardSidebar
-        onRefresh={handleManualRefreshStoryboard}
-        isRefreshing={isRefreshingStoryboard}
-        storyboardId={storyboard.id}
-                  selection={sidebarSelection}
-                  activeSceneId={activeSceneId}
-                  onSelect={setSidebarSelection}
-                  onInitialLoad={handleSidebarInitialLoad}
-                  onDeleteEpisode={handleDeleteEpisode}
-                  onDeleteScene={handleDeleteScene}
-                  onReorderScenes={handleReorderScenes}
-                  scriptEpisodes={scriptEpisodes}
-                  onBindScriptEpisode={handleBindScriptEpisode}
-                  onGenerateEpisodeStoryboard={handleGenerateEpisodeStoryboard}
-                />
-              </SheetContent>
-            </Sheet>
-            <h2 className="text-base font-semibold flex items-center gap-2 overflow-hidden">
-              <Film className="h-4 w-4 text-primary shrink-0" />
-              <span className="truncate">{project?.name || "未命名项目"}</span>
-              <span className="hidden sm:inline text-xs text-muted-foreground font-normal ml-1 shrink-0">
-                · {sceneGroups.length} 场次 · {allItems.length} 镜头
-              </span>
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ai" size="sm" onClick={() => setShowAiConfirmDialog(true)}>
-              <Sparkles className="h-4 w-4" />
-              {sceneGroups.length > 0 ? "AI 补全" : "AI 生成"}
-            </Button>
-            {/* 合成本集视频(窄屏压缩为图标按钮,标签由 title 承载) */}
-            {currentEpisodeId && currentEpisode && (() => {
-              const cs = currentEpisode.composeStatus;
-              const isSubmitting = submittingComposeEpisodeIds.includes(currentEpisodeId);
-              const isRunning = runningComposeEpisodeIds.includes(currentEpisodeId) || cs === 1;
-              if (isSubmitting) {
-                return (
-                  <button
-                    disabled
-                    className="flex items-center gap-1.5 px-2.5 sm:px-3 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-xs font-medium border border-border/30 bg-muted/20 text-muted-foreground shrink-0 cursor-not-allowed"
-                    title="正在提交合成任务"
-                  >
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span className="hidden sm:inline">提交中…</span>
-                  </button>
-                );
-              }
-              if (isRunning) {
-                return (
-                  <button
-                    disabled
-                    className="flex items-center gap-1.5 px-2.5 sm:px-3 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-xs font-medium border border-border/30 bg-muted/20 text-muted-foreground shrink-0 cursor-not-allowed"
-                    title="正在合成本集视频，预计 30s - 3min"
-                  >
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span className="hidden sm:inline">合成中…</span>
-                  </button>
-                );
-              }
-              if (cs === 2 && currentEpisode.composedVideoUrl) {
-                return (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => setComposedPreviewUrl(currentEpisode.composedVideoUrl)}
-                      className="flex items-center gap-1.5 px-2.5 sm:px-3 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-xs font-medium border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors"
-                      title="查看本集合成视频"
-                    >
-                      <PlayCircle className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">查看本集视频</span>
-                    </button>
-                    <button
-                      onClick={handleComposeEpisodeVideo}
-                      className="flex h-11 w-11 sm:h-8 sm:w-8 items-center justify-center rounded-lg border border-border/30 bg-muted/20 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-                      title="重新合成"
-                      aria-label="重新合成本集视频"
-                    >
-                      <Clapperboard className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                );
-              }
-              if (cs === 3) {
-                return (
-                  <button
-                    onClick={handleComposeEpisodeVideo}
-                    className="flex items-center gap-1.5 px-2.5 sm:px-3 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors shrink-0"
-                    title={`上次失败：${currentEpisode.composeErrorMsg || "未知错误"}\n点击重试`}
-                  >
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">重试合成</span>
-                  </button>
-                );
-              }
-              return (
-                <button
-                  onClick={handleComposeEpisodeVideo}
-                  className="flex items-center gap-1.5 px-2.5 sm:px-3 sm:py-1.5 min-h-11 sm:min-h-0 rounded-lg text-xs font-medium border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors shrink-0"
-                  title="将本集所有镜头视频按顺序拼接成一个完整视频"
-                >
-                  <Clapperboard className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">合成本集视频</span>
-                </button>
-              );
-            })()}
-
-            {/* 视图切换(窄屏强制卡片视图,隐藏切换) */}
-            <div className="hidden sm:flex items-center rounded-lg border border-border/30 bg-muted/20 p-0.5 shrink-0">
-              <button
-                onClick={() => handleSetViewMode("table")}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all",
-                  effectiveViewMode === "table"
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                title="表格视图"
-              >
-                <Table2 className="h-3.5 w-3.5" />
-                表格
-              </button>
-              <button
-                onClick={() => handleSetViewMode("card")}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all",
-                  effectiveViewMode === "card"
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                title="卡片视图"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                卡片
-              </button>
-            </div>
-            {/* 右侧边栏触发器 */}
-            <Sheet open={rightSheetOpen} onOpenChange={setRightSheetOpen}>
-              <SheetTrigger
-                render={
-                  <button
-                    className="2xl:hidden flex h-11 w-11 -mr-2 items-center justify-center rounded-md hover:bg-muted text-muted-foreground transition-colors shrink-0"
-                    aria-label="打开引用信息"
-                  >
-                    <Info className="h-5 w-5" />
-                  </button>
-                }
-              />
-              <SheetContent side="right" className="w-full sm:w-[300px] p-0 border-l-0 flex flex-col pt-12 overflow-y-auto">
-                <StoryboardRefPanel
-                  storyboard={storyboard}
-                  items={allItems}
-                  selectedItem={selectedItem}
-                  activeSceneGroup={activeSceneGroup}
-                  projectId={projectId}
-                  project={project}
-                  assetLookup={assetLookup}
-                  onUpdateFrame={handleUpdateItemFrame}
-                  onGenerateFrame={handleGenerateItemFrame}
-                  onBatchGenerateFrames={handleBatchGenerateSceneFrames}
-                  onEditAssets={(item) => {
-                    setEditingItem(item);
-                    setEditAssetsOpen(true);
-                  }}
-                />
-              </SheetContent>
-            </Sheet>
-          </div>
-        </div>
-
-        {/* 内容区域 - 按场次滚动 */}
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-5 space-y-8"
-        >
-          {loadingScenes ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : sceneGroups.length === 0 ? (
-            <div className="text-center py-16">
-              <Camera className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">
-                暂无分镜内容，请在左侧创建分集和场次，或使用顶部 AI 生成
-              </p>
-            </div>
-          ) : (
-            sceneGroups.map(({ scene, items }) => (
-              <div
-                key={scene.id}
-                data-scene-id={scene.id}
-                ref={(el) => {
-                  sceneRefs.current[scene.id] = el;
-                }}
-                className={cn(
-                  "scroll-mt-4 p-3 sm:p-5 rounded-2xl border transition-all duration-500 ease-out",
-                  activeSceneId === scene.id
-                    ? "bg-violet-500/1.5 border-violet-500/15 shadow-[0_2px_8px_-3px_rgba(139,92,246,0.04)] dark:bg-violet-500/0.5"
-                    : "border-transparent bg-transparent"
-                )}
-                onClick={() => setActiveSceneId(scene.id)}
-              >
-                {/* 场次标题：点击时亦可切换激活场次 */}
-                <div
-                  className="flex flex-wrap items-center gap-2 mb-3 cursor-pointer group/title"
-                  onClick={() => setActiveSceneId(scene.id)}
-                >
-                  <Camera className={cn(
-                    "h-3.5 w-3.5 transition-colors",
-                    activeSceneId === scene.id ? "text-violet-500" : "text-primary/60 group-hover/title:text-primary"
-                  )} />
-                  <h3 className={cn(
-                    "text-sm font-semibold transition-colors",
-                    activeSceneId === scene.id ? "text-violet-600 dark:text-violet-400" : "group-hover/title:text-primary"
-                  )}>
-                    {scene.sceneHeading ||
-                      `场次 ${scene.sceneNumber || scene.id}`}
-                  </h3>
-                  {scene.location && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted/30 text-muted-foreground">
-                      {scene.intExt && `${scene.intExt} `}
-                      {scene.location}
-                      {scene.timeOfDay && ` ${scene.timeOfDay}`}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-muted-foreground/50 ml-auto">
-                    {items.length} 镜
-                  </span>
-                </div>
-
-                {/* 场次内的镜头列表 */}
-                {effectiveViewMode === "table" ? (
-                  <StoryboardTableView
-                    items={items}
-                    selectedItemId={selectedItemId}
-                    onSelectItem={handleSelectItem}
-                    onUpdateItemField={handleUpdateItemField}
-                    onAddItem={() =>
-                      handleAddItem(scene.id, scene.episodeId)
-                    }
-                    onDeleteItem={handleDeleteItem}
-                    onReorderItems={(reordered) =>
-                      handleReorderItems(scene.id, reordered)
-                    }
-                    onVideoGen={handleVideoGen}
-                    onOpenFrameDialog={handleOpenFrameDialog}
-                    assetLookup={assetLookup}
-                    onEditAssets={(item) => {
-                      setEditingItem(item);
-                      setEditAssetsOpen(true);
-                    }}
-                  />
-                ) : (
-                  <StoryboardCardView
-                    items={items}
-                    selectedItemId={selectedItemId}
-                    onSelectItem={handleSelectItem}
-                    onAddItem={() =>
-                      handleAddItem(scene.id, scene.episodeId)
-                    }
-                    onDeleteItem={handleDeleteItem}
-                    onReorderItems={(reordered) =>
-                      handleReorderItems(scene.id, reordered)
-                    }
-                    onVideoGen={handleVideoGen}
-                    onOpenFrameDialog={handleOpenFrameDialog}
-                  />
-                )}
-              </div>
-            ))
-          )}
-        </div>
->>>>>>> swarm/M2-mobile-polish
       </motion.div>
 
       {/* 右栏：引用信息 */}

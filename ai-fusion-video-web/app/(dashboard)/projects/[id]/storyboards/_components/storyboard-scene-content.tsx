@@ -53,7 +53,7 @@ export function StoryboardSceneContent({
   return (
     <div
       ref={scrollContainerRef}
-      className="flex-1 overflow-y-auto px-6 py-5 space-y-8"
+      className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-5 space-y-8"
     >
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -75,7 +75,7 @@ export function StoryboardSceneContent({
               sceneRefs.current[scene.id] = el;
             }}
             className={cn(
-              "scroll-mt-4 p-5 rounded-2xl border transition-all duration-500 ease-out",
+              "scroll-mt-4 p-3 sm:p-5 rounded-2xl border transition-all duration-500 ease-out",
               activeSceneId === scene.id
                 ? "bg-violet-500/1.5 border-violet-500/15 shadow-[0_2px_8px_-3px_rgba(139,92,246,0.04)] dark:bg-violet-500/0.5"
                 : "border-transparent bg-transparent"
@@ -83,8 +83,8 @@ export function StoryboardSceneContent({
             onClick={() => onSelectScene(scene.id)}
           >
             {/* 场次标题：点击时亦可切换激活场次 */}
-            <div 
-              className="flex items-center gap-2 mb-3 cursor-pointer group/title"
+            <div
+              className="flex flex-wrap items-center gap-2 mb-3 cursor-pointer group/title"
               onClick={() => onSelectScene(scene.id)}
             >
               <Camera className={cn(
