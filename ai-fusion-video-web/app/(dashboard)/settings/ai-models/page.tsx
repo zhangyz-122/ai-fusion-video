@@ -41,6 +41,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import {
   ModelVendorIcon,
   ProviderVendorIcon,
@@ -419,7 +420,7 @@ export default function AiModelsPage() {
       >
         {/* ── API 配置头部 ── */}
         <div className={cn(
-          "flex items-start gap-3 px-4 py-3 group bg-muted/30"
+          "flex items-start gap-3 max-lg:flex-wrap px-4 py-3 group bg-muted/30"
         )}>
           <button
             type="button"
@@ -428,7 +429,8 @@ export default function AiModelsPage() {
             title={collapsed ? "展开 API 配置" : "折叠 API 配置"}
             className={cn(
               "mt-1 h-7 w-7 rounded-md flex items-center justify-center shrink-0",
-              "text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              "text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors",
+              touchHitArea.size28
             )}
           >
             <ChevronRight className={cn(
@@ -480,12 +482,15 @@ export default function AiModelsPage() {
               ) : null)}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 mt-0.5">
+          <div className="flex items-center gap-2 max-lg:gap-3 shrink-0 mt-0.5 max-lg:w-full max-lg:justify-end">
             {config.platform !== "comfyui" && (
               <button
                 type="button"
                 onClick={() => { setFetchModelsConfig(config); setFetchModelsDialogOpen(true); }}
-                className="flex h-8 w-8 items-center justify-center rounded-xl text-sky-500 transition-colors hover:bg-sky-500/10 hover:text-sky-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-xl text-sky-500 transition-colors hover:bg-sky-500/10 hover:text-sky-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  touchHitArea.size32
+                )}
                 title="获取可用模型列表"
               >
                 <CloudDownload className="h-3.5 w-3.5" />
@@ -510,7 +515,10 @@ export default function AiModelsPage() {
             <button
               type="button"
               onClick={() => { setEditingConfig(config); setConfigDialogOpen(true); }}
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-emerald-500 transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-xl text-emerald-500 transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                touchHitArea.size32
+              )}
               title="编辑 API 配置"
             >
               <Edit2 className="h-3.5 w-3.5" />
@@ -518,7 +526,10 @@ export default function AiModelsPage() {
             <button
               type="button"
               onClick={() => handleDeleteConfig(config.id)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                touchHitArea.size32
+              )}
               title="删除 API 配置"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -591,7 +602,7 @@ export default function AiModelsPage() {
                       return (
                         <div
                           key={model.id}
-                          className="flex items-start gap-3 px-3 py-2.5 rounded-lg group/model hover:bg-white/5 transition-colors"
+                          className="flex items-start gap-3 max-lg:flex-wrap px-3 py-2.5 rounded-lg group/model hover:bg-white/5 transition-colors"
                         >
                           <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60">
                             <ModelVendorIcon source={model} className="size-4" />
@@ -689,16 +700,17 @@ export default function AiModelsPage() {
                           </div>
 
                           {/* 操作按钮 */}
-                          <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                          <div className="flex items-center gap-1 max-lg:gap-2 shrink-0 mt-0.5 max-lg:w-full max-lg:justify-end max-lg:mt-1">
                             {model.modelType === 1 && (
                               <button
                                 onClick={() => handleTestTextModel(model)}
                                 disabled={testingModelIds.has(model.id)}
                                 className={cn(
-                                  "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
+                                  "flex items-center gap-1 px-2 max-lg:h-9 max-lg:px-3 max-lg:text-xs rounded-md max-lg:rounded-lg text-[10px] font-medium transition-all",
                                   "border border-sky-500/30 text-sky-500",
                                   "hover:bg-sky-500/10 hover:border-sky-500/50",
-                                  "disabled:opacity-60 disabled:cursor-not-allowed"
+                                  "disabled:opacity-60 disabled:cursor-not-allowed",
+                                  touchHitArea.size36
                                 )}
                               >
                                 {testingModelIds.has(model.id) ? (
@@ -725,9 +737,10 @@ export default function AiModelsPage() {
                                   }
                                 }}
                                 className={cn(
-                                  "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all",
+                                  "flex items-center gap-1 px-2 max-lg:h-9 max-lg:px-3 max-lg:text-xs rounded-md max-lg:rounded-lg text-[10px] font-medium transition-all",
                                   "border border-amber-500/30 text-amber-500",
-                                  "hover:bg-amber-500/10 hover:border-amber-500/50"
+                                  "hover:bg-amber-500/10 hover:border-amber-500/50",
+                                  touchHitArea.size36
                                 )}
                               >
                                 <Star className="h-3 w-3" />
@@ -736,14 +749,20 @@ export default function AiModelsPage() {
                             )}
                             <button
                               onClick={() => { setEditingModel(model); setModelDialogApiConfigId(undefined); setModelDialogOpen(true); }}
-                              className="p-1 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                              className={cn(
+                                "p-1 max-lg:h-9 max-lg:w-9 max-lg:grid max-lg:place-items-center rounded-md max-lg:rounded-lg text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors",
+                                touchHitArea.size36
+                              )}
                               title="编辑模型"
                             >
                               <Edit2 className="h-3 w-3" />
                             </button>
                             <button
                               onClick={() => handleDeleteModel(model.id)}
-                              className="p-1 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
+                              className={cn(
+                                "p-1 max-lg:h-9 max-lg:w-9 max-lg:grid max-lg:place-items-center rounded-md max-lg:rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors",
+                                touchHitArea.size36
+                              )}
                               title="删除模型"
                             >
                               <Trash2 className="h-3 w-3" />

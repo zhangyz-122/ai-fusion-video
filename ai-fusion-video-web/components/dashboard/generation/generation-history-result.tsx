@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import { SafeImage } from "@/components/ui/safe-image";
 import {
   Tooltip,
@@ -220,10 +221,11 @@ export function GenerationHistoryResult({
       </div>
 
       <div className="flex items-center justify-between gap-1.5 px-2 py-1.5">
-        <div className="flex min-w-0 items-center gap-0.5">
+        <div className="flex min-w-0 items-center gap-0.5 max-lg:gap-1">
           <Button
             variant="ghost"
             size="xs"
+            className={touchHitArea.size24}
             onClick={() => onUseReference(item)}
             disabled={!resultReady}
             title="作为下一次生成的参考"
@@ -234,6 +236,7 @@ export function GenerationHistoryResult({
           <Button
             variant="ghost"
             size="xs"
+            className={touchHitArea.size24}
             onClick={() => onAddAsset(item, prompt)}
             disabled={!resultReady}
           >
@@ -249,7 +252,10 @@ export function GenerationHistoryResult({
             rel="noreferrer"
             title="下载"
             aria-label="下载结果"
-            className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className={cn(
+              "grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+              touchHitArea.size28,
+            )}
           >
             <ArrowDownToLine className="h-3.5 w-3.5" />
           </a>

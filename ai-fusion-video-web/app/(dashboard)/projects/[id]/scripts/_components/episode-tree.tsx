@@ -73,7 +73,7 @@ function SortableSceneItem({
       <span
         {...attributes}
         {...listeners}
-        className="px-1.5 self-stretch flex items-center opacity-0 group-hover/scene:opacity-40 hover:opacity-100! text-muted-foreground cursor-grab active:cursor-grabbing transition-opacity shrink-0"
+        className="px-1.5 self-stretch flex items-center opacity-40 lg:opacity-0 lg:group-hover/scene:opacity-40 hover:opacity-100! text-muted-foreground cursor-grab active:cursor-grabbing transition-opacity shrink-0"
         onPointerDown={(e) => {
           // 阻止 click 冒泡到 onSelect
           e.stopPropagation();
@@ -98,10 +98,11 @@ function SortableSceneItem({
       </button>
       <button
         onClick={onDelete}
-        className="p-1.5 mr-1 flex items-center shrink-0 rounded-full opacity-0 group-hover/scene:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+        className="p-2.5 lg:p-1.5 mr-1 flex items-center shrink-0 rounded-full opacity-100 lg:opacity-0 lg:group-hover/scene:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
         title="删除场次"
+        aria-label={`删除场次 ${scene.sceneNumber}`}
       >
-        <Trash2 className="h-3 w-3" />
+        <Trash2 className="h-3.5 lg:h-3 lg:w-3 w-3.5" />
       </button>
     </div>
   );
@@ -269,27 +270,30 @@ export function EpisodeTree({
                 {onParseEpisode && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onParseEpisode(ep.id); }}
-                    className="p-1.5 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all"
+                    className="p-2.5 lg:p-1.5 shrink-0 rounded-full opacity-100 lg:opacity-0 lg:group-hover/ep:opacity-100 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all"
                     title="AI 解析该集"
+                    aria-label={`AI 解析第 ${ep.episodeNumber} 集`}
                   >
-                    <Sparkles className="h-3 w-3" />
+                    <Sparkles className="h-3.5 lg:h-3 lg:w-3 w-3.5" />
                   </button>
                 )}
                 {onGenerateStoryboard && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onGenerateStoryboard(ep.id); }}
-                    className="p-1.5 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all"
+                    className="p-2.5 lg:p-1.5 shrink-0 rounded-full opacity-100 lg:opacity-0 lg:group-hover/ep:opacity-100 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all"
                     title="AI 生成该集分镜"
+                    aria-label={`AI 生成第 ${ep.episodeNumber} 集分镜`}
                   >
-                    <Film className="h-3 w-3" />
+                    <Film className="h-3.5 lg:h-3 lg:w-3 w-3.5" />
                   </button>
                 )}
                 <button
                   onClick={() => onDeleteEpisode(ep.id)}
-                  className="p-1.5 mr-1 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                  className="p-2.5 lg:p-1.5 mr-1 shrink-0 rounded-full opacity-100 lg:opacity-0 lg:group-hover/ep:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
                   title="删除分集"
+                  aria-label={`删除 ${ep.title || `第 ${ep.episodeNumber} 集`}`}
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="h-3.5 lg:h-3 lg:w-3 w-3.5" />
                 </button>
               </div>
 
@@ -335,7 +339,7 @@ export function EpisodeTree({
                       <button
                         onClick={() => onAddScene(ep.id)}
                         className={cn(
-                          "w-full flex items-center gap-1.5 pl-6 pr-3 py-1.5 text-[10px] rounded-md",
+                          "w-full flex items-center gap-1.5 pl-6 pr-3 py-2.5 lg:py-1.5 text-[10px] rounded-md",
                           "text-muted-foreground/50 hover:text-primary hover:bg-primary/5 transition-colors"
                         )}
                       >
@@ -354,7 +358,7 @@ export function EpisodeTree({
         <button
           onClick={onAddEpisode}
           className={cn(
-            "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium",
+            "w-full flex items-center justify-center gap-1.5 px-3 py-2 min-h-11 rounded-lg text-xs font-medium",
             "text-primary/60 bg-primary/5 transition-colors",
             "border border-dashed border-primary/20 hover:text-primary hover:bg-primary/10 hover:border-primary/40"
           )}

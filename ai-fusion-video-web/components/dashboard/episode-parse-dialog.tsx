@@ -64,7 +64,7 @@ export function EpisodeParseDialog({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="modal-overlay fixed inset-0 z-50"
+            className="modal-overlay fixed inset-0 z-[11000]"
             onClick={handleClose}
           />
           <motion.div
@@ -72,7 +72,7 @@ export function EpisodeParseDialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg"
+            className="fixed left-1/2 top-1/2 z-[11000] -translate-x-1/2 -translate-y-1/2 w-full max-w-lg max-lg:max-w-[calc(100vw-1.5rem)]"
           >
             <div className="modal-surface rounded-2xl border border-border/40 p-6">
               {/* 标题栏 */}

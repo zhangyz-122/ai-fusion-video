@@ -140,9 +140,9 @@ export function GenerationReferenceField({
               }
               title={`移除${label}`}
               aria-label={`移除${label}`}
-              className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-lg bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute right-1 top-1 grid h-7 w-7 lg:h-6 lg:w-6 place-items-center rounded-lg bg-black/60 text-white opacity-100 lg:opacity-0 transition-opacity lg:group-hover:opacity-100"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-3.5 w-3.5 lg:h-3 lg:w-3" />
             </button>
           </div>
         ))}

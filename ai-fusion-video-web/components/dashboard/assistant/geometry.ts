@@ -39,11 +39,20 @@ export function getViewportSize() {
   };
 }
 
+/**
+ * 悬浮球底部安全边距。
+ * 窄屏(≤1023px)底部常驻 Tab 栏(约 56px 高 + 安全区),悬浮球需停在其上方;
+ * 桌面端维持原 16px 边距不变。
+ */
+export function getLauncherBottomInset(viewport = getViewportSize()) {
+  return viewport.width < 1024 ? 72 : 16;
+}
+
 export function getDefaultLauncherPosition(): AssistantPoint {
   const viewport = getViewportSize();
   return {
     x: Math.max(16, viewport.width - ASSISTANT_LAUNCHER_SIZE - 16),
-    y: Math.max(16, viewport.height - ASSISTANT_LAUNCHER_SIZE - 16),
+    y: Math.max(16, viewport.height - ASSISTANT_LAUNCHER_SIZE - getLauncherBottomInset(viewport)),
   };
 }
 
@@ -70,7 +79,10 @@ export function clampLauncherPosition(
   viewport = getViewportSize(),
 ): AssistantPoint {
   const maxX = Math.max(16, viewport.width - ASSISTANT_LAUNCHER_SIZE - 16);
-  const maxY = Math.max(16, viewport.height - ASSISTANT_LAUNCHER_SIZE - 16);
+  const maxY = Math.max(
+    16,
+    viewport.height - ASSISTANT_LAUNCHER_SIZE - getLauncherBottomInset(viewport),
+  );
   return {
     x: Math.min(maxX, Math.max(16, finite(position.x, maxX))),
     y: Math.min(maxY, Math.max(16, finite(position.y, maxY))),

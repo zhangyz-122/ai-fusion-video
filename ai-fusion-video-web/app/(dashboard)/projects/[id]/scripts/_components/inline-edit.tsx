@@ -85,6 +85,8 @@ export function InlineEdit({
       onClick={() => setEditing(true)}
       className={cn(
         "cursor-pointer hover:bg-muted/30 px-1 py-0.5 rounded transition-colors inline-block border border-transparent",
+        // 移动端扩大纵向热区(不横向扩展,避免与同行相邻控件重叠)
+        "max-lg:relative max-lg:after:absolute max-lg:after:inset-x-0 max-lg:after:-inset-y-2 max-lg:after:content-['']",
         !value && "text-muted-foreground/40 italic",
         className
       )}

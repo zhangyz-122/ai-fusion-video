@@ -751,10 +751,10 @@ export default function GenerationWorkbench({
   const title = mode === "image" ? "生图" : unified ? "万能导演台" : "生视频";
   const PageIcon = mode === "image" ? ImageIcon : Video;
   const advancedMode = composerMode === "advanced";
-  const historyBottomInset = advancedMode ? 0 : composerHeight + 16;
+  const historyBottomInset = advancedMode ? 0 : composerHeight + 36;
 
   return (
-    <div className="relative flex min-h-0 w-full grow basis-0 flex-col overflow-hidden pb-20 lg:pb-3">
+    <div className="relative flex min-h-0 w-full grow basis-0 flex-col overflow-hidden pb-3 lg:pb-3">
       <div className="w-full shrink-0 px-5 lg:px-8">
         {mode === "image" ? (
           <ImageStudioHeader
@@ -936,7 +936,7 @@ export default function GenerationWorkbench({
                 ? { duration: 0 }
                 : { duration: 0.14, ease: "easeIn" },
             }}
-            className="pointer-events-none absolute inset-x-0 bottom-20 z-20 lg:bottom-3"
+            className="pointer-events-none absolute inset-x-0 bottom-5 z-20 lg:bottom-3"
           >
             <div
               aria-hidden="true"

@@ -7,9 +7,7 @@ import {
   Plus,
   Search,
   FolderKanban,
-  MoreHorizontal,
   Clock,
-  Film,
   Trash2,
   Loader2,
 } from "lucide-react";
@@ -132,10 +130,10 @@ export default function ProjectsPage() {
         {/* 页面标题区域 */}
         <motion.div
           variants={itemVariants}
-          className="flex items-center justify-between mb-8"
+          className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5 lg:mb-8"
         >
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">项目管理</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">项目管理</h1>
             <p className="text-muted-foreground mt-1">
               管理你的所有视频创作项目
             </p>
@@ -143,7 +141,7 @@ export default function ProjectsPage() {
           <button
             onClick={() => setShowCreate(true)}
             className={cn(
-              "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium",
+              "flex items-center justify-center gap-2 px-5 py-2.5 min-h-11 rounded-xl text-sm font-medium",
               "bg-linear-to-r from-blue-600 to-purple-600",
               "text-white shadow-lg shadow-blue-500/20",
               "hover:shadow-blue-500/30 hover:scale-[1.02]",
@@ -155,8 +153,11 @@ export default function ProjectsPage() {
           </button>
         </motion.div>
 
-        {/* 搜索栏 */}
-        <motion.div variants={itemVariants} className="mb-6">
+        {/* 搜索栏(窄屏粘性悬浮在列表顶部) */}
+        <motion.div
+          variants={itemVariants}
+          className="sticky top-0 z-20 -mx-5 px-5 pt-1 pb-3 bg-background/85 backdrop-blur-sm mb-4 lg:static lg:mx-0 lg:px-0 lg:pt-0 lg:pb-0 lg:bg-transparent lg:backdrop-blur-none"
+        >
           <div
             className={cn(
               "flex items-center gap-3 px-4 py-3 rounded-xl",
@@ -249,7 +250,12 @@ export default function ProjectsPage() {
                     <button
                       onClick={(e) => handleDelete(e, project.id)}
                       disabled={deletingId === project.id}
-                      className="p-1.5 rounded-lg hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+                      aria-label={`删除项目 ${project.name}`}
+                      className={cn(
+                        "flex h-11 w-11 lg:h-7 lg:w-7 lg:p-0.5 items-center justify-center rounded-lg",
+                        "text-muted-foreground hover:bg-destructive/10 hover:text-destructive",
+                        "opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all"
+                      )}
                     >
                       {deletingId === project.id ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />

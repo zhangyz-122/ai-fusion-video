@@ -130,10 +130,11 @@ export function EditableDialogueItem({
       {/* 删除按钮 */}
       <button
         onClick={() => onDelete(index)}
-        className="shrink-0 p-1 rounded opacity-0 group-hover/dl:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all self-center"
+        className="shrink-0 p-2 lg:p-1 rounded opacity-100 lg:opacity-0 lg:group-hover/dl:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all self-center"
         title="删除"
+        aria-label="删除该句对白"
       >
-        <Trash2 className="h-3 w-3" />
+        <Trash2 className="h-3.5 lg:h-3 lg:w-3 w-3.5" />
       </button>
     </div>
 

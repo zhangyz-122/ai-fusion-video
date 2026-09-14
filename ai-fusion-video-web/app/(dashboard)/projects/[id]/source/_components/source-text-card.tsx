@@ -59,7 +59,7 @@ export function SourceTextCard({
 
   return (
     <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-5 space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 max-lg:flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <FileText className="h-5 w-5 text-primary" />
@@ -77,7 +77,7 @@ export function SourceTextCard({
             </div>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={onEdit}>
+        <Button variant="outline" size="sm" className="max-lg:ml-auto" onClick={onEdit}>
           <PenLine data-icon="inline-start" />
           编辑 / 替换
         </Button>

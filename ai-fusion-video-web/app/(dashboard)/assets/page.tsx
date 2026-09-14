@@ -250,9 +250,9 @@ export default function AssetsPage() {
       transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
       {/* ========== 页面标题 + 页签 ========== */}
-      <div className="flex items-end justify-between gap-4 flex-wrap mb-8">
+      <div className="flex items-end justify-between gap-4 flex-wrap mb-5 lg:mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">素材资产</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">素材资产</h1>
           <p className="text-muted-foreground mt-1">
             跨项目查看和管理所有创作素材
           </p>
@@ -263,7 +263,7 @@ export default function AssetsPage() {
             aria-pressed={tab === "assets"}
             onClick={() => setTab("assets")}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-sm transition-colors",
+              "inline-flex items-center min-h-11 rounded-lg px-4 lg:px-3 lg:py-1.5 text-sm transition-colors",
               "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
               tab === "assets"
                 ? "bg-background text-foreground font-medium shadow-sm"
@@ -277,7 +277,7 @@ export default function AssetsPage() {
             aria-pressed={tab === "recycle"}
             onClick={() => setTab("recycle")}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-sm transition-colors inline-flex items-center",
+              "inline-flex items-center min-h-11 rounded-lg px-4 lg:px-3 lg:py-1.5 text-sm transition-colors",
               "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
               tab === "recycle"
                 ? "bg-background text-foreground font-medium shadow-sm"
@@ -307,7 +307,7 @@ export default function AssetsPage() {
       ) : (
         <>
           {/* ========== 统计卡片 ========== */}
-          <div className="mb-8">
+          <div className="mb-5 lg:mb-8">
             <AssetTypeCards
               totalCount={assets.length}
               typeCounts={typeCounts}

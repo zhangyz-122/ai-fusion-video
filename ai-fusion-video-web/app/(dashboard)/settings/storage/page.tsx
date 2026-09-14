@@ -19,6 +19,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import { cn } from "@/lib/utils";
 import {
   getStorageProviderOption,
@@ -744,14 +745,15 @@ export default function StoragePage() {
                       </div>
                     </div>
                     {/* 右侧操作区 */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5 max-lg:gap-3.5 shrink-0">
                       {!sc.isDefault && (
                         <button
                           onClick={() => handleSetDefaultStorage(sc.id)}
                           className={cn(
-                            "flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all",
+                            "flex items-center gap-1 px-2.5 max-lg:h-9 max-lg:px-3 max-lg:text-xs py-1 rounded-lg text-[11px] font-medium transition-all",
                             "border border-amber-500/30 text-amber-500",
-                            "hover:bg-amber-500/10 hover:border-amber-500/50"
+                            "hover:bg-amber-500/10 hover:border-amber-500/50",
+                            touchHitArea.size36
                           )}
                         >
                           <Star className="h-3 w-3" />
@@ -760,13 +762,21 @@ export default function StoragePage() {
                       )}
                       <button
                         onClick={() => { setEditingStorageConfig(sc); setStorageDialogOpen(true); }}
-                        className="p-1.5 rounded-md text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100"
+                        aria-label="编辑存储配置"
+                        className={cn(
+                          "p-2.5 lg:p-1.5 rounded-md text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100",
+                          touchHitArea.size32
+                        )}
                       >
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => handleDeleteStorageConfig(sc.id)}
-                        className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
+                        aria-label="删除存储配置"
+                        className={cn(
+                          "p-2.5 lg:p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-100 lg:opacity-0 lg:group-hover:opacity-100",
+                          touchHitArea.size32
+                        )}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>

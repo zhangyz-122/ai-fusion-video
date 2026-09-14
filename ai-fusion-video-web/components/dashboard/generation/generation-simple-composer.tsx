@@ -20,6 +20,7 @@ import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { SafeImage } from "@/components/ui/safe-image";
 import { Textarea } from "@/components/ui/textarea";
+import { touchHitArea, touchHitAreaOverlay } from "@/components/dashboard/mobile-touch-area";
 import { cn } from "@/lib/utils";
 import type {
   GenerationFormState,
@@ -192,7 +193,10 @@ export function GenerationSimpleComposer({
           variant="ghost"
           size="xs"
           onClick={onAdvanced}
-          className="absolute right-3 top-3 z-10 rounded-xl bg-background/65 text-muted-foreground shadow-sm backdrop-blur-md hover:bg-background hover:text-foreground"
+          className={cn(
+            touchHitAreaOverlay.size24,
+            "absolute right-3 top-3 z-10 rounded-xl bg-background/65 text-muted-foreground shadow-sm backdrop-blur-md hover:bg-background hover:text-foreground",
+          )}
         >
           <SlidersHorizontal className="h-3 w-3" />
           高级模式
@@ -232,9 +236,12 @@ export function GenerationSimpleComposer({
                   onClick={() => onRemoveAttachment(attachment.url)}
                   title={`移除${attachment.label}`}
                   aria-label={`移除${attachment.label}`}
-                  className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  className={cn(
+                    touchHitAreaOverlay.size28,
+                    "absolute right-0.5 top-0.5 lg:right-1 lg:top-1 grid h-7 w-7 lg:h-5 lg:w-5 place-items-center rounded-full bg-black/60 text-white opacity-100 lg:opacity-0 transition-opacity lg:group-hover:opacity-100",
+                  )}
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3.5 w-3.5 lg:h-3 lg:w-3" />
                 </button>
               </div>
             ))}
@@ -323,7 +330,7 @@ export function GenerationSimpleComposer({
                     : "生成视频"
               }
               aria-label={mode === "image" ? "生成图片" : "生成视频"}
-              className="min-w-[76px] rounded-xl px-4"
+              className={cn(touchHitArea.size32, "min-w-[76px] rounded-xl px-4")}
             >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

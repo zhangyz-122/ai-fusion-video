@@ -9,7 +9,7 @@ export default function ProjectDeliveryPage() {
   const projectId = Number(params.id);
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 px-6 py-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6 px-5 py-4 lg:px-6 lg:py-6">
       <header className="space-y-2">
         <p className="text-sm text-muted-foreground">剪 · 成片</p>
         <h1 className="text-2xl font-semibold tracking-tight">合成与交付</h1>

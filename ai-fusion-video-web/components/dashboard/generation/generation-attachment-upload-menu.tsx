@@ -11,6 +11,7 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import type {
   SimpleAttachmentKind,
   SimpleAttachmentUploadOption,
@@ -53,6 +54,7 @@ export function GenerationAttachmentUploadMenu({
             type="button"
             variant="ghost"
             size="icon-sm"
+            className={touchHitArea.size32}
             disabled={disabled}
             title={title}
             aria-label="添加附件"

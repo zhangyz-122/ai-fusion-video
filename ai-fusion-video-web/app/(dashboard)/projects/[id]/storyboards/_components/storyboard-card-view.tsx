@@ -4,6 +4,7 @@ import React, { memo, useState, useMemo } from "react";
 import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Clapperboard, Play, Trash2 } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { Button } from "@/components/ui/button";
+import { touchHitAreaOverlay } from "@/components/dashboard/mobile-touch-area";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
@@ -156,7 +157,7 @@ const CardItemUI = memo(
               {...attributes}
               {...listeners}
               className={cn(
-                "absolute top-2 left-1/2 -translate-x-1/2 p-1.5 rounded-md bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 cursor-grab hover:bg-black/60 transition-all z-20",
+                "absolute top-2 left-1/2 -translate-x-1/2 p-1.5 max-lg:p-2.5 rounded-md bg-black/40 backdrop-blur-sm opacity-40 lg:opacity-0 lg:group-hover:opacity-100 cursor-grab hover:bg-black/60 transition-all z-20",
                 isOverlay && "cursor-grabbing opacity-100 bg-black/60",
                 isDragging && "opacity-0"
               )}
@@ -204,7 +205,7 @@ const CardItemUI = memo(
                 <button
                   onClick={() => setMediaMode("image")}
                   className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors",
+                    "flex items-center gap-1 px-2 py-1 max-lg:py-1.5 rounded text-[10px] font-medium transition-colors",
                     mediaMode === "image"
                       ? "bg-white/20 text-white"
                       : "text-white/60 hover:text-white/90"
@@ -216,7 +217,7 @@ const CardItemUI = memo(
                 <button
                   onClick={() => setMediaMode("video")}
                   className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors",
+                    "flex items-center gap-1 px-2 py-1 max-lg:py-1.5 rounded text-[10px] font-medium transition-colors",
                     mediaMode === "video"
                       ? "bg-white/20 text-white"
                       : "text-white/60 hover:text-white/90"
@@ -251,8 +252,9 @@ const CardItemUI = memo(
                         onOpenFrameDialog(item, frameType);
                       }}
                       className={cn(
-                        "h-7 w-7 rounded-md border text-[10px] font-semibold backdrop-blur-sm transition-all",
+                        "h-7 w-7 max-lg:h-8 max-lg:w-8 rounded-md border text-[10px] font-semibold backdrop-blur-sm transition-all",
                         "flex items-center justify-center shadow-sm",
+                        touchHitAreaOverlay.size28,
                         hasFrame
                           ? "border-emerald-400/50 bg-emerald-500/80 text-white"
                           : "border-white/20 bg-black/45 text-white/80 hover:bg-primary/70 hover:text-white"
@@ -275,7 +277,7 @@ const CardItemUI = memo(
                   onVideoGen(item.id);
                 }}
                 className={cn(
-                  "absolute bottom-2 right-2 p-1.5 rounded-md bg-black/45 backdrop-blur-sm",
+                  "absolute bottom-2 right-2 p-1.5 max-lg:p-2.5 rounded-md bg-black/45 backdrop-blur-sm",
                   "transition-colors hover:bg-violet-500/70 z-20",
                   "text-white/90 focus-visible:outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 )}
@@ -479,7 +481,7 @@ export function StoryboardCardView({
       >
         <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {/* 修改 Grid 列数，解决卡片太小的问题 */}
-          <div className="grid gap-4 md:gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+          <div className="grid gap-4 md:gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))" }}>
             {items.map((item, idx) => (
               <SortableCardItem
                 key={item.id}

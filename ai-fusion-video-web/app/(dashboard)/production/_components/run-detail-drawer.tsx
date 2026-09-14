@@ -124,7 +124,7 @@ export function RunDetailDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-lg">
+      <SheetContent side="right" className="z-[11000] w-full gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-border/20 pb-4">
           <SheetTitle className="flex items-center gap-2">
             <Clapperboard className="h-4 w-4 text-violet-500" />

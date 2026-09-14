@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, VideoOff } from "lucide-react";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import { cn } from "@/lib/utils";
 import type { EditingShotVideo } from "@/lib/api/editing";
 import type { EditingShotRow } from "./editing-types";
@@ -129,10 +130,11 @@ export function ShotCard({
         </div>
 
         {/* 排序 */}
-        <div className="flex shrink-0 flex-col gap-1">
+        <div className="flex shrink-0 flex-col gap-1 max-lg:gap-2.5">
           <Button
             variant="ghost"
             size="icon-xs"
+            className={touchHitArea.size24}
             disabled={moveUpDisabled}
             onClick={() => onMove(item.id, -1)}
             aria-label={`上移镜头 ${shotLabel}`}
@@ -143,6 +145,7 @@ export function ShotCard({
           <Button
             variant="ghost"
             size="icon-xs"
+            className={touchHitArea.size24}
             disabled={moveDownDisabled}
             onClick={() => onMove(item.id, 1)}
             aria-label={`下移镜头 ${shotLabel}`}

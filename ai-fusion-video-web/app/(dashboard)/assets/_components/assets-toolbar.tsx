@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { Search, Grid3X3, List, ImagePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import {
   Select,
   SelectContent,
@@ -42,8 +43,8 @@ export function AssetsToolbar({
 
   return (
     <div className="flex items-center gap-3 flex-wrap">
-      {/* 项目选择器 */}
-      <div className="w-44 shrink-0">
+      {/* 项目选择器(窄屏独占一行) */}
+      <div className="w-full sm:w-44 sm:shrink-0">
         <Select
           value={selectedProjectId}
           onValueChange={(v) => onSelectProject(v ?? "all")}
@@ -67,7 +68,7 @@ export function AssetsToolbar({
       {/* 搜索框（匹配名称或标签） */}
       <div
         className={cn(
-          "flex-1 min-w-[200px] flex items-center gap-2.5 px-3.5 py-2 rounded-xl",
+          "flex-1 min-w-0 sm:min-w-[200px] flex items-center gap-2.5 px-3.5 py-2.5 sm:py-2 rounded-xl",
           "border border-border/30 bg-card/50 backdrop-blur-sm",
           "transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 motion-reduce:transition-none"
         )}
@@ -114,6 +115,7 @@ export function AssetsToolbar({
             className={cn(
               "rounded-lg p-1.5 transition-colors",
               "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              touchHitArea.size28,
               viewMode === "grid"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -130,6 +132,7 @@ export function AssetsToolbar({
             className={cn(
               "rounded-lg p-1.5 transition-colors",
               "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              touchHitArea.size28,
               viewMode === "list"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
