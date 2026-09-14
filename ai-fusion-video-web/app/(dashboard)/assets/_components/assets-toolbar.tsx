@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { Search, Grid3X3, List, ImagePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import {
   Select,
   SelectContent,
@@ -114,6 +115,7 @@ export function AssetsToolbar({
             className={cn(
               "rounded-lg p-1.5 transition-colors",
               "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              touchHitArea.size28,
               viewMode === "grid"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -130,6 +132,7 @@ export function AssetsToolbar({
             className={cn(
               "rounded-lg p-1.5 transition-colors",
               "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              touchHitArea.size28,
               viewMode === "list"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"

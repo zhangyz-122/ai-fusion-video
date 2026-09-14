@@ -162,15 +162,16 @@ export default function ProjectOverviewPage() {
             <Link
               href={stage.href}
               className={cn(
-                "block rounded-xl border p-4 transition-colors",
+                "rounded-xl border transition-colors",
+                "flex items-center gap-3 px-4 py-3 lg:block lg:p-4",
                 stage.key === next.key
                   ? "border-primary/40 bg-primary/5"
                   : "border-border/30 bg-card/50 hover:border-border/50"
               )}
             >
-              <p className="text-xs text-muted-foreground">{index + 1}</p>
-              <p className="mt-1 text-lg font-semibold">{stage.label}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{stage.detail}</p>
+              <p className="text-xs text-muted-foreground shrink-0 lg:shrink">{index + 1}</p>
+              <p className="text-lg font-semibold leading-tight lg:mt-1">{stage.label}</p>
+              <p className="text-xs text-muted-foreground ml-auto truncate text-right lg:mt-1 lg:ml-0 lg:text-left">{stage.detail}</p>
             </Link>
           </li>
         ))}

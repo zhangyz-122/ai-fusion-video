@@ -243,7 +243,7 @@ export function ProductionTakeDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg p-0 gap-0">
+      <SheetContent side="right" className="z-[11000] w-full sm:max-w-lg p-0 gap-0">
         <SheetHeader className="border-b border-border/20 pb-4">
           <SheetTitle className="flex items-center gap-2">
             <Clapperboard className="h-4 w-4 text-violet-500" />

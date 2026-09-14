@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { productionApi, type ProductionRun, type ProductionRunStatus } from "@/lib/api/production";
 import {
@@ -52,7 +53,7 @@ export default function ProductionCenterPage() {
           <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">生产运行</h1>
           <p className="text-muted-foreground">全部三候选生产运行的状态、失败原因与项目入口。</p>
         </div>
-        <Button variant="outline" size="icon-sm" onClick={() => setRevision(v => v + 1)} disabled={loading} title="刷新">
+        <Button variant="outline" size="icon-sm" className={touchHitArea.size32} onClick={() => setRevision(v => v + 1)} disabled={loading} title="刷新">
           <RefreshCw className={loading ? "animate-spin" : ""} />
         </Button>
       </header>
@@ -102,6 +103,7 @@ export default function ProductionCenterPage() {
                   <Button
                     variant="outline"
                     size="xs"
+                    className={touchHitArea.size24}
                     onClick={() => setDetailRunId(run.id)}
                     title="查看运行详情"
                   >
@@ -118,7 +120,7 @@ export default function ProductionCenterPage() {
                 <div className="mt-3">
                   <Link
                     href={`/projects/${run.projectId}`}
-                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    className="text-xs text-muted-foreground underline-offset-2 hover:underline max-lg:inline-block max-lg:py-2 max-lg:pr-6"
                   >
                     打开项目工作区 →
                   </Link>

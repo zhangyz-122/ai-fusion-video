@@ -12,6 +12,7 @@ import {
 import type { AiModel } from "@/lib/api/ai-model";
 import { getModelDisplayParts } from "@/lib/model-display";
 import { Button } from "@/components/ui/button";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import {
   Tooltip,
   TooltipContent,
@@ -137,6 +138,7 @@ export function GenerationHistory({
         <Button
           variant="ghost"
           size="icon-xs"
+          className={touchHitArea.size24}
           onClick={onRefresh}
           title="刷新记录"
           aria-label="刷新记录"
@@ -266,6 +268,7 @@ export function GenerationHistory({
                 <Button
                   variant="ghost"
                   size="xs"
+                  className={touchHitArea.size24}
                   onClick={() => onReusePrompt(task.prompt)}
                   title="复用提示词"
                 >

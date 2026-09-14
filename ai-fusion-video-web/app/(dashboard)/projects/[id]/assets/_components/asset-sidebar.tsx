@@ -2,6 +2,7 @@
 
 import { Images, RefreshCw, Search } from "lucide-react";
 import type { AssetWithItems } from "@/lib/api/asset";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,7 +50,7 @@ export function AssetSidebar({
               {filteredAssets.length} 个资产
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-lg:gap-3">
             <Button
               variant="image"
               size="sm"
@@ -65,7 +66,10 @@ export function AssetSidebar({
               onClick={onRefresh}
               title="刷新"
               aria-label="刷新资产"
-              className="grid h-8 w-8 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-primary/8 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              className={cn(
+                "grid h-8 w-8 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-primary/8 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                touchHitArea.size32,
+              )}
             >
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -80,14 +84,15 @@ export function AssetSidebar({
             className="h-9 rounded-xl bg-background/70 pl-9 text-xs"
           />
         </div>
-        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-3 flex gap-1.5 max-lg:gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[{ value: "all", label: "全部" }, ...ASSET_TYPES].map((item) => (
             <button
               key={item.value}
               type="button"
               onClick={() => onTypeFilterChange(item.value)}
               className={cn(
-                "h-6 shrink-0 rounded-md border px-2 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                "h-6 max-lg:h-9 shrink-0 rounded-md max-lg:rounded-lg border px-2 max-lg:px-3 text-[10px] max-lg:text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                touchHitArea.size36,
                 typeFilter === item.value
                   ? "border-primary/20 bg-primary/10 text-primary"
                   : "border-transparent text-muted-foreground hover:border-border/50 hover:bg-background/70",

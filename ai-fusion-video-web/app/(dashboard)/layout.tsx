@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { AssistantDockSlot } from "@/components/dashboard/assistant/dock-slot";
+import { installMobileInputScrollIntoView } from "@/components/dashboard/mobile-input-scroll";
 import { ClientErrorBoundary } from "@/components/client-error-boundary";
 import { ErrorRecoveryPanel } from "@/components/error-recovery-panel";
 import { ErrorRegionFallback } from "@/components/error-region-fallback";
@@ -51,6 +52,9 @@ export default function DashboardLayout({
   });
   const [projectState, setProjectState] = useState<{ id: number; project: Project } | null>(null);
   const sidebarOpen = sidebarRoute === pathname;
+  // 工坊编辑器是全高工作区,底部为输入合成器;悬浮菜单按钮会遮挡主操作,
+  // 这些路由不渲染(导航由底部 Tab 栏与页内"返回目录"链接承担)
+  const pageMenuFabHidden = /^\/generate\/(universal|image|video|images|videos|audios)$/.test(pathname);
   const currentProjectId = useMemo(() => {
     const match = pathname.match(/^\/projects\/(\d+)/);
     return match ? Number(match[1]) : null;
@@ -93,6 +97,9 @@ export default function DashboardLayout({
       router.replace("/login");
     }
   }, [authHydrated, isAuthenticated, router]);
+
+  // 移动端软键盘弹出时保证聚焦的输入框滚动到可视区域(仅窄屏安装)
+  useEffect(() => installMobileInputScrollIntoView(), []);
 
   const ready = authHydrated && isAuthenticated;
 
@@ -176,7 +183,7 @@ export default function DashboardLayout({
           </AnimatePresence>
 
           {/* 移动端页面菜单按钮(项目/设置等二级导航入口,悬浮于底部 Tab 栏上方) */}
-          {ready && (
+          {ready && !pageMenuFabHidden && (
             <button
               onClick={() => setSidebarRoute(sidebarOpen ? null : pathname)}
               className={cn(

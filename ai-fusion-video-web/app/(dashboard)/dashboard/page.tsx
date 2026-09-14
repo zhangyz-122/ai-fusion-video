@@ -207,7 +207,7 @@ export default function DashboardPage() {
         <div
           onClick={() => router.push("/settings/ai-models")}
           className={cn(
-            "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4",
+            "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4 max-lg:py-3.5",
             "hover:border-border/50 transition-colors cursor-pointer flex flex-col justify-between"
           )}
         >
@@ -254,7 +254,7 @@ export default function DashboardPage() {
         <div
           onClick={() => router.push("/settings/storage")}
           className={cn(
-            "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4",
+            "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4 max-lg:py-3.5",
             "hover:border-border/50 transition-colors cursor-pointer flex flex-col justify-between"
           )}
         >
@@ -391,17 +391,18 @@ function StatCard({
       onClick={onClick}
       className={cn(
         "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4",
+        "max-lg:flex max-lg:items-center max-lg:justify-between max-lg:gap-3 max-lg:py-3.5",
         "hover:border-border/50 transition-colors",
         onClick && "cursor-pointer"
       )}
     >
-      <div className="flex items-center gap-2 mb-2.5">
+      <div className="flex items-center gap-2 mb-2.5 max-lg:mb-0">
         <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center", iconBg)}>
           <Icon className={cn("h-3.5 w-3.5", iconColor)} />
         </div>
         <span className="text-xs text-muted-foreground">{label}</span>
       </div>
-      <p className={cn("font-bold tracking-tight", small ? "text-base" : "text-2xl")}>{value}</p>
+      <p className={cn("font-bold tracking-tight max-lg:text-xl max-lg:shrink-0", small ? "text-base" : "text-2xl")}>{value}</p>
     </div>
   );
 }

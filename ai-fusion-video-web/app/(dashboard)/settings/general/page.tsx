@@ -422,7 +422,7 @@ export default function GeneralSettingsPage() {
             className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-6"
           >
             <div className="flex items-start justify-between gap-4">
-              <div>
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-primary" />
                   <h3 className={settingsTypography.sectionTitle}>公网访问地址</h3>
@@ -431,8 +431,8 @@ export default function GeneralSettingsPage() {
                   已根据当前访问环境自动识别，通常无需修改。
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">前后端不同域名</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">前后端不同域名</span>
                 <button
                   type="button"
                   disabled={!isAdmin}

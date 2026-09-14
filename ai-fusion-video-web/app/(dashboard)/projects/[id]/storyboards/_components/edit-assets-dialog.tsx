@@ -139,7 +139,7 @@ export function EditItemAssetsDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[11000] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -435,7 +435,7 @@ export function EditItemAssetsDialog({
 
       {/* 图片预览 Modal */}
       {previewImage && (
-        <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="modal-overlay fixed inset-0 z-[11001] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="absolute inset-0" onClick={() => setPreviewImage(null)} />
           <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center gap-3 z-10">
             <button

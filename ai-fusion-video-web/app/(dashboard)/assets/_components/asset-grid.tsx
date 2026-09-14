@@ -2,6 +2,7 @@
 
 import { ExternalLink, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { touchHitAreaOverlay } from "@/components/dashboard/mobile-touch-area";
 import type { Asset } from "@/lib/api/asset";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -67,7 +68,8 @@ export function AssetGrid({ assets, projectMap, onOpen, onDelete }: AssetGridPro
                 className={cn(
                   "absolute top-2 right-2 rounded-lg bg-black/40 p-2.5 lg:p-1.5 text-white/80 backdrop-blur-sm",
                   "opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-150 hover:text-white",
-                  "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                  "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
+                  touchHitAreaOverlay.size36
                 )}
               >
                 <Trash2 className="h-4 w-4 lg:h-3.5 lg:w-3.5" />

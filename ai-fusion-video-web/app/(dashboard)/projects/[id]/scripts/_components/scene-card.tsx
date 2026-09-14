@@ -18,6 +18,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { touchHitArea } from "@/components/dashboard/mobile-touch-area";
 import {
   scriptApi,
   type SceneItem,
@@ -223,7 +224,7 @@ export function SceneCard({
             <SelectTrigger
               size="sm"
               className={cn(
-                "h-auto! px-2 py-0.5 text-[11px] font-medium shrink-0 rounded-md min-w-0 w-auto gap-1 border",
+                "h-auto! px-2 py-0.5 max-lg:py-1.5 text-[11px] max-lg:text-xs font-medium shrink-0 rounded-md min-w-0 w-auto gap-1 border",
                 localScene.intExt === "内"
                   ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
                   : localScene.intExt === "外"
@@ -233,11 +234,11 @@ export function SceneCard({
             >
               <SelectValue placeholder="内/外" />
             </SelectTrigger>
-            <SelectContent className="min-w-16 rounded-lg">
+            <SelectContent className="min-w-16 rounded-lg max-lg:text-xs">
               <SelectGroup>
-                <SelectItem value="内" className="text-xs py-1 pl-2 pr-6 rounded-md">内</SelectItem>
-                <SelectItem value="外" className="text-xs py-1 pl-2 pr-6 rounded-md">外</SelectItem>
-                <SelectItem value="内/外" className="text-xs py-1 pl-2 pr-6 rounded-md">内/外</SelectItem>
+                <SelectItem value="内" className="text-xs py-1 max-lg:py-2 pl-2 pr-6 rounded-md">内</SelectItem>
+                <SelectItem value="外" className="text-xs py-1 max-lg:py-2 pl-2 pr-6 rounded-md">外</SelectItem>
+                <SelectItem value="内/外" className="text-xs py-1 max-lg:py-2 pl-2 pr-6 rounded-md">内/外</SelectItem>
               </SelectGroup>
             </SelectContent>
           </Select>
@@ -296,7 +297,10 @@ export function SceneCard({
                 e.stopPropagation();
                 onDelete();
               }}
-              className="p-2.5 lg:p-1.5 rounded-lg opacity-100 lg:opacity-0 lg:group-hover/card:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+              className={cn(
+                "p-2.5 lg:p-1.5 rounded-lg opacity-100 lg:opacity-0 lg:group-hover/card:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all",
+                touchHitArea.size32
+              )}
               title="删除场次"
               aria-label={`删除场次 ${localScene.sceneNumber || ""}`}
             >

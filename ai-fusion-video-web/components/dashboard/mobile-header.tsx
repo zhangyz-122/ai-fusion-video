@@ -85,7 +85,7 @@ export function MobileHeader() {
           className="flex min-h-11 shrink-0 cursor-pointer items-center px-2"
           onClick={() => router.push("/dashboard")}
         >
-          <span className="text-sm font-semibold tracking-tight">短剧制造</span>
+          <span className="text-sm font-semibold tracking-tight">融光</span>
         </button>
 
         {/* 状态与通知 */}
