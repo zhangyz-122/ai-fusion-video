@@ -117,7 +117,8 @@ public class SubtitleExportService {
 
     /**
      * 解析 dialogues JSON。仅 type=1（对白）与 type=3（画外音）可成字幕；
-     * 未写 type 的条目（如自动拆分产物 {"speaker","line"}）按对白处理。
+     * 未写 type 的条目按对白处理（auto-split 新产物已统一为标准
+     * DialogueElement 结构，字段兼容仅用于历史库中遗留的 {"speaker","line"} 行）。
      * 说话人字段兼容 character_name / character / speaker，文本字段兼容 content / line。
      */
     public List<SubtitleLine> extractFromDialogues(String dialoguesJson) {

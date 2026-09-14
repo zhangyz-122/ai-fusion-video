@@ -2,10 +2,10 @@ package com.stonewu.fusion.service.script;
 
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
@@ -13,6 +13,7 @@ import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.script.ScriptMapper;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
+import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.provider.AiProviderService;
 import com.stonewu.fusion.service.task.TaskStreamService;
@@ -64,6 +65,15 @@ public class ScriptAutoSplitService {
     static final int STALE_PARSING_THRESHOLD_MINUTES = 30;
     /** 滞留恢复时写入的失败说明 */
     static final String STALE_PARSING_MESSAGE = "解析中断，请重跑";
+    /** 任务流类型：TaskStreamService.createTask 与 afv_agent_conversation.agent_type 共用 */
+    static final String AUTO_SPLIT_TASK_TYPE = "script_auto_split";
+    /**
+     * 僵尸会话判定阈值：任务线程随进程重启消失时，会话会永远停在 running，
+     * 超过该时长仍无更新的 script_auto_split 会话视为僵尸并终态化。
+     */
+    static final int STALE_CONVERSATION_THRESHOLD_MINUTES = 120;
+    /** 僵尸会话终态化的状态值 */
+    static final String STALE_CONVERSATION_STATUS = "failed";
     /** ScriptService 实体缓存名与键前缀（与 @Cacheable value/key 保持一致） */
     private static final String SCRIPT_CACHE_NAME = "script";
     private static final String EPISODE_CACHE_NAME = "episode";
@@ -78,6 +88,7 @@ public class ScriptAutoSplitService {
     private final AiModelService aiModelService;
     private final AiProviderService aiProviderService;
     private final TaskStreamService taskStreamService;
+    private final AgentConversationService conversationService;
     private final CacheManager cacheManager;
 
     private final ExecutorService autoSplitExecutor = Executors.newFixedThreadPool(2, r -> {
@@ -112,7 +123,7 @@ public class ScriptAutoSplitService {
         String taskId = taskStreamService.createTask(
                 userId,
                 script.getProjectId(),
-                "script_auto_split",
+                AUTO_SPLIT_TASK_TYPE,
                 "自动分块解析 · " + script.getTitle(),
                 "script",
                 scriptId,
@@ -136,17 +147,20 @@ public class ScriptAutoSplitService {
 
     /**
      * 滞留恢复：应用启动完成后扫描一次。
-     * 应用重启后内存任务表为空，所有 parsing_status=1 的滞留记录都视为中断。
+     * 应用重启后内存任务表为空，所有 parsing_status=1 的滞留记录都视为中断；
+     * 同时终态化进程重启遗留的 running 会话。
      */
     @EventListener(ApplicationReadyEvent.class)
     public void recoverStaleParsingOnStartup() {
         recoverStaleParsing();
+        recoverStaleConversations();
     }
 
     /** 滞留恢复：运行期间定时兜底扫描（每 5 分钟）。 */
     @Scheduled(initialDelay = 300_000, fixedDelay = 300_000)
     public void recoverStaleParsingScheduled() {
         recoverStaleParsing();
+        recoverStaleConversations();
     }
 
     /**
@@ -180,6 +194,34 @@ public class ScriptAutoSplitService {
         return recovered;
     }
 
+    /**
+     * 僵尸会话兜底：任务完成/失败时 TaskStreamService 已会话终态化，但任务线程
+     * 随进程重启消失后会话会永远停在 running。扫描超过阈值仍 running 的
+     * script_auto_split 会话并置为 failed。
+     *
+     * @return 本次终态化的僵尸会话数
+     */
+    int recoverStaleConversations() {
+        List<AgentConversation> stale = conversationService.listStaleRunning(
+                AUTO_SPLIT_TASK_TYPE,
+                LocalDateTime.now().minusMinutes(STALE_CONVERSATION_THRESHOLD_MINUTES));
+        int finished = 0;
+        for (AgentConversation conversation : stale) {
+            if (conversation == null || conversation.getConversationId() == null) {
+                continue;
+            }
+            // 内存任务表仍登记在案说明任务正在正常运行，不误终态化
+            if (conversation.getContextId() != null && isScriptRunning(conversation.getContextId())) {
+                continue;
+            }
+            conversationService.finish(conversation.getConversationId(), STALE_CONVERSATION_STATUS);
+            finished += 1;
+            log.warn("[AutoSplit] 终态化滞留解析会话: conversationId={}, contextId={}",
+                    conversation.getConversationId(), conversation.getContextId());
+        }
+        return finished;
+    }
+
     /** 登记进行中的解析任务（内存任务表） */
     void markScriptRunning(Long scriptId) {
         runningScriptIds.add(scriptId);
@@ -200,7 +242,7 @@ public class ScriptAutoSplitService {
         return Math.max(MIN_CHUNK_CHARS, Math.min(MAX_CHUNK_CHARS, value));
     }
 
-    private void runAutoSplit(Long scriptId, Long userId, Long modelId, String taskId, int chunkChars) {
+    void runAutoSplit(Long scriptId, Long userId, Long modelId, String taskId, int chunkChars) {
         Script script = scriptMapper.selectById(scriptId);
         if (script == null || script.getRawContent() == null || script.getRawContent().isBlank()) {
             throw new BusinessException("剧本原文为空，无法自动分块解析");
@@ -229,10 +271,10 @@ public class ScriptAutoSplitService {
             String chunkTitle = chunkTitle(chunks, i);
             episodeNumber += 1;
             try {
-                JSONObject converted = convertChunk(chatModel, model.getName(), chunkTitle, chunk, chunkChars);
+                JSONObject converted = convertChunk(chatModel, chunkTitle, chunk, chunkChars);
                 saveConvertedEpisode(scriptId, episodeNumber, chunkTitle, chunk, converted);
             } catch (Exception convertFailure) {
-                // 单块转换失败不中断整体：原文兜底保存为该块的场景
+                // 单块转换失败（含一次修复重试后仍失败）不中断整体：原文兜底保存为该块的场景
                 log.warn("[AutoSplit] 分块 {} 转换失败，原文兜底保存: {}", i + 1, convertFailure.getMessage());
                 saveVerbatimEpisode(scriptId, episodeNumber, chunkTitle, chunk);
             }
@@ -328,49 +370,50 @@ public class ScriptAutoSplitService {
         return "第" + (index + 1) + "部分";
     }
 
-    /** 逐块调用模型改写为结构化场次，输出 JSON。 */
-    private JSONObject convertChunk(ChatModel chatModel, String modelName, String chunkTitle,
-                                    String chunk, int chunkChars) {
+    /**
+     * 逐块调用模型改写为结构化场次，输出经 {@link ScriptChunkValidator} 校验
+     * 与归一化的 JSON；首次输出不通过时带着修复指令重试一次，仍不通过则抛出
+     * 异常，由调用方原文兜底保存。
+     */
+    JSONObject convertChunk(ChatModel chatModel, String chunkTitle, String chunk, int chunkChars) {
         // 用户显式调大分块时，输入上限随之放宽，避免正常块被截断丢字
         int inputLimit = Math.max(MODEL_INPUT_MAX, chunkChars);
         String input = chunk.length() > inputLimit ? chunk.substring(0, inputLimit) : chunk;
-        String system = """
-                你是剧本改编引擎。把输入的故事片段改写为结构化剧本场次。只输出 JSON，不要任何解释或代码块标记。
-                输出格式：
-                {"episodeTitle":"本块对应的剧集标题","scenes":[{"sceneHeading":"场次标题","sceneDescription":"场景与剧情描述","dialogues":[{"speaker":"角色名","line":"台词"}]}]}
-                规则：忠于原文剧情，不虚构新主线；无对白的段落 dialogues 为空数组；场次数量按剧情自然划分。
-                """;
-        String user = "剧集标题参考：" + chunkTitle + "\n\n故事片段：\n" + input;
+        String userMessage = ScriptAutoSplitPrompts.userMessage(chunkTitle, input);
+        ScriptChunkValidator.Result result = callAndValidate(chatModel, userMessage);
+        if (!result.valid()) {
+            log.warn("[AutoSplit] 模型输出未通过校验，携带修复指令重试一次: {}",
+                    String.join("；", result.problems()));
+            result = callAndValidate(chatModel,
+                    ScriptAutoSplitPrompts.repairMessage(userMessage, result.problems()));
+        }
+        if (!result.valid()) {
+            throw new BusinessException("模型输出连续两次无法解析: " + String.join("；", result.problems()));
+        }
+        return result.normalized();
+    }
+
+    /** 调用一次模型并校验/归一化输出 */
+    private ScriptChunkValidator.Result callAndValidate(ChatModel chatModel, String userMessage) {
         ChatResponse response = chatModel.call(new Prompt(List.of(
-                new SystemMessage(system),
-                new UserMessage(user))));
-        String text = response.getResult().getOutput().getText();
-        return extractJsonObject(text);
+                new SystemMessage(ScriptAutoSplitPrompts.SYSTEM_PROMPT),
+                new UserMessage(userMessage))));
+        return ScriptChunkValidator.parseAndNormalize(response.getResult().getOutput().getText());
     }
 
-    private JSONObject extractJsonObject(String text) {
-        if (text == null) {
-            throw new BusinessException("模型返回为空");
-        }
-        String cleaned = text.strip()
-                .replaceAll("^```(json)?", "")
-                .replaceAll("```$", "")
-                .strip();
-        int start = cleaned.indexOf('{');
-        int end = cleaned.lastIndexOf('}');
-        if (start < 0 || end <= start) {
-            throw new BusinessException("模型未返回 JSON");
-        }
-        return JSONUtil.parseObj(cleaned.substring(start, end + 1));
-    }
-
+    /**
+     * 落库模型转换成功的分集：写入模型给出的集标题与一句话集概要，
+     * 场次 dialogues/characters 使用 {@link ScriptChunkValidator} 归一化后的
+     * 标准 DialogueElement 结构（与 Agent 链路一致）。
+     */
     private void saveConvertedEpisode(Long scriptId, int episodeNumber, String chunkTitle,
                                       String chunk, JSONObject converted) {
         String title = converted.getStr("episodeTitle", chunkTitle);
         if (title == null || title.isBlank()) {
             title = chunkTitle;
         }
-        ScriptEpisode episode = insertEpisode(scriptId, episodeNumber, title, chunk);
+        String synopsis = converted.getStr("episodeSynopsis");
+        ScriptEpisode episode = insertEpisode(scriptId, episodeNumber, title, synopsis, chunk);
 
         JSONArray scenes = converted.getJSONArray("scenes");
         List<ScriptSceneItem> items = new ArrayList<>();
@@ -382,46 +425,40 @@ public class ScriptAutoSplitService {
                 }
                 index += 1;
                 String heading = sceneJson.getStr("sceneHeading", "场次 " + index);
-                String description = sceneJson.getStr("sceneDescription", "");
-                StringBuilder descriptionBuilder = new StringBuilder(description == null ? "" : description);
+                // 场次号对齐 Agent 链路的"集-场"格式；前后端消费处均按展示字符串处理
                 JSONArray dialogues = sceneJson.getJSONArray("dialogues");
-                if (dialogues != null && !dialogues.isEmpty()) {
-                    descriptionBuilder.append("\n\n对白：");
-                    for (Object d : dialogues) {
-                        if (d instanceof JSONObject dialogue) {
-                            descriptionBuilder.append("\n").append(dialogue.getStr("speaker", ""))
-                                    .append("：").append(dialogue.getStr("line", ""));
-                        }
-                    }
-                }
+                JSONArray characters = sceneJson.getJSONArray("characters");
                 items.add(ScriptSceneItem.builder()
                         .scriptId(scriptId)
                         .episodeId(episode.getId())
-                        .sceneNumber(String.valueOf(index))
+                        .sceneNumber(String.format("%d-%d", episodeNumber, index))
                         .sceneHeading(heading)
-                        .sceneDescription(descriptionBuilder.toString())
-                        .dialogues(dialogues == null ? null : dialogues.toString())
+                        .sceneDescription(sceneJson.getStr("sceneDescription", ""))
+                        .dialogues(dialogues == null || dialogues.isEmpty() ? null : dialogues.toString())
+                        .characters(characters == null || characters.isEmpty() ? null : characters.toString())
                         .status(1)
                         .build());
             }
         }
         if (items.isEmpty()) {
-            items.add(verbatimScene(scriptId, episode.getId(), 1, chunk));
+            items.add(verbatimScene(scriptId, episode.getId(), episodeNumber, chunk));
         }
         persistScenes(items, episode);
     }
 
     private void saveVerbatimEpisode(Long scriptId, int episodeNumber, String chunkTitle, String chunk) {
-        ScriptEpisode episode = insertEpisode(scriptId, episodeNumber, chunkTitle, chunk);
-        List<ScriptSceneItem> items = List.of(verbatimScene(scriptId, episode.getId(), 1, chunk));
+        ScriptEpisode episode = insertEpisode(scriptId, episodeNumber, chunkTitle, null, chunk);
+        List<ScriptSceneItem> items = List.of(verbatimScene(scriptId, episode.getId(), episodeNumber, chunk));
         persistScenes(items, episode);
     }
 
-    private ScriptEpisode insertEpisode(Long scriptId, int episodeNumber, String title, String rawContent) {
+    private ScriptEpisode insertEpisode(Long scriptId, int episodeNumber, String title,
+                                        String synopsis, String rawContent) {
         ScriptEpisode episode = ScriptEpisode.builder()
                 .scriptId(scriptId)
                 .episodeNumber(episodeNumber)
                 .title(title.length() > 120 ? title.substring(0, 120) : title)
+                .synopsis(synopsis)
                 .rawContent(rawContent)
                 .sortOrder(episodeNumber)
                 .totalScenes(0)
@@ -432,12 +469,13 @@ public class ScriptAutoSplitService {
         return episode;
     }
 
-    private ScriptSceneItem verbatimScene(Long scriptId, Long episodeId, int index, String chunk) {
+    /** 原文兜底场景：场景号沿用"集-场"格式（该集唯一一场），便于与转换成功的场次一致 */
+    private ScriptSceneItem verbatimScene(Long scriptId, Long episodeId, int episodeNumber, String chunk) {
         return ScriptSceneItem.builder()
                 .scriptId(scriptId)
                 .episodeId(episodeId)
-                .sceneNumber(String.valueOf(index))
-                .sceneHeading("原文片段 " + index)
+                .sceneNumber(episodeNumber + "-1")
+                .sceneHeading("原文片段 1")
                 .sceneDescription(chunk)
                 .status(1)
                 .build();

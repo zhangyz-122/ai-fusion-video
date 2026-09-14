@@ -170,6 +170,18 @@ public class AgentConversationService {
                 .orderByDesc(AgentConversation::getUpdateTime));
     }
 
+    /**
+     * 查询指定 Agent 类型下滞留 running 的任务会话：任务线程随进程重启消失后，
+     * 会话没有任何终态化调用，更新时间停在任务开始时刻，由调用方兜底终态化。
+     */
+    public List<AgentConversation> listStaleRunning(String agentType, LocalDateTime updatedBefore) {
+        return conversationMapper.selectList(new LambdaQueryWrapper<AgentConversation>()
+                .eq(AgentConversation::getAgentType, agentType)
+                .eq(AgentConversation::getStatus, "running")
+                .eq(AgentConversation::getDeleted, false)
+                .lt(AgentConversation::getUpdateTime, updatedBefore));
+    }
+
     public Mono<Void> deleteConversation(long id, long currentUserId) {
         return deleteOwnedConversation(
                 () -> ownedConversation(id, currentUserId), currentUserId);
