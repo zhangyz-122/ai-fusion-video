@@ -33,11 +33,18 @@ public final class OwnedExecutionRegistry {
     private final long maxBytes;
     private final Scheduler deadlineScheduler;
     private final Clock clock;
+    private volatile RunLeaseHeartbeatKeeper leaseHeartbeats = RunLeaseHeartbeatKeeper.noop();
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
 
     @Autowired
     void setMetrics(AgentRuntimeMetrics metrics) {
         this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
+
+    @Autowired
+    void setLeaseHeartbeats(RunLeaseHeartbeatKeeper leaseHeartbeats) {
+        this.leaseHeartbeats = Objects.requireNonNull(
+                leaseHeartbeats, "leaseHeartbeats must not be null");
     }
 
     @Autowired
@@ -104,6 +111,9 @@ public final class OwnedExecutionRegistry {
             }
             metrics.executionStarted();
             try {
+                // 执行被本地持有期间必须持续续期租约，长阻塞模型调用不依赖维护调度线程。
+                leaseHeartbeats.start(
+                        execution.runId(), execution.ownerInstanceId(), execution.ownerEpoch());
                 Mono<Void> monitor = Objects.requireNonNull(
                         controlMonitor.apply(handle),
                         "controlMonitor returned null");
@@ -171,6 +181,7 @@ public final class OwnedExecutionRegistry {
 
     private void remove(String runId, AgentExecutionHandle expected) {
         if (expected != null && handles.remove(runId, expected)) {
+            leaseHeartbeats.stop(runId);
             metrics.executionStopped();
             if (handles.isEmpty()) {
                 signalEmpty();

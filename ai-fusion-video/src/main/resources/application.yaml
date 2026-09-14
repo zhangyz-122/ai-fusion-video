@@ -89,6 +89,9 @@ fusion:
         coalesce-delay: 50ms
         coalesce-max-chars: 1024
       execution:
+        # Agent run 租约 TTL：owner 持有期间由 RunLeaseHeartbeatKeeper 按 TTL/3 间隔
+        # 主动续期，run 结束/中断/进程退出后停止；进程崩溃后其他实例在 TTL 后接管。
+        # 长剧本模型调用靠心跳保活，不要通过调大该值掩盖续期故障。
         owner-lease: 30s
         run-timeout: 30m
         confirmation-timeout: 48h
