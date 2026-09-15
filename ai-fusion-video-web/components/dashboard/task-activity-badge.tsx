@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 /**
  * 顶栏全局任务指示器：跨页面轮询当前用户的进行中任务，
  * 有活动任务时显示徽标，点击跳转仪表盘查看明细。
+ * 仅统计真正执行中的任务（running）；失败待确认、待质检等
+ * 待办事项不计入，避免旋转加载指示器传达错误的进行中语义。
  */
 export function TaskActivityBadge() {
   const router = useRouter();
@@ -32,11 +34,12 @@ export function TaskActivityBadge() {
     };
   }, []);
 
-  const runningCount = (activity?.running?.length ?? 0) + (activity?.pending?.length ?? 0);
+  // 待办事项（失败待确认、待质检）只在仪表盘“待处理”列表展示，不计入进行中
+  const runningCount = activity?.running?.length ?? 0;
   if (runningCount === 0) {
     return null;
   }
-  const latest = activity?.running?.[0] ?? activity?.pending?.[0];
+  const latest = activity?.running?.[0];
 
   return (
     <button
