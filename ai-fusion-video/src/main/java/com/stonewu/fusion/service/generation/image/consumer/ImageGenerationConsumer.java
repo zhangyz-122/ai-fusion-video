@@ -74,6 +74,13 @@ public class ImageGenerationConsumer {
         task.setModelId(queueModel.getId());
         pinWorkflowVersion(queueModel, task);
         generationModelCapabilityService.validateImageTask(queueModel, task);
+        // 提交期预解析 API 配置与生成策略，让“缺少 API 配置/未配置请求协议”在入队前报错，而不是排队消费后才失败。
+        ApiConfig submitApiConfig = queueModel.getApiConfigId() == null
+                ? null : apiConfigService.getById(queueModel.getApiConfigId());
+        if (submitApiConfig == null) {
+            throw new BusinessException("找不到匹配的 API 配置");
+        }
+        imageGenerationStrategyRouter.resolve(queueModel, submitApiConfig);
 
         String queueName = resolveQueueName(task.getModelId());
         String taskId = IdUtil.fastSimpleUUID();

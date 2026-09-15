@@ -76,6 +76,8 @@ public class VideoGenerationConsumer {
         pinWorkflowVersion(queueModel, task);
         applyTaskDefaults(task, queueModel);
         generationModelCapabilityService.validateVideoTask(queueModel, task);
+        // 提交期预解析生成策略，让“未配置请求协议/无匹配策略”在入队前报错，而不是排队消费后才失败。
+        videoGenerationStrategyRouter.resolve(queueModel);
 
         String queueName = resolveQueueName(task.getModelId());
         String taskId = IdUtil.fastSimpleUUID();

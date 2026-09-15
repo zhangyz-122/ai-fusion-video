@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.generation.video.consumer;
 
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflow;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
@@ -22,8 +23,10 @@ import org.mockito.ArgumentCaptor;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -164,6 +167,49 @@ class VideoGenerationConsumerTests {
         VideoTask createdTask = taskCaptor.getValue();
         assertThat(createdTask.getWatermark()).isFalse();
         assertThat(createdTask.getGenerateAudio()).isTrue();
+    }
+
+    @Test
+    void submitTaskRejectsAndDoesNotEnqueueWhenStrategyUnresolvable() {
+        RedisTaskQueue taskQueue = mock(RedisTaskQueue.class);
+        VideoGenerationService videoGenerationService = mock(VideoGenerationService.class);
+        AiModelService aiModelService = mock(AiModelService.class);
+        GenerationModelCapabilityService capabilityService = mock(GenerationModelCapabilityService.class);
+        VideoGenerationStrategyRouter strategyRouter = mock(VideoGenerationStrategyRouter.class);
+
+        AiModel model = AiModel.builder()
+                .id(103L)
+                .status(1)
+                .build();
+        when(aiModelService.getById(103L)).thenReturn(model);
+        when(strategyRouter.resolve(model))
+                .thenThrow(new BusinessException("视频模型未配置请求协议"));
+
+        VideoGenerationConsumer consumer = new VideoGenerationConsumer(
+                taskQueue,
+                videoGenerationService,
+                aiModelService,
+                mock(ApiConfigService.class),
+                capabilityService,
+                mock(ReferenceImageTransportService.class),
+                strategyRouter,
+                mock(MediaStorageService.class),
+                mock(VideoFrameExtractor.class),
+                mock(ComfyUiWorkflowService.class)
+        );
+
+        VideoTask task = VideoTask.builder()
+                .modelId(103L)
+                .prompt("test prompt")
+                .build();
+
+        assertThatThrownBy(() -> consumer.submitTask(task))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("视频模型未配置请求协议");
+
+        verify(videoGenerationService, never()).create(any(VideoTask.class));
+        verify(taskQueue, never()).push(any(), any());
+        consumer.shutdownWorkerExecutor();
     }
 
     @Test

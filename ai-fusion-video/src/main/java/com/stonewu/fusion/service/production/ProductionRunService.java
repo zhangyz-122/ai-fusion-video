@@ -149,7 +149,13 @@ public class ProductionRunService {
                 .build();
         stepMapper.insert(step);
 
-        String firstFrameImageUrl = firstNonBlank(request.getFirstFrameImageUrl(), item.getFirstFrameImageUrl());
+        // 与 ShotReadinessService 的首帧判定保持同一回退链（请求覆盖 → 锁定首帧 → 生成图 → 原图），
+        // 避免就绪校验放行后任务却没带图片，排队后才被“至少需要 N 张图片输入”拒绝。
+        String firstFrameImageUrl = firstNonBlank(
+                request.getFirstFrameImageUrl(),
+                item.getFirstFrameImageUrl(),
+                item.getGeneratedImageUrl(),
+                item.getImageUrl());
         String lastFrameImageUrl = firstNonBlank(request.getLastFrameImageUrl(), item.getLastFrameImageUrl());
 
         VideoTask.VideoTaskBuilder taskBuilder = VideoTask.builder()
@@ -568,6 +574,19 @@ public class ProductionRunService {
             return second.trim();
         }
         return third;
+    }
+
+    private String firstNonBlank(String first, String second, String third, String fourth) {
+        if (StringUtils.hasText(first)) {
+            return first.trim();
+        }
+        if (StringUtils.hasText(second)) {
+            return second.trim();
+        }
+        if (StringUtils.hasText(third)) {
+            return third.trim();
+        }
+        return fourth;
     }
 
     private String trimMessage(String message) {

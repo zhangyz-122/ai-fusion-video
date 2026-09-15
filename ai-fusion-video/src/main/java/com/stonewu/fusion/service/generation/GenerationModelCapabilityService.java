@@ -163,6 +163,7 @@ public class GenerationModelCapabilityService {
             return;
         }
         ImageModelCapability capability = resolveImageCapability(model, platform);
+        JSONObject config = getMergedModelConfig(model);
         List<String> referenceImages = parseJsonUrls(task.getRefImageUrls(), "refImageUrls");
 
         if (!referenceImages.isEmpty() && !capability.supportsReferenceImages()) {
@@ -181,8 +182,13 @@ public class GenerationModelCapabilityService {
                     + " 至少需要 " + capability.minReferenceImages() + " 张参考图，当前仅传入了 " + referenceImages.size() + " 张。");
         }
 
+        // 画幅/分辨率在提交期即按模型声明校验，避免任务入队后因平台拒绝而失败。
+        validateSupportedValue(model, config, "supportedAspectRatios",
+                StrUtil.blankToDefault(task.getAspectRatio(), task.getRatio()), "画幅", "图片模型");
+        validateSupportedValue(model, config, "supportedResolutions", task.getResolution(), "分辨率", "图片模型");
+
         if (referenceImageTransportService != null) {
-            referenceImageTransportService.validateInputs(model, getMergedModelConfig(model), referenceImages);
+            referenceImageTransportService.validateInputs(model, config, referenceImages);
         }
     }
 
@@ -269,6 +275,18 @@ public class GenerationModelCapabilityService {
                     + " 参考素材总数（参考图 + 参考视频 + 参考音频）最多 " + capability.maxReferenceTotal()
                     + " 个，当前传入了 " + totalReferenceInputs + " 个，请减少参考素材后重试。");
         }
+
+        // 没有任何输入（提示词、图片、参考视频、参考音频均缺失）的任务只会在平台请求阶段失败，提交期直接拦截。
+        // 注意：仅参考音频/参考视频而无提示词是部分模型的合法用法（如音频驱动生视频），不在此拦截。
+        if (StrUtil.isBlank(task.getPrompt()) && totalImageInputs == 0 && totalReferenceInputs == 0) {
+            throw new BusinessException("当前视频模型 " + modelLabel(model)
+                    + " 至少需要提示词、图片、参考视频或参考音频其中一种输入，请补充后重试。");
+        }
+
+        // 时长/画幅/分辨率在提交期按模型声明校验，避免任务排队后到消费阶段才被平台拒绝。
+        validateDurationInRange(model, config, task.getDuration());
+        validateSupportedValue(model, config, "supportedAspectRatios", task.getRatio(), "画幅", "视频模型");
+        validateSupportedValue(model, config, "supportedResolutions", task.getResolution(), "分辨率", "视频模型");
 
         if (referenceImageTransportService != null && totalImageInputs > 0) {
             List<String> imageInputs = new ArrayList<>();
@@ -482,6 +500,53 @@ public class GenerationModelCapabilityService {
             }
         }
         return null;
+    }
+
+    /** 读取配置里的正整数约束；未配置或非正数视为不限制。 */
+    private Integer getPositiveInteger(JSONObject config, String... keys) {
+        Integer value = getInteger(config, keys);
+        return value != null && value > 0 ? value : null;
+    }
+
+    /** 校验时长在模型声明的上下限内；未配置上下限的模型交给平台默认值处理。 */
+    private void validateDurationInRange(AiModel model, JSONObject config, Integer duration) {
+        if (duration == null) {
+            return;
+        }
+        Integer minDuration = getPositiveInteger(config, "minDuration");
+        if (minDuration != null && duration < minDuration) {
+            throw new BusinessException("当前视频模型 " + modelLabel(model)
+                    + " 最短支持 " + minDuration + " 秒，当前传入了 " + duration + " 秒。");
+        }
+        Integer maxDuration = getPositiveInteger(config, "maxDuration");
+        if (maxDuration != null && duration > maxDuration) {
+            throw new BusinessException("当前视频模型 " + modelLabel(model)
+                    + " 最长支持 " + maxDuration + " 秒，当前传入了 " + duration + " 秒。");
+        }
+    }
+
+    /** 校验取值在模型声明的候选列表内（忽略大小写）；未配置列表的模型不做限制。 */
+    private void validateSupportedValue(AiModel model, JSONObject config, String listKey,
+                                        String rawValue, String label, String modelKind) {
+        String value = StrUtil.trim(rawValue);
+        if (StrUtil.isBlank(value)) {
+            return;
+        }
+        List<String> supported = getStringList(config, listKey);
+        if (supported.isEmpty() || containsIgnoreCase(supported, value)) {
+            return;
+        }
+        throw new BusinessException("当前" + modelKind + " " + modelLabel(model)
+                + " 不支持" + label + " " + value + "，可选：" + String.join("、", supported) + "。");
+    }
+
+    private boolean containsIgnoreCase(List<String> values, String expected) {
+        for (String value : values) {
+            if (expected.equalsIgnoreCase(StrUtil.trim(value))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> getStringList(JSONObject config, String key) {

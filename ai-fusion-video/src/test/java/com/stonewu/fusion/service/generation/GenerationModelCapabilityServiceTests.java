@@ -626,4 +626,242 @@ class GenerationModelCapabilityServiceTests {
         assertNull(capability.maxReferenceTotal());
         service.validateVideoTask(model, task, "comfyui");
     }
+
+    private static final String TIMED_VIDEO_CONFIG = """
+            {
+              "supportFirstFrame": false,
+              "supportLastFrame": false,
+              "supportReferenceImages": true,
+              "maxReferenceImages": 1,
+              "minImageInputs": 1,
+              "minDuration": 4,
+              "maxDuration": 15,
+              "supportedResolutions": ["480p"],
+              "supportedAspectRatios": ["16:9"]
+            }
+            """;
+
+    @Test
+    void shouldRejectVideoDurationShorterThanConfiguredMinAtSubmitValidation() {
+        AiModel model = buildMultiRefVideoModel(TIMED_VIDEO_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .prompt("一段空镜头")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(3)
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "comfyui"));
+
+        assertTrue(ex.getMessage().contains("最短支持 4 秒"));
+    }
+
+    @Test
+    void shouldRejectVideoDurationLongerThanConfiguredMaxAtSubmitValidation() {
+        AiModel model = buildMultiRefVideoModel(TIMED_VIDEO_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .prompt("一段空镜头")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(16)
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "comfyui"));
+
+        assertTrue(ex.getMessage().contains("最长支持 15 秒"));
+    }
+
+    @Test
+    void shouldAllowVideoDurationInsideConfiguredRange() {
+        AiModel model = buildMultiRefVideoModel(TIMED_VIDEO_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .prompt("一段空镜头")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(5)
+                .build();
+
+        service.validateVideoTask(model, task, "comfyui");
+    }
+
+    @Test
+    void shouldNotCheckVideoDurationWhenUnconfigured() {
+        AiModel model = buildMultiRefVideoModel(MULTI_REF_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .prompt("一段空镜头")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(999)
+                .build();
+
+        service.validateVideoTask(model, task, "comfyui");
+    }
+
+    @Test
+    void shouldRejectUnsupportedVideoAspectRatioAtSubmitValidation() {
+        AiModel model = buildMultiRefVideoModel(TIMED_VIDEO_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .prompt("一段空镜头")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(5)
+                .ratio("4:3")
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "comfyui"));
+
+        assertTrue(ex.getMessage().contains("不支持画幅 4:3"));
+        assertTrue(ex.getMessage().contains("16:9"));
+    }
+
+    @Test
+    void shouldAllowSupportedVideoAspectRatioIgnoringCase() {
+        AiModel model = buildMultiRefVideoModel(TIMED_VIDEO_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .prompt("一段空镜头")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(5)
+                .ratio("16:9 ")
+                .build();
+
+        service.validateVideoTask(model, task, "comfyui");
+    }
+
+    @Test
+    void shouldRejectUnsupportedVideoResolutionAtSubmitValidation() {
+        AiModel model = buildMultiRefVideoModel(TIMED_VIDEO_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .prompt("一段空镜头")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(5)
+                .resolution("1080P")
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "comfyui"));
+
+        assertTrue(ex.getMessage().contains("不支持分辨率 1080P"));
+    }
+
+    @Test
+    void shouldAllowSupportedVideoResolutionIgnoringCase() {
+        AiModel model = buildMultiRefVideoModel(TIMED_VIDEO_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .prompt("一段空镜头")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(5)
+                .resolution("480p")
+                .build();
+
+        service.validateVideoTask(model, task, "comfyui");
+    }
+
+    @Test
+    void shouldRejectVideoTaskWithoutAnyInputAtSubmitValidation() {
+        AiModel model = buildMultiRefVideoModel("""
+                {
+                  "supportFirstFrame": false,
+                  "supportLastFrame": false,
+                  "supportReferenceImages": true,
+                  "maxReferenceImages": 2
+                }
+                """);
+        VideoTask task = VideoTask.builder()
+                .duration(5)
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "comfyui"));
+
+        assertTrue(ex.getMessage().contains("至少需要提示词、图片、参考视频或参考音频其中一种输入"));
+    }
+
+    @Test
+    void shouldAllowAudioOnlyVideoTaskWithoutPrompt() {
+        AiModel model = buildMultiRefVideoModel("""
+                {
+                  "supportFirstFrame": false,
+                  "supportLastFrame": false,
+                  "supportReferenceImages": false,
+                  "supportReferenceAudios": true,
+                  "maxReferenceAudios": 1
+                }
+                """);
+        VideoTask task = VideoTask.builder()
+                .referenceAudioUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.mp3")))
+                .duration(5)
+                .build();
+
+        service.validateVideoTask(model, task, "comfyui");
+    }
+
+    @Test
+    void shouldAllowVideoTaskWithImageInputButNoPrompt() {
+        AiModel model = buildMultiRefVideoModel(TIMED_VIDEO_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .duration(5)
+                .build();
+
+        service.validateVideoTask(model, task, "comfyui");
+    }
+
+    @Test
+    void shouldRejectUnsupportedImageResolutionAtSubmitValidation() {
+        ModelPresetService timedPresetService = new ModelPresetService() {
+            @Override
+            public String getPresetConfig(String code) {
+                return """
+                        {
+                          "supportReferenceImages": true,
+                          "maxReferenceImages": 1,
+                          "supportedAspectRatios": ["1:1", "16:9"],
+                          "supportedResolutions": ["1K", "2K"]
+                        }
+                        """;
+            }
+        };
+        GenerationModelCapabilityService imageService = new GenerationModelCapabilityService(
+                metadataResolver, timedPresetService);
+        AiModel model = AiModel.builder()
+                .name("Timed Image")
+                .code("timed_image_model")
+                .capabilityPresetCode("timed_image_model")
+                .build();
+        ImageTask task = ImageTask.builder()
+                .resolution("4K")
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> imageService.validateImageTask(model, task, "openai_compatible"));
+
+        assertTrue(ex.getMessage().contains("图片模型"));
+        assertTrue(ex.getMessage().contains("不支持分辨率 4K"));
+    }
+
+    @Test
+    void shouldAllowSupportedImageAspectRatioIgnoringCase() {
+        ModelPresetService timedPresetService = new ModelPresetService() {
+            @Override
+            public String getPresetConfig(String code) {
+                return """
+                        {
+                          "supportReferenceImages": true,
+                          "maxReferenceImages": 1,
+                          "supportedAspectRatios": ["1:1", "16:9"]
+                        }
+                        """;
+            }
+        };
+        GenerationModelCapabilityService imageService = new GenerationModelCapabilityService(
+                metadataResolver, timedPresetService);
+        AiModel model = AiModel.builder()
+                .name("Timed Image")
+                .code("timed_image_model")
+                .capabilityPresetCode("timed_image_model")
+                .build();
+        ImageTask task = ImageTask.builder()
+                .aspectRatio("16:9")
+                .build();
+
+        imageService.validateImageTask(model, task, "openai_compatible");
+    }
 }

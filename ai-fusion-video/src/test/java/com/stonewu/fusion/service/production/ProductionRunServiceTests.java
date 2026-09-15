@@ -314,6 +314,57 @@ class ProductionRunServiceTests {
         verify(repairExecutor).execute(eq(run), eq(step), eq(attempt));
     }
 
+    @Test
+    void startFallsBackToGeneratedImageForFirstFrameLikeReadinessGate() {
+        ProductionRunService service = service();
+        StoryboardItem item = StoryboardItem.builder()
+                .id(11L).storyboardId(21L).content("fallback prompt")
+                .generatedImageUrl("https://cdn.example.com/generated.png")
+                .build();
+        when(runMapper.selectOne(any())).thenReturn(null);
+        when(storyboardService.getItemById(11L)).thenReturn(item);
+        when(storyboardService.getById(21L)).thenReturn(
+                com.stonewu.fusion.entity.storyboard.Storyboard.builder().id(21L).projectId(7L).build());
+        when(aiModelService.getById(101L)).thenReturn(com.stonewu.fusion.entity.ai.AiModel.builder()
+                .id(101L).modelType(3).status(1).build());
+        when(generationModelCapabilityService.resolveVideoCapability(any()))
+                .thenReturn(new GenerationModelCapabilityService.VideoModelCapability(
+                        true, false, false, false, false, java.util.List.of(),
+                        false, false, 1, null, null, null, null));
+        doAnswer(invocation -> {
+            ProductionRun run = invocation.getArgument(0);
+            run.setId(301L);
+            return 1;
+        }).when(runMapper).insert(any(ProductionRun.class));
+        doAnswer(invocation -> {
+            ProductionStep step = invocation.getArgument(0);
+            step.setId(401L);
+            return 1;
+        }).when(stepMapper).insert(any(ProductionStep.class));
+        when(videoGenerationConsumer.submitTask(any(VideoTask.class))).thenReturn("task-301");
+        when(videoGenerationService.getByTaskId("task-301"))
+                .thenReturn(VideoTask.builder().id(501L).taskId("task-301").build());
+        when(runMapper.selectById(301L)).thenReturn(ProductionRun.builder()
+                .id(301L).userId(99L).storyboardItemId(11L)
+                .status(ProductionRunService.RUN_WAITING_GENERATION).build());
+        when(stepMapper.selectOne(any())).thenReturn(ProductionStep.builder()
+                .id(401L).runId(301L).videoTaskId(501L).build());
+        when(takeMapper.selectList(any())).thenReturn(java.util.List.of());
+        when(videoGenerationService.getById(501L)).thenReturn(VideoTask.builder().id(501L).build());
+
+        ProductionStartReqVO request = new ProductionStartReqVO();
+        request.setStoryboardItemId(11L);
+        request.setIdempotencyKey("fallback-run");
+        request.setModelId(101L);
+
+        service.start(request, 99L);
+
+        ArgumentCaptor<VideoTask> taskCaptor = ArgumentCaptor.forClass(VideoTask.class);
+        verify(videoGenerationConsumer).submitTask(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getFirstFrameImageUrl())
+                .isEqualTo("https://cdn.example.com/generated.png");
+    }
+
     private ProductionRunService service() {
         return new ProductionRunService(
                 runMapper,

@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.generation.image.consumer;
 
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflow;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import com.stonewu.fusion.entity.generation.ImageItem;
@@ -19,9 +21,11 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,12 +37,15 @@ class ImageGenerationConsumerTests {
         ImageGenerationService generationService = mock(ImageGenerationService.class);
         AiModelService aiModelService = mock(AiModelService.class);
         ComfyUiWorkflowService workflowService = mock(ComfyUiWorkflowService.class);
+        ApiConfigService apiConfigService = mock(ApiConfigService.class);
         AiModel model = AiModel.builder()
                 .id(5L)
                 .status(1)
+                .apiConfigId(7L)
                 .comfyuiWorkflowId(12L)
                 .build();
         when(aiModelService.getById(5L)).thenReturn(model);
+        when(apiConfigService.getById(7L)).thenReturn(ApiConfig.builder().id(7L).build());
         when(workflowService.requireWorkflow(12L)).thenReturn(ComfyUiWorkflow.builder()
                 .id(12L)
                 .status(1)
@@ -56,7 +63,7 @@ class ImageGenerationConsumerTests {
                 taskQueue,
                 generationService,
                 aiModelService,
-                mock(ApiConfigService.class),
+                apiConfigService,
                 mock(GenerationModelCapabilityService.class),
                 mock(ReferenceImageTransportService.class),
                 mock(ImageGenerationStrategyRouter.class),
@@ -68,6 +75,74 @@ class ImageGenerationConsumerTests {
 
         assertThat(task.getWorkflowVersionId()).isEqualTo(21L);
         verify(taskQueue).push(eq("image_generation:model:5"), any(String.class));
+        consumer.shutdownWorkerExecutor();
+    }
+
+    @Test
+    void submitTaskRejectsBeforeQueueingWhenApiConfigMissing() {
+        RedisTaskQueue taskQueue = mock(RedisTaskQueue.class);
+        ImageGenerationService generationService = mock(ImageGenerationService.class);
+        AiModelService aiModelService = mock(AiModelService.class);
+        AiModel model = AiModel.builder()
+                .id(6L)
+                .status(1)
+                .build();
+        when(aiModelService.getById(6L)).thenReturn(model);
+        ImageGenerationConsumer consumer = new ImageGenerationConsumer(
+                taskQueue,
+                generationService,
+                aiModelService,
+                mock(ApiConfigService.class),
+                mock(GenerationModelCapabilityService.class),
+                mock(ReferenceImageTransportService.class),
+                mock(ImageGenerationStrategyRouter.class),
+                mock(MediaStorageService.class),
+                mock(ComfyUiWorkflowService.class));
+        ImageTask task = ImageTask.builder().modelId(6L).prompt("test").count(1).build();
+
+        assertThatThrownBy(() -> consumer.submitTask(task))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("找不到匹配的 API 配置");
+
+        verify(generationService, never()).create(any(ImageTask.class));
+        verify(taskQueue, never()).push(any(), any());
+        consumer.shutdownWorkerExecutor();
+    }
+
+    @Test
+    void submitTaskRejectsBeforeQueueingWhenStrategyUnresolvable() {
+        RedisTaskQueue taskQueue = mock(RedisTaskQueue.class);
+        ImageGenerationService generationService = mock(ImageGenerationService.class);
+        AiModelService aiModelService = mock(AiModelService.class);
+        ApiConfigService apiConfigService = mock(ApiConfigService.class);
+        ImageGenerationStrategyRouter strategyRouter = mock(ImageGenerationStrategyRouter.class);
+        AiModel model = AiModel.builder()
+                .id(8L)
+                .status(1)
+                .apiConfigId(9L)
+                .build();
+        when(aiModelService.getById(8L)).thenReturn(model);
+        when(apiConfigService.getById(9L)).thenReturn(ApiConfig.builder().id(9L).build());
+        when(strategyRouter.resolve(eq(model), any(ApiConfig.class)))
+                .thenThrow(new BusinessException("图片模型未配置请求协议"));
+        ImageGenerationConsumer consumer = new ImageGenerationConsumer(
+                taskQueue,
+                generationService,
+                aiModelService,
+                apiConfigService,
+                mock(GenerationModelCapabilityService.class),
+                mock(ReferenceImageTransportService.class),
+                strategyRouter,
+                mock(MediaStorageService.class),
+                mock(ComfyUiWorkflowService.class));
+        ImageTask task = ImageTask.builder().modelId(8L).prompt("test").count(1).build();
+
+        assertThatThrownBy(() -> consumer.submitTask(task))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("图片模型未配置请求协议");
+
+        verify(generationService, never()).create(any(ImageTask.class));
+        verify(taskQueue, never()).push(any(), any());
         consumer.shutdownWorkerExecutor();
     }
 
