@@ -23,7 +23,9 @@ import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.invocation.InvocationOnMock;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -32,13 +34,19 @@ import org.springframework.cache.CacheManager;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -66,11 +74,13 @@ class ScriptAutoSplitServiceTests {
     private final AiProviderService aiProviderService = mock(AiProviderService.class);
     private final TaskStreamService taskStreamService = mock(TaskStreamService.class);
     private final AgentConversationService conversationService = mock(AgentConversationService.class);
+    private final ScriptMetadataSynthesizer metadataSynthesizer = mock(ScriptMetadataSynthesizer.class);
     private final CacheManager cacheManager = new ConcurrentMapCacheManager();
 
     private final ScriptAutoSplitService service = new ScriptAutoSplitService(
             scriptMapper, episodeMapper, sceneItemMapper,
-            aiModelService, aiProviderService, taskStreamService, conversationService, cacheManager);
+            aiModelService, aiProviderService, taskStreamService, conversationService,
+            metadataSynthesizer, cacheManager);
 
     private static String paragraph(int index, int length) {
         StringBuilder builder = new StringBuilder();
@@ -383,6 +393,7 @@ class ScriptAutoSplitServiceTests {
     @Test
     void runAutoSplit_convertedEpisode_persistsUnifiedSchemaAndSynopsis() {
         stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        stubSynthesis(new ScriptMetadataSynthesizer.MetadataResult(null, null, null, List.of()));
         ChatModel chatModel = mock(ChatModel.class);
         when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
@@ -418,17 +429,19 @@ class ScriptAutoSplitServiceTests {
     }
 
     @Test
-    void runAutoSplit_bothAttemptsFail_savesVerbatimEpisodeAsFallback() {
+    void runAutoSplit_allSplitPiecesFail_savesVerbatimEpisodeAsFallback() {
         stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        stubSynthesis(new ScriptMetadataSynthesizer.MetadataResult(null, null, null, List.of()));
         ChatModel chatModel = mock(ChatModel.class);
         when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
         when(chatModel.call(any(Prompt.class)))
                 .thenReturn(chatResponse("无法输出"))
-                .thenReturn(chatResponse("{\"scenes\":[]}"));
+                .thenReturn(chatResponse("{\"scenes\":[]}"))
+                .thenAnswer(invocation -> chatResponse("无法输出"));
 
         service.runAutoSplit(1L, 9L, 10L, "task-2", 6000);
 
-        // 两次失败后原文兜底：整块原文保存为该集唯一场景，任务正常完成
+        // 对半再切后全部子块仍失败：原始整块原文兜底保存为该集唯一场景，任务正常完成
         ArgumentCaptor<ScriptEpisode> episodeCaptor = ArgumentCaptor.forClass(ScriptEpisode.class);
         verify(episodeMapper).insert(episodeCaptor.capture());
         assertThat(episodeCaptor.getValue().getTitle()).isEqualTo("第一章 起点");
@@ -439,6 +452,195 @@ class ScriptAutoSplitServiceTests {
         assertThat(sceneCaptor.getValue().getSceneHeading()).isEqualTo("原文片段 1");
         assertThat(sceneCaptor.getValue().getDialogues()).isNull();
         verify(taskStreamService).complete(eq("task-2"), any());
+    }
+
+    // ========== 失败块对半再切 ==========
+
+    @Test
+    void convertChunkWithSplit_wholeFailsButHalvesSucceed_returnsPartsInOrder() {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenAnswer(invocation -> {
+            String text = userMessageText(invocation);
+            if (text.contains("左半标记") && text.contains("右半标记")) {
+                return chatResponse("无法输出");
+            }
+            if (text.contains("左半标记")) {
+                return chatResponse("""
+                        {"episodeTitle":"夜归","episodeSynopsis":"左半概要","scenes":[\
+                        {"sceneHeading":"内景 厨房 夜","sceneDescription":"左一场","dialogues":[]}]}\
+                        """);
+            }
+            if (text.contains("右半标记")) {
+                return chatResponse("""
+                        {"scenes":[{"sceneHeading":"外景 街道 夜","sceneDescription":"右一场","dialogues":[]}]}\
+                        """);
+            }
+            return chatResponse("无法输出");
+        });
+
+        List<JSONObject> parts = service.convertChunkWithSplit(chatModel, "第一章 起点",
+                "左半标记 甲乙丙丁\n右半标记 戊己庚辛", 6000);
+
+        // 整块首次失败后对半解析，两个子块结果按剧情顺序返回
+        assertThat(parts).hasSize(2);
+        assertThat(parts.get(0).getStr("episodeTitle")).isEqualTo("夜归");
+        assertThat(parts.get(1).getJSONArray("scenes").getJSONObject(0).getStr("sceneHeading"))
+                .isEqualTo("外景 街道 夜");
+    }
+
+    @Test
+    void convertChunkWithSplit_allPiecesFail_returnsEmptyAfterDepthLimit() {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse("无法输出"));
+
+        List<JSONObject> parts = service.convertChunkWithSplit(chatModel, "第一章 起点",
+                "甲乙丙丁\n戊己庚辛\n子丑寅卯\n卯辰巳午", 6000);
+
+        assertThat(parts).isEmpty();
+        // 递归深度最多 2 层：整块(1)+两半(2)+四份(4)=7 次 convertChunk，每次含修复重试共 14 次调用
+        verify(chatModel, times(14)).call(any(Prompt.class));
+    }
+
+    @Test
+    void splitInHalf_prefersParagraphBoundaryAndRejectsUnsplittableChunk() {
+        // 有段落边界：在中点附近回退到换行处
+        String[] halves = ScriptAutoSplitService.splitInHalf("甲乙丙丁\n戊己庚辛");
+        assertThat(halves[0]).isEqualTo("甲乙丙丁");
+        assertThat(halves[1]).isEqualTo("戊己庚辛");
+
+        // 无段落边界：字符中点硬切
+        String[] hardCut = ScriptAutoSplitService.splitInHalf("甲乙丙丁戊己庚辛");
+        assertThat(hardCut[0]).isEqualTo("甲乙丙丁");
+        assertThat(hardCut[1]).isEqualTo("戊己庚辛");
+
+        // 过短块不可再切
+        assertThat(ScriptAutoSplitService.splitInHalf("甲")).isNull();
+        assertThat(ScriptAutoSplitService.splitInHalf("  ")).isNull();
+        assertThat(ScriptAutoSplitService.splitInHalf(null)).isNull();
+    }
+
+    @Test
+    void runAutoSplit_subBlockTitlesMerged_firstNonBlankWinsAndSceneNumbersContinue() {
+        stubScriptAndModel("第一章 起点\n左半标记 甲乙丙丁\n右半标记 戊己庚辛");
+        stubSynthesis(new ScriptMetadataSynthesizer.MetadataResult(null, null, null, List.of()));
+        ChatModel chatModel = mock(ChatModel.class);
+        when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenAnswer(invocation -> {
+            String text = userMessageText(invocation);
+            if (text.contains("左半标记") && text.contains("右半标记")) {
+                return chatResponse("无法输出");
+            }
+            if (text.contains("左半标记")) {
+                return chatResponse("""
+                        {"episodeTitle":"夜归","episodeSynopsis":"左半概要","scenes":[\
+                        {"sceneHeading":"内景 厨房 夜","sceneDescription":"左一场","dialogues":[]},\
+                        {"sceneHeading":"外景 学校操场 白天","sceneDescription":"左二场","dialogues":[]}]}\
+                        """);
+            }
+            if (text.contains("右半标记")) {
+                return chatResponse("""
+                        {"scenes":[{"sceneHeading":"内景 客厅 夜","sceneDescription":"右一场","dialogues":[]}]}\
+                        """);
+            }
+            return chatResponse("无法输出");
+        });
+
+        service.runAutoSplit(1L, 9L, 10L, "task-3", 6000);
+
+        ArgumentCaptor<ScriptEpisode> episodeCaptor = ArgumentCaptor.forClass(ScriptEpisode.class);
+        verify(episodeMapper).insert(episodeCaptor.capture());
+        // 子块各自给标题时取第一个非空的，概要同理
+        assertThat(episodeCaptor.getValue().getTitle()).isEqualTo("夜归");
+        assertThat(episodeCaptor.getValue().getSynopsis()).isEqualTo("左半概要");
+
+        ArgumentCaptor<ScriptSceneItem> sceneCaptor = ArgumentCaptor.forClass(ScriptSceneItem.class);
+        verify(sceneItemMapper, times(3)).insert(sceneCaptor.capture());
+        List<ScriptSceneItem> scenes = sceneCaptor.getAllValues();
+        // 子块场次并入同一集，场次号跨子块连续；标头清洗（白天→日）落库前生效
+        assertThat(scenes).extracting(ScriptSceneItem::getSceneNumber)
+                .containsExactly("1-1", "1-2", "1-3");
+        assertThat(scenes).extracting(ScriptSceneItem::getSceneHeading)
+                .containsExactly("内景 厨房 夜", "外景 学校操场 日", "内景 客厅 夜");
+    }
+
+    // ========== 收尾合成：剧本级元数据 ==========
+
+    @Test
+    void runAutoSplit_metadataSynthesized_persistsStoryGenreAndCharacters() {
+        stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        stubSynthesis(new ScriptMetadataSynthesizer.MetadataResult(
+                "张三与母亲的故事", "家庭/剧情",
+                "[{\"name\":\"母亲\",\"importance\":\"主角\",\"description\":\"张三的母亲\"}]",
+                List.of()));
+        ChatModel chatModel = mock(ChatModel.class);
+        when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
+
+        service.runAutoSplit(1L, 9L, 10L, "task-4", 6000);
+
+        // 元数据写入剧本实体并携带分集摘要与角色出场统计
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ScriptMetadataSynthesizer.EpisodeDigest>> digestCaptor =
+                ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<ScriptMetadataSynthesizer.CharacterStat>> statsCaptor =
+                ArgumentCaptor.forClass(Collection.class);
+        verify(metadataSynthesizer).synthesize(eq(chatModel), digestCaptor.capture(), statsCaptor.capture());
+        assertThat(digestCaptor.getValue()).hasSize(1);
+        assertThat(digestCaptor.getValue().get(0).title()).isEqualTo("夜归");
+        assertThat(digestCaptor.getValue().get(0).synopsis()).contains("张三深夜回家");
+        assertThat(statsCaptor.getValue()).hasSize(1);
+        ScriptMetadataSynthesizer.CharacterStat stat =
+                statsCaptor.getValue().iterator().next();
+        assertThat(stat.getName()).isEqualTo("母亲");
+        assertThat(stat.getCount()).isEqualTo(1);
+        assertThat(stat.getSamples()).containsExactly("怎么才回来？");
+
+        // 元数据字段随 LambdaUpdateWrapper 落库
+        Set<Object> updatedValues = capturedScriptUpdateValues();
+        assertThat(updatedValues).contains("张三与母亲的故事", "家庭/剧情",
+                "[{\"name\":\"母亲\",\"importance\":\"主角\",\"description\":\"张三的母亲\"}]");
+        // 完成日志不含合成失败标注
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(taskStreamService).complete(eq("task-4"), messageCaptor.capture());
+        assertThat(messageCaptor.getValue()).isEqualTo("解析完成：共 1 集");
+    }
+
+    @Test
+    void runAutoSplit_metadataSynthesisFailed_degradesWithoutFailingTask() {
+        stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        stubSynthesis(new ScriptMetadataSynthesizer.MetadataResult(
+                null, null, null, List.of("故事梗概", "人物表")));
+        ChatModel chatModel = mock(ChatModel.class);
+        when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
+
+        service.runAutoSplit(1L, 9L, 10L, "task-5", 6000);
+
+        // 显式降级：任务仍正常完成，完成日志注明元数据合成失败
+        verify(metadataSynthesizer).synthesize(eq(chatModel), anyList(), anyCollection());
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(taskStreamService).complete(eq("task-5"), messageCaptor.capture());
+        assertThat(messageCaptor.getValue())
+                .isEqualTo("解析完成：共 1 集（元数据合成失败：故事梗概、人物表）");
+        Set<Object> updatedValues = capturedScriptUpdateValues();
+        assertThat(updatedValues).contains("解析完成：共 1 集（元数据合成失败：故事梗概、人物表）")
+                .doesNotContain("张三与母亲的故事");
+    }
+
+    @Test
+    void runAutoSplit_publishesSynthesizingProgress() {
+        stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        stubSynthesis(new ScriptMetadataSynthesizer.MetadataResult(null, null, null, List.of()));
+        ChatModel chatModel = mock(ChatModel.class);
+        when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
+
+        service.runAutoSplit(1L, 9L, 10L, "task-6", 6000);
+
+        verify(taskStreamService).publishContent("task-6", ScriptAutoSplitService.SYNTHESIZING_PROGRESS);
+        Set<Object> updatedValues = capturedScriptUpdateValues();
+        assertThat(updatedValues).contains(ScriptAutoSplitService.SYNTHESIZING_PROGRESS);
     }
 
     // ========== 测试辅助 ==========
@@ -455,6 +657,30 @@ class ScriptAutoSplitServiceTests {
 
     private static ChatResponse chatResponse(String text) {
         return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+    }
+
+    /** 桩定收尾合成结果，阻断真实合成调用 */
+    private void stubSynthesis(ScriptMetadataSynthesizer.MetadataResult result) {
+        when(metadataSynthesizer.synthesize(any(ChatModel.class), anyList(), anyCollection()))
+                .thenReturn(result);
+    }
+
+    /** 从 mock 调用中取出 Prompt 的用户消息文本（用于按块内容路由桩响应） */
+    private static String userMessageText(InvocationOnMock invocation) {
+        Prompt prompt = invocation.getArgument(0);
+        return ((UserMessage) prompt.getInstructions().get(1)).getText();
+    }
+
+    /** 汇总全部 scriptMapper.update 的 Wrapper 参数值（状态文案、梗概、人物表等） */
+    private Set<Object> capturedScriptUpdateValues() {
+        ArgumentCaptor<LambdaUpdateWrapper<Script>> captor =
+                ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(scriptMapper, atLeastOnce()).update(isNull(), captor.capture());
+        Set<Object> values = new HashSet<>();
+        for (LambdaUpdateWrapper<Script> wrapper : captor.getAllValues()) {
+            values.addAll(wrapper.getParamNameValuePairs().values());
+        }
+        return values;
     }
 
     /** 准备 runAutoSplit 所需的剧本与模型桩 */

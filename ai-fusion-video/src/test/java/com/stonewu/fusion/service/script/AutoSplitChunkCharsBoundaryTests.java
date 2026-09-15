@@ -48,7 +48,7 @@ class AutoSplitChunkCharsBoundaryTests {
     // ========== splitIntoChunks：切分尺寸与钳制一致性 ==========
 
     private final ScriptAutoSplitService service = new ScriptAutoSplitService(
-            null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null);
 
     /** 生成 count 个无换行的段落，每段 length 字符，段落间以单个换行分隔 */
     private static String paragraphs(int count, int length) {

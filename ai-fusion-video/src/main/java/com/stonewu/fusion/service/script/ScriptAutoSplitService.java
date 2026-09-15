@@ -33,7 +33,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -67,13 +70,15 @@ public class ScriptAutoSplitService {
     static final String STALE_PARSING_MESSAGE = "解析中断，请重跑";
     /** 任务流类型：TaskStreamService.createTask 与 afv_agent_conversation.agent_type 共用 */
     static final String AUTO_SPLIT_TASK_TYPE = "script_auto_split";
-    /**
-     * 僵尸会话判定阈值：任务线程随进程重启消失时，会话会永远停在 running，
-     * 超过该时长仍无更新的 script_auto_split 会话视为僵尸并终态化。
-     */
+    /** 僵尸会话判定阈值：任务线程随进程重启消失时，会话会永远停在 running，
+     * 超过该时长仍无更新的 script_auto_split 会话视为僵尸并终态化。 */
     static final int STALE_CONVERSATION_THRESHOLD_MINUTES = 120;
     /** 僵尸会话终态化的状态值 */
     static final String STALE_CONVERSATION_STATUS = "failed";
+    /** 收尾合成阶段的进度文案 */
+    static final String SYNTHESIZING_PROGRESS = "正在合成剧本元数据";
+    /** 失败块对半再切的最大递归深度：2 层即最多切成 4 份 */
+    static final int MAX_SPLIT_DEPTH = 2;
     /** ScriptService 实体缓存名与键前缀（与 @Cacheable value/key 保持一致） */
     private static final String SCRIPT_CACHE_NAME = "script";
     private static final String EPISODE_CACHE_NAME = "episode";
@@ -89,6 +94,7 @@ public class ScriptAutoSplitService {
     private final AiProviderService aiProviderService;
     private final TaskStreamService taskStreamService;
     private final AgentConversationService conversationService;
+    private final ScriptMetadataSynthesizer metadataSynthesizer;
     private final CacheManager cacheManager;
 
     private final ExecutorService autoSplitExecutor = Executors.newFixedThreadPool(2, r -> {
@@ -265,28 +271,119 @@ public class ScriptAutoSplitService {
         taskStreamService.publishContent(taskId, "已分块：" + total + " 块");
 
         int episodeNumber = 0;
+        List<ScriptMetadataSynthesizer.EpisodeDigest> episodeDigests = new ArrayList<>();
+        Map<String, ScriptMetadataSynthesizer.CharacterStat> characterStats = new LinkedHashMap<>();
         for (int i = 0; i < total; i++) {
             markParsing(scriptId, script.getProjectId(), 1, "正在解析分块 " + (i + 1) + "/" + total);
             String chunk = chunks.get(i);
             String chunkTitle = chunkTitle(chunks, i);
             episodeNumber += 1;
-            try {
-                JSONObject converted = convertChunk(chatModel, chunkTitle, chunk, chunkChars);
-                saveConvertedEpisode(scriptId, episodeNumber, chunkTitle, chunk, converted);
-            } catch (Exception convertFailure) {
-                // 单块转换失败（含一次修复重试后仍失败）不中断整体：原文兜底保存为该块的场景
-                log.warn("[AutoSplit] 分块 {} 转换失败，原文兜底保存: {}", i + 1, convertFailure.getMessage());
+            // 校验失败时对半再切递归解析；全部子块仍失败返回空列表走原文兜底
+            List<JSONObject> convertedParts =
+                    convertChunkWithSplit(chatModel, chunkTitle, chunk, chunkChars);
+            if (convertedParts.isEmpty()) {
+                // 对半再切后仍全部失败（含一次修复重试）：原文兜底保存为该块的场景
+                log.warn("[AutoSplit] 分块 {} 转换失败，原文兜底保存", i + 1);
                 saveVerbatimEpisode(scriptId, episodeNumber, chunkTitle, chunk);
+                episodeDigests.add(new ScriptMetadataSynthesizer.EpisodeDigest(chunkTitle, null));
+            } else {
+                saveConvertedEpisode(scriptId, episodeNumber, chunkTitle, chunk, convertedParts);
+                collectEpisodeDigestAndCharacters(episodeDigests, characterStats, chunkTitle, convertedParts);
             }
             taskStreamService.publishContent(taskId, "进度：" + (i + 1) + "/" + total);
         }
 
-        markParsing(scriptId, script.getProjectId(), 2, "解析完成：共 " + episodeNumber + " 集");
+        // 收尾合成剧本级元数据（故事梗概/题材/人物表），失败显式降级不中断任务
+        markParsing(scriptId, script.getProjectId(), 1, SYNTHESIZING_PROGRESS);
+        taskStreamService.publishContent(taskId, SYNTHESIZING_PROGRESS);
+        ScriptMetadataSynthesizer.MetadataResult metadata =
+                metadataSynthesizer.synthesize(chatModel, episodeDigests, characterStats.values());
+        String completionMessage = "解析完成：共 " + episodeNumber + " 集";
+        if (!metadata.success()) {
+            log.warn("[AutoSplit] 剧本元数据合成失败: scriptId={}, 缺失项={}",
+                    scriptId, metadata.failures());
+            completionMessage += "（元数据合成失败：" + String.join("、", metadata.failures()) + "）";
+        }
+        persistScriptMetadata(scriptId, script.getProjectId(), metadata);
+
+        markParsing(scriptId, script.getProjectId(), 2, completionMessage);
         scriptMapper.update(null, new LambdaUpdateWrapper<Script>()
                 .eq(Script::getId, scriptId)
                 .set(Script::getTotalEpisodes, episodeNumber));
-        taskStreamService.complete(taskId, "自动分块解析完成，共 " + episodeNumber + " 集");
+        taskStreamService.complete(taskId, completionMessage);
         log.info("[AutoSplit] 自动分块解析完成: scriptId={}, episodes={}", scriptId, episodeNumber);
+    }
+
+    /** 记录分集摘要与 type=1 对白的角色出场统计，供收尾合成阶段使用 */
+    private void collectEpisodeDigestAndCharacters(
+            List<ScriptMetadataSynthesizer.EpisodeDigest> episodeDigests,
+            Map<String, ScriptMetadataSynthesizer.CharacterStat> characterStats,
+            String chunkTitle, List<JSONObject> convertedParts) {
+        String title = firstNonBlank(convertedParts, "episodeTitle");
+        episodeDigests.add(new ScriptMetadataSynthesizer.EpisodeDigest(
+                title == null ? chunkTitle : title,
+                firstNonBlank(convertedParts, "episodeSynopsis")));
+        for (JSONObject part : convertedParts) {
+            JSONArray scenes = part.getJSONArray("scenes");
+            if (scenes == null) {
+                continue;
+            }
+            for (Object sceneObj : scenes) {
+                if (!(sceneObj instanceof JSONObject scene)) {
+                    continue;
+                }
+                JSONArray dialogues = scene.getJSONArray("dialogues");
+                if (dialogues == null) {
+                    continue;
+                }
+                for (Object dialogueObj : dialogues) {
+                    if (!(dialogueObj instanceof JSONObject dialogue)
+                            || !Integer.valueOf(1).equals(dialogue.getInt("type", 0))) {
+                        continue;
+                    }
+                    String characterName = dialogue.getStr("character_name", "");
+                    if (characterName.isBlank()) {
+                        continue;
+                    }
+                    characterStats.computeIfAbsent(characterName.strip(),
+                            ScriptMetadataSynthesizer.CharacterStat::new)
+                            .record(dialogue.getStr("content", ""));
+                }
+            }
+        }
+    }
+
+    /** 取子块结果中第一个非空字段（子块可能各自给出标题/概要，取第一个非空的） */
+    private static String firstNonBlank(List<JSONObject> parts, String key) {
+        for (JSONObject part : parts) {
+            String value = part.getStr(key);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /** 收尾合成结果落库：只写成功合成的字段并失效相关缓存 */
+    private void persistScriptMetadata(Long scriptId, Long projectId,
+                                       ScriptMetadataSynthesizer.MetadataResult metadata) {
+        if (metadata.storySynopsis() == null && metadata.genre() == null
+                && metadata.charactersJson() == null) {
+            return;
+        }
+        LambdaUpdateWrapper<Script> update = new LambdaUpdateWrapper<Script>()
+                .eq(Script::getId, scriptId);
+        if (metadata.storySynopsis() != null) {
+            update.set(Script::getStorySynopsis, metadata.storySynopsis());
+        }
+        if (metadata.genre() != null) {
+            update.set(Script::getGenre, metadata.genre());
+        }
+        if (metadata.charactersJson() != null) {
+            update.set(Script::getCharactersJson, metadata.charactersJson());
+        }
+        scriptMapper.update(null, update);
+        evictScriptRelatedCaches(scriptId, projectId);
     }
 
     /**
@@ -353,7 +450,7 @@ public class ScriptAutoSplitService {
         return chunks;
     }
 
-    private int paragraphBoundary(String text, int target) {
+    private static int paragraphBoundary(String text, int target) {
         int cut = Math.min(target, text.length());
         int boundary = text.lastIndexOf("\n", cut);
         return boundary > target / 2 ? boundary : cut;
@@ -373,19 +470,19 @@ public class ScriptAutoSplitService {
     /**
      * 逐块调用模型改写为结构化场次，输出经 {@link ScriptChunkValidator} 校验
      * 与归一化的 JSON；首次输出不通过时带着修复指令重试一次，仍不通过则抛出
-     * 异常，由调用方原文兜底保存。
+     * 异常，由 {@link #convertChunkWithSplit} 对半再切。
      */
     JSONObject convertChunk(ChatModel chatModel, String chunkTitle, String chunk, int chunkChars) {
         // 用户显式调大分块时，输入上限随之放宽，避免正常块被截断丢字
         int inputLimit = Math.max(MODEL_INPUT_MAX, chunkChars);
         String input = chunk.length() > inputLimit ? chunk.substring(0, inputLimit) : chunk;
         String userMessage = ScriptAutoSplitPrompts.userMessage(chunkTitle, input);
-        ScriptChunkValidator.Result result = callAndValidate(chatModel, userMessage);
+        ScriptChunkValidator.Result result = callAndValidate(chatModel, userMessage, input);
         if (!result.valid()) {
             log.warn("[AutoSplit] 模型输出未通过校验，携带修复指令重试一次: {}",
                     String.join("；", result.problems()));
             result = callAndValidate(chatModel,
-                    ScriptAutoSplitPrompts.repairMessage(userMessage, result.problems()));
+                    ScriptAutoSplitPrompts.repairMessage(userMessage, result.problems()), input);
         }
         if (!result.valid()) {
             throw new BusinessException("模型输出连续两次无法解析: " + String.join("；", result.problems()));
@@ -393,52 +490,111 @@ public class ScriptAutoSplitService {
         return result.normalized();
     }
 
-    /** 调用一次模型并校验/归一化输出 */
-    private ScriptChunkValidator.Result callAndValidate(ChatModel chatModel, String userMessage) {
+    /**
+     * 带对半再切的分块解析：convertChunk 校验失败且重试仍失败时，把该块按
+     * 段落边界对半切成两块分别解析（子块继承同样的校验+重试逻辑），递归深度
+     * 最多 {@link #MAX_SPLIT_DEPTH} 层（最多切成 4 份）。
+     * 返回各子块的转换结果（保持剧情顺序）；全部子块仍失败时返回空列表，
+     * 由调用方对原始块走原文兜底。
+     */
+    List<JSONObject> convertChunkWithSplit(ChatModel chatModel, String chunkTitle,
+                                           String chunk, int chunkChars) {
+        return convertChunkWithSplit(chatModel, chunkTitle, chunk, chunkChars, 0);
+    }
+
+    private List<JSONObject> convertChunkWithSplit(ChatModel chatModel, String chunkTitle,
+                                                   String chunk, int chunkChars, int depth) {
+        try {
+            return List.of(convertChunk(chatModel, chunkTitle, chunk, chunkChars));
+        } catch (Exception convertFailure) {
+            log.warn("[AutoSplit] 分块转换失败（递归深度 {}/{}）: {}",
+                    depth, MAX_SPLIT_DEPTH, convertFailure.getMessage());
+        }
+        if (depth >= MAX_SPLIT_DEPTH) {
+            return List.of();
+        }
+        String[] halves = splitInHalf(chunk);
+        if (halves == null) {
+            return List.of();
+        }
+        List<JSONObject> results = new ArrayList<>();
+        for (String half : halves) {
+            results.addAll(convertChunkWithSplit(chatModel, chunkTitle, half, chunkChars, depth + 1));
+        }
+        return results;
+    }
+
+    /** 按段落边界对半切分块；无可用边界或切出空块时返回 null 表示不可再切 */
+    static String[] splitInHalf(String chunk) {
+        String text = chunk == null ? "" : chunk.strip();
+        if (text.length() < 2) {
+            return null;
+        }
+        int cut = paragraphBoundary(text, text.length() / 2);
+        if (cut <= 0 || cut >= text.length()) {
+            return null;
+        }
+        String first = text.substring(0, cut).strip();
+        String second = text.substring(cut).strip();
+        if (first.isEmpty() || second.isEmpty()) {
+            return null;
+        }
+        return new String[]{first, second};
+    }
+
+    /** 调用一次模型并校验/归一化输出；input 为块原文，用于对白漏抽校验 */
+    private ScriptChunkValidator.Result callAndValidate(ChatModel chatModel,
+                                                        String userMessage, String input) {
         ChatResponse response = chatModel.call(new Prompt(List.of(
                 new SystemMessage(ScriptAutoSplitPrompts.SYSTEM_PROMPT),
                 new UserMessage(userMessage))));
-        return ScriptChunkValidator.parseAndNormalize(response.getResult().getOutput().getText());
+        return ScriptChunkValidator.parseAndNormalize(response.getResult().getOutput().getText(), input);
     }
 
     /**
      * 落库模型转换成功的分集：写入模型给出的集标题与一句话集概要，
      * 场次 dialogues/characters 使用 {@link ScriptChunkValidator} 归一化后的
      * 标准 DialogueElement 结构（与 Agent 链路一致）。
+     * convertedParts 为对半再切出的全部子块结果：场次按剧情顺序并入同一集
+     * （场次号跨子块连续），标题与概要取第一个子块的非空值。
      */
     private void saveConvertedEpisode(Long scriptId, int episodeNumber, String chunkTitle,
-                                      String chunk, JSONObject converted) {
-        String title = converted.getStr("episodeTitle", chunkTitle);
+                                      String chunk, List<JSONObject> convertedParts) {
+        String title = firstNonBlank(convertedParts, "episodeTitle");
         if (title == null || title.isBlank()) {
             title = chunkTitle;
         }
-        String synopsis = converted.getStr("episodeSynopsis");
+        String synopsis = firstNonBlank(convertedParts, "episodeSynopsis");
         ScriptEpisode episode = insertEpisode(scriptId, episodeNumber, title, synopsis, chunk);
 
-        JSONArray scenes = converted.getJSONArray("scenes");
+        JSONArray scenes = new JSONArray();
+        for (JSONObject part : convertedParts) {
+            JSONArray partScenes = part.getJSONArray("scenes");
+            if (partScenes != null) {
+                scenes.addAll(partScenes);
+            }
+        }
         List<ScriptSceneItem> items = new ArrayList<>();
         int index = 0;
-        if (scenes != null) {
-            for (Object obj : scenes) {
-                if (!(obj instanceof JSONObject sceneJson)) {
-                    continue;
-                }
-                index += 1;
-                String heading = sceneJson.getStr("sceneHeading", "场次 " + index);
-                // 场次号对齐 Agent 链路的"集-场"格式；前后端消费处均按展示字符串处理
-                JSONArray dialogues = sceneJson.getJSONArray("dialogues");
-                JSONArray characters = sceneJson.getJSONArray("characters");
-                items.add(ScriptSceneItem.builder()
-                        .scriptId(scriptId)
-                        .episodeId(episode.getId())
-                        .sceneNumber(String.format("%d-%d", episodeNumber, index))
-                        .sceneHeading(heading)
-                        .sceneDescription(sceneJson.getStr("sceneDescription", ""))
-                        .dialogues(dialogues == null || dialogues.isEmpty() ? null : dialogues.toString())
-                        .characters(characters == null || characters.isEmpty() ? null : characters.toString())
-                        .status(1)
-                        .build());
+        for (Object obj : scenes) {
+            if (!(obj instanceof JSONObject sceneJson)) {
+                continue;
             }
+            index += 1;
+            String heading = sceneJson.getStr("sceneHeading", "场次 " + index);
+            // 场次号对齐 Agent 链路的"集-场"格式；前后端消费处均按展示字符串处理
+            JSONArray dialogues = sceneJson.getJSONArray("dialogues");
+            JSONArray characters = sceneJson.getJSONArray("characters");
+            items.add(ScriptSceneItem.builder()
+                    .scriptId(scriptId)
+                    .episodeId(episode.getId())
+                    .sceneNumber(String.format("%d-%d", episodeNumber, index))
+                    .sceneHeading(heading)
+                    .sceneDescription(sceneJson.getStr("sceneDescription", ""))
+                    .dialogues(dialogues == null || dialogues.isEmpty() ? null : dialogues.toString())
+                    .characters(characters == null || characters.isEmpty() ? null : characters.toString())
+                    .status(1)
+                    .build());
         }
         if (items.isEmpty()) {
             items.add(verbatimScene(scriptId, episode.getId(), episodeNumber, chunk));

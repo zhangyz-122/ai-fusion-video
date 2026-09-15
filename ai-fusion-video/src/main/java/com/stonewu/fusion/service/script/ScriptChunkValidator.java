@@ -14,12 +14,17 @@ import java.util.Set;
  * 自动分块解析的模型输出校验与归一化（纯函数，便于单测）。
  * <p>
  * 校验规则：JSON 可解析、scenes 为非空数组、每一场都有非空 sceneHeading；
+ * 原文含对白引号（「」『』“”‘’）但输出没有任何 type=1 对白时判为对白漏抽；
  * 任一不满足即返回问题清单，供调用方带着修复指令重试一次。
  * 归一化规则：dialogues 统一为与 Agent 链路一致的结构
  * {type:整数, character_name, content, parenthetical, sortOrder}，
- * 出场角色从对白讲者去重推导（不额外要求模型输出 characters，降低小模型漂移）。
+ * 出场角色从对白讲者去重推导（不额外要求模型输出 characters，降低小模型漂移），
+ * sceneHeading 经 {@link HeadingNormalizer} 清洗后落库。
  */
 final class ScriptChunkValidator {
+
+    /** 原文对白引号：块原文包含任一即视为含对白（用于对白漏抽校验，避免误伤纯叙事块） */
+    private static final String DIALOGUE_QUOTES = "「」『』“”‘’";
 
     /** 校验+归一化结果：valid=false 时 problems 携带可直接回传给模型的修复要点 */
     record Result(boolean valid, List<String> problems, JSONObject normalized) {
@@ -36,8 +41,17 @@ final class ScriptChunkValidator {
     private ScriptChunkValidator() {
     }
 
-    /** 解析并校验模型输出；通过校验时返回归一化后的 JSON，否则返回问题清单 */
+    /** 解析并校验模型输出（不带原文，跳过对白漏抽校验）；通过校验时返回归一化后的 JSON */
     static Result parseAndNormalize(String modelText) {
+        return parseAndNormalize(modelText, null);
+    }
+
+    /**
+     * 解析并校验模型输出；sourceText 为块原文，用于对白漏抽校验：
+     * 原文含对白引号但输出场次中没有任何 type=1 对白时判为无效，
+     * 触发调用方带着「原文中有对白未提取」修复指令重试。
+     */
+    static Result parseAndNormalize(String modelText, String sourceText) {
         if (modelText == null || modelText.isBlank()) {
             return Result.fail(List.of("模型返回为空"));
         }
@@ -51,7 +65,58 @@ final class ScriptChunkValidator {
         if (!problems.isEmpty()) {
             return Result.fail(problems);
         }
-        return Result.ok(normalize(json));
+        JSONObject normalized = normalize(json);
+        String missingDialogueProblem = findMissingDialogueProblem(normalized, sourceText);
+        if (missingDialogueProblem != null) {
+            return Result.fail(List.of(missingDialogueProblem));
+        }
+        return Result.ok(normalized);
+    }
+
+    /**
+     * 对白漏抽校验：只有原文确实含对白引号才触发，避免误伤真·纯叙事块；
+     * 归一化后统计（兼容 type 缺失时按讲者推断为对白），行为 0 才判失败。
+     *
+     * @return 问题描述；无问题时返回 null
+     */
+    static String findMissingDialogueProblem(JSONObject normalized, String sourceText) {
+        if (sourceText == null || !containsDialogueQuote(sourceText)) {
+            return null;
+        }
+        JSONArray scenes = normalized.getJSONArray("scenes");
+        if (scenes == null) {
+            return null;
+        }
+        for (Object obj : scenes) {
+            if (!(obj instanceof JSONObject scene)) {
+                continue;
+            }
+            JSONArray dialogues = scene.getJSONArray("dialogues");
+            if (dialogues == null) {
+                continue;
+            }
+            for (Object dialogueObj : dialogues) {
+                if (dialogueObj instanceof JSONObject dialogue
+                        && Integer.valueOf(1).equals(dialogue.getInt("type", 0))) {
+                    return null;
+                }
+            }
+        }
+        return "原文中有对白未提取：原文含对白引号但输出中没有任何 type=1 对白，"
+                + "请把引号内的台词逐条抽取为 type=1 对白并标注 character_name";
+    }
+
+    /** 原文是否包含任一对白引号 */
+    static boolean containsDialogueQuote(String text) {
+        if (text == null) {
+            return false;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            if (DIALOGUE_QUOTES.indexOf(text.charAt(i)) >= 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -128,11 +193,12 @@ final class ScriptChunkValidator {
         return normalized;
     }
 
-    /** 归一化单场：标头与描述去空白、描述限长、dialogues 结构化、characters 从讲者去重 */
+    /** 归一化单场：标头清洗与去空白、描述限长、dialogues 结构化、characters 从讲者去重 */
     private static JSONObject normalizeScene(JSONObject scene) {
         JSONArray dialogues = normalizeDialogues(scene.get("dialogues"));
         JSONObject normalized = new JSONObject();
-        normalized.set("sceneHeading", scene.getStr("sceneHeading").strip());
+        // 标头经 HeadingNormalizer 清洗：时间词归一 + 去冗余后缀
+        normalized.set("sceneHeading", HeadingNormalizer.normalize(scene.getStr("sceneHeading")));
         normalized.set("sceneDescription", truncate(scene.getStr("sceneDescription", "")));
         normalized.set("dialogues", dialogues);
         // 出场角色从对白/旁白讲者去重推导，避免小模型额外输出 characters 造成与 dialogues 漂移

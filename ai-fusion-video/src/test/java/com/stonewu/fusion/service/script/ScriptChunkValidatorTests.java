@@ -190,4 +190,94 @@ class ScriptChunkValidatorTests {
         assertThat(result.valid()).isFalse();
         assertThat(result.problems()).containsExactly("scenes 第2场缺少 sceneHeading");
     }
+
+    // ========== 对白漏抽校验（源文含引号但输出无 type=1 对白）==========
+
+    @Test
+    void parseAndNormalize_sourceHasQuotesButNoDialogue_reportsMissingDialogue() {
+        String source = "张三推开厨房门。「怎么才回来？」母亲低声问。";
+
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"内景 厨房 夜","sceneDescription":"只有动作","dialogues":[\
+                {"type":2,"content":"张三推开厨房门，母亲低声问。"}]}]}\
+                """, source);
+
+        assertThat(result.valid()).isFalse();
+        assertThat(result.problems()).hasSize(1);
+        assertThat(result.problems().get(0))
+                .contains("原文中有对白未提取")
+                .contains("type=1");
+    }
+
+    @Test
+    void parseAndNormalize_sourceWithAllQuoteStyles_triggersMissingDialogueCheck() {
+        String output = """
+                {"scenes":[{"sceneHeading":"内景 厨房 夜","sceneDescription":"描述","dialogues":[\
+                {"type":2,"content":"叙述"}]}]}\
+                """;
+        // 『』与 ‘’ 引号同样触发
+        assertThat(ScriptChunkValidator.parseAndNormalize(output, "『进来吧。』他说").valid()).isFalse();
+        assertThat(ScriptChunkValidator.parseAndNormalize(output, "她低声说‘好’。").valid()).isFalse();
+        assertThat(ScriptChunkValidator.parseAndNormalize(output, "他喊道“站住”！").valid()).isFalse();
+    }
+
+    @Test
+    void parseAndNormalize_sourceHasQuotesAndDialogueExtracted_passes() {
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"内景 厨房 夜","sceneDescription":"描述","dialogues":[\
+                {"type":1,"character_name":"母亲","content":"怎么才回来？"}]}]}\
+                """, "「怎么才回来？」母亲低声问。");
+
+        assertThat(result.valid()).isTrue();
+    }
+
+    @Test
+    void parseAndNormalize_dialogueTypeMissingButSpeakerPresent_passes() {
+        // type 缺失但带讲者，归一化推断为 type=1，不误报对白漏抽
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"内景 厨房 夜","sceneDescription":"描述","dialogues":[\
+                {"character_name":"母亲","content":"怎么才回来？"}]}]}\
+                """, "「怎么才回来？」母亲低声问。");
+
+        assertThat(result.valid()).isTrue();
+    }
+
+    @Test
+    void parseAndNormalize_pureNarrativeSourceWithoutQuotes_passes() {
+        // 真·纯叙事块：原文没有对白引号，输出全为动作/旁白也不判失败
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"外景 山顶 日","sceneDescription":"纯叙事","dialogues":[\
+                {"type":2,"content":"他独自站在山顶。"},\
+                {"type":3,"character_name":"旁白","content":"多年以后。"}]}]}\
+                """, "他独自站在山顶。多年以后，人们仍记得这一天。");
+
+        assertThat(result.valid()).isTrue();
+    }
+
+    @Test
+    void parseAndNormalize_withoutSourceText_skipsMissingDialogueCheck() {
+        // 单参重载不带原文，跳过对白漏抽校验（兼容旧调用）
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"内景 厨房 夜","sceneDescription":"描述","dialogues":[\
+                {"type":2,"content":"叙述"}]}]}\
+                """);
+
+        assertThat(result.valid()).isTrue();
+    }
+
+    // ========== 标头清洗（落库前经 HeadingNormalizer）==========
+
+    @Test
+    void parseAndNormalize_cleansNoisySceneHeading() {
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[\
+                {"sceneHeading":"内景 103室 室","sceneDescription":"a","dialogues":[]},\
+                {"sceneHeading":"外景 学校操场 白天","sceneDescription":"b","dialogues":[]}]}\
+                """);
+
+        assertThat(result.valid()).isTrue();
+        JSONArray scenes = result.normalized().getJSONArray("scenes");
+        assertThat(scenes.getJSONObject(0).getStr("sceneHeading")).isEqualTo("内景 103室");
+        assertThat(scenes.getJSONObject(1).getStr("sceneHeading")).isEqualTo("外景 学校操场 日");
+    }
 }
