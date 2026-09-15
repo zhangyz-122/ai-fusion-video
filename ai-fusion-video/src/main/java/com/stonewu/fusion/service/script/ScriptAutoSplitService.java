@@ -296,12 +296,22 @@ public class ScriptAutoSplitService {
         // 收尾合成剧本级元数据（故事梗概/题材/人物表），失败显式降级不中断任务
         markParsing(scriptId, script.getProjectId(), 1, SYNTHESIZING_PROGRESS);
         taskStreamService.publishContent(taskId, SYNTHESIZING_PROGRESS);
+        long synthesisStartMillis = System.currentTimeMillis();
+        log.info("[AutoSplit] 进入剧本元数据合成阶段: scriptId={}, episodes={}, characters={}",
+                scriptId, episodeDigests.size(), characterStats.size());
         ScriptMetadataSynthesizer.MetadataResult metadata =
                 metadataSynthesizer.synthesize(chatModel, episodeDigests, characterStats.values());
+        long synthesisCostMillis = System.currentTimeMillis() - synthesisStartMillis;
         String completionMessage = "解析完成：共 " + episodeNumber + " 集";
-        if (!metadata.success()) {
-            log.warn("[AutoSplit] 剧本元数据合成失败: scriptId={}, 缺失项={}",
-                    scriptId, metadata.failures());
+        if (metadata.success()) {
+            log.info("[AutoSplit] 剧本元数据合成完成: scriptId={}, 耗时={}ms, 成功项={}",
+                    scriptId, synthesisCostMillis,
+                    String.join("、", synthesizedItemNames(metadata)));
+        } else {
+            log.warn("[AutoSplit] 剧本元数据合成降级: scriptId={}, 耗时={}ms, 成功项={}, 降级项={}",
+                    scriptId, synthesisCostMillis,
+                    String.join("、", synthesizedItemNames(metadata)),
+                    String.join("、", metadata.failures()));
             completionMessage += "（元数据合成失败：" + String.join("、", metadata.failures()) + "）";
         }
         persistScriptMetadata(scriptId, script.getProjectId(), metadata);
@@ -312,6 +322,21 @@ public class ScriptAutoSplitService {
                 .set(Script::getTotalEpisodes, episodeNumber));
         taskStreamService.complete(taskId, completionMessage);
         log.info("[AutoSplit] 自动分块解析完成: scriptId={}, episodes={}", scriptId, episodeNumber);
+    }
+
+    /** 合成成功的元数据项名称（题材随故事梗概同一次调用产出） */
+    private static List<String> synthesizedItemNames(ScriptMetadataSynthesizer.MetadataResult metadata) {
+        List<String> items = new ArrayList<>();
+        if (metadata.storySynopsis() != null) {
+            items.add("故事梗概");
+        }
+        if (metadata.genre() != null) {
+            items.add("题材");
+        }
+        if (metadata.charactersJson() != null) {
+            items.add("人物表");
+        }
+        return items;
     }
 
     /** 记录分集摘要与 type=1 对白的角色出场统计，供收尾合成阶段使用 */
@@ -469,8 +494,9 @@ public class ScriptAutoSplitService {
 
     /**
      * 逐块调用模型改写为结构化场次，输出经 {@link ScriptChunkValidator} 校验
-     * 与归一化的 JSON；首次输出不通过时带着修复指令重试一次，仍不通过则抛出
-     * 异常，由 {@link #convertChunkWithSplit} 对半再切。
+     * 与归一化的 JSON；首次输出有问题时带着修复指令重试一次：硬性问题仍不通过
+     * 则抛出异常，由 {@link #convertChunkWithSplit} 对半再切；软性问题（对白缺
+     * 说话人/标头缺景别前缀）重试后仍存在时接受现状，不整块失败。
      */
     JSONObject convertChunk(ChatModel chatModel, String chunkTitle, String chunk, int chunkChars) {
         // 用户显式调大分块时，输入上限随之放宽，避免正常块被截断丢字
@@ -478,14 +504,20 @@ public class ScriptAutoSplitService {
         String input = chunk.length() > inputLimit ? chunk.substring(0, inputLimit) : chunk;
         String userMessage = ScriptAutoSplitPrompts.userMessage(chunkTitle, input);
         ScriptChunkValidator.Result result = callAndValidate(chatModel, userMessage, input);
-        if (!result.valid()) {
-            log.warn("[AutoSplit] 模型输出未通过校验，携带修复指令重试一次: {}",
+        if (!result.problems().isEmpty()) {
+            log.warn("[AutoSplit] 模型输出存在问题，携带修复指令重试一次: {}",
                     String.join("；", result.problems()));
             result = callAndValidate(chatModel,
                     ScriptAutoSplitPrompts.repairMessage(userMessage, result.problems()), input);
         }
         if (!result.valid()) {
+            // 硬性问题重试后仍不通过：抛出交由上层对半再切/原文兜底
             throw new BusinessException("模型输出连续两次无法解析: " + String.join("；", result.problems()));
+        }
+        if (!result.problems().isEmpty()) {
+            // 软性问题重试后仍存在：接受现状，不做无限重试，也不做兜底改写
+            log.warn("[AutoSplit] 软性问题修复重试后仍存在，接受现状: {}",
+                    String.join("；", result.problems()));
         }
         return result.normalized();
     }

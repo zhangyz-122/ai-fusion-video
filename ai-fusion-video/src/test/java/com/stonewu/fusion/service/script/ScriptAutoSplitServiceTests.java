@@ -2,6 +2,9 @@ package com.stonewu.fusion.service.script;
 
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -24,6 +27,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -388,6 +392,64 @@ class ScriptAutoSplitServiceTests {
         verify(chatModel, times(2)).call(any(Prompt.class));
     }
 
+    // ========== 软性问题：修复重试一次后接受现状 ==========
+
+    @Test
+    void convertChunk_softProblemsOnBothAttempts_acceptsNormalizedResultAfterRetry() {
+        // 两轮输出都缺说话人与景别前缀：重试一次后接受现状，不抛出也不无限重试
+        String softProblemJson = """
+                {"scenes":[{"sceneHeading":"高空 日","sceneDescription":"描述","dialogues":[\
+                {"type":1,"content":"怎么才回来？"}]}]}\
+                """;
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse(softProblemJson))
+                .thenReturn(chatResponse(softProblemJson));
+
+        JSONObject converted = service.convertChunk(chatModel, "第一章 起点", "张三……", 6000);
+
+        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        verify(chatModel, times(2)).call(promptCaptor.capture());
+        assertThat(converted.getJSONArray("scenes").getJSONObject(0).getStr("sceneHeading"))
+                .isEqualTo("高空 日");
+        // 修复指令携带两类软性问题原文
+        assertThat(promptCaptor.getAllValues().get(1).getInstructions().get(1).getText())
+                .contains("第1场有对白缺少说话人")
+                .contains("场次1标头缺少内景/外景前缀");
+    }
+
+    @Test
+    void convertChunk_softProblemOnFirstAttempt_repairedOnRetry() {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse("""
+                        {"scenes":[{"sceneHeading":"高空 日","sceneDescription":"描述","dialogues":[\
+                        {"type":1,"content":"怎么才回来？"}]}]}\
+                        """))
+                .thenReturn(chatResponse(validEpisodeJson()));
+
+        JSONObject converted = service.convertChunk(chatModel, "第一章 起点", "张三……", 6000);
+
+        assertThat(converted.getStr("episodeTitle")).isEqualTo("夜归");
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
+    @Test
+    void convertChunk_softProblemThenHardFailure_throwsForSplitFallback() {
+        // 软性问题触发修复重试后，重试输出硬性失败：仍走对半再切的抛出路径
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class)))
+                .thenReturn(chatResponse("""
+                        {"scenes":[{"sceneHeading":"高空 日","sceneDescription":"描述","dialogues":[]}]}\
+                        """))
+                .thenReturn(chatResponse("无法输出"));
+
+        assertThatThrownBy(() -> service.convertChunk(chatModel, "第一章 起点", "张三……", 6000))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("连续两次");
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
+
     // ========== 全链路落库：schema 统一 + 集概要 + 原文兜底 ==========
 
     @Test
@@ -643,6 +705,46 @@ class ScriptAutoSplitServiceTests {
         assertThat(updatedValues).contains(ScriptAutoSplitService.SYNTHESIZING_PROGRESS);
     }
 
+    // ========== 收尾合成阶段日志：进入/完成/降级均落后端日志 ==========
+
+    @Test
+    void runAutoSplit_logsSynthesisEntryAndCompletionWithItems() {
+        stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        stubSynthesis(new ScriptMetadataSynthesizer.MetadataResult(
+                "张三与母亲的故事", "家庭/剧情",
+                "[{\"name\":\"母亲\",\"importance\":\"主角\",\"description\":\"张三的母亲\"}]",
+                List.of()));
+        ChatModel chatModel = mock(ChatModel.class);
+        when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
+
+        List<String> messages = captureAutoSplitLogs(
+                () -> service.runAutoSplit(1L, 9L, 10L, "task-7", 6000));
+
+        assertThat(messages).anySatisfy(message -> assertThat(message)
+                .contains("[AutoSplit]").contains("进入剧本元数据合成阶段").contains("scriptId=1"));
+        assertThat(messages).anySatisfy(message -> assertThat(message)
+                .contains("[AutoSplit]").contains("剧本元数据合成完成")
+                .contains("耗时=").contains("成功项=故事梗概、题材、人物表"));
+    }
+
+    @Test
+    void runAutoSplit_logsSynthesisDegradationWithItems() {
+        stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        stubSynthesis(new ScriptMetadataSynthesizer.MetadataResult(
+                "张三与母亲的故事", "家庭/剧情", null, List.of("人物表")));
+        ChatModel chatModel = mock(ChatModel.class);
+        when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
+
+        List<String> messages = captureAutoSplitLogs(
+                () -> service.runAutoSplit(1L, 9L, 10L, "task-8", 6000));
+
+        assertThat(messages).anySatisfy(message -> assertThat(message)
+                .contains("[AutoSplit]").contains("剧本元数据合成降级")
+                .contains("耗时=").contains("成功项=故事梗概、题材").contains("降级项=人物表"));
+    }
+
     // ========== 测试辅助 ==========
 
     private static String validEpisodeJson() {
@@ -663,6 +765,20 @@ class ScriptAutoSplitServiceTests {
     private void stubSynthesis(ScriptMetadataSynthesizer.MetadataResult result) {
         when(metadataSynthesizer.synthesize(any(ChatModel.class), anyList(), anyCollection()))
                 .thenReturn(result);
+    }
+
+    /** 捕获 ScriptAutoSplitService 的格式化日志内容，供收尾合成阶段日志断言 */
+    private List<String> captureAutoSplitLogs(Runnable action) {
+        Logger logger = (Logger) LoggerFactory.getLogger(ScriptAutoSplitService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            action.run();
+        } finally {
+            logger.detachAppender(appender);
+        }
+        return appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
     }
 
     /** 从 mock 调用中取出 Prompt 的用户消息文本（用于按块内容路由桩响应） */

@@ -14,8 +14,12 @@ import java.util.Set;
  * 自动分块解析的模型输出校验与归一化（纯函数，便于单测）。
  * <p>
  * 校验规则：JSON 可解析、scenes 为非空数组、每一场都有非空 sceneHeading；
- * 原文含对白引号（「」『』“”‘’）但输出没有任何 type=1 对白时判为对白漏抽；
- * 任一不满足即返回问题清单，供调用方带着修复指令重试一次。
+ * 原文含对白引号（「」『』“”‘’）但输出没有任何 type=1 对白时判为对白漏抽。
+ * 以上为硬性问题，任一不满足即返回问题清单，供调用方带着修复指令重试一次，
+ * 重试仍不通过则整块判失败（上层对半再切/原文兜底）。
+ * 软性问题（type=1 对白缺说话人、标头缺内景/外景前缀）同样进入问题清单触发
+ * 修复重试，但重试后仍存在时随归一化结果一并交付，由调用方接受现状，
+ * 不做无限重试，也不做兜底改写。
  * 归一化规则：dialogues 统一为与 Agent 链路一致的结构
  * {type:整数, character_name, content, parenthetical, sortOrder}，
  * 出场角色从对白讲者去重推导（不额外要求模型输出 characters，降低小模型漂移），
@@ -26,11 +30,20 @@ final class ScriptChunkValidator {
     /** 原文对白引号：块原文包含任一即视为含对白（用于对白漏抽校验，避免误伤纯叙事块） */
     private static final String DIALOGUE_QUOTES = "「」『』“”‘’";
 
-    /** 校验+归一化结果：valid=false 时 problems 携带可直接回传给模型的修复要点 */
+    /**
+     * 校验+归一化结果：valid=false 时 problems 携带可直接回传给模型的修复要点；
+     * valid=true 且 problems 非空表示软性问题（对白缺说话人/标头缺景别前缀），
+     * 归一化结果仍可交付，供调用方在修复重试仍不通过时接受现状。
+     */
     record Result(boolean valid, List<String> problems, JSONObject normalized) {
 
         static Result ok(JSONObject normalized) {
             return new Result(true, List.of(), normalized);
+        }
+
+        /** 软性问题交付：携带修复要点与归一化结果，重试仍存在时接受现状 */
+        static Result acceptable(List<String> problems, JSONObject normalized) {
+            return new Result(true, problems, normalized);
         }
 
         static Result fail(List<String> problems) {
@@ -70,6 +83,10 @@ final class ScriptChunkValidator {
         if (missingDialogueProblem != null) {
             return Result.fail(List.of(missingDialogueProblem));
         }
+        List<String> acceptableProblems = findAcceptableProblems(normalized);
+        if (!acceptableProblems.isEmpty()) {
+            return Result.acceptable(acceptableProblems, normalized);
+        }
         return Result.ok(normalized);
     }
 
@@ -104,6 +121,52 @@ final class ScriptChunkValidator {
         }
         return "原文中有对白未提取：原文含对白引号但输出中没有任何 type=1 对白，"
                 + "请把引号内的台词逐条抽取为 type=1 对白并标注 character_name";
+    }
+
+    /**
+     * 软性校验问题清单：type=1 对白缺说话人、标头缺内景/外景前缀。
+     * 与硬性校验不同，重试一次后仍存在时由调用方接受现状，不整块判失败。
+     * 与讲者推断协同：归一化时 type 缺失但有讲者的条目已推断为 type=1 且带讲者，
+     * 因此能触发缺说话人规则的只有模型显式输出 type=1 却未给讲者的条目；
+     * {@link HeadingNormalizer} 只做清洗不补写景别前缀，缺前缀的标头原样交付待模型自修。
+     */
+    static List<String> findAcceptableProblems(JSONObject normalized) {
+        List<String> problems = new ArrayList<>();
+        JSONArray scenes = normalized.getJSONArray("scenes");
+        if (scenes == null) {
+            return problems;
+        }
+        int index = 0;
+        for (Object obj : scenes) {
+            index += 1;
+            if (!(obj instanceof JSONObject scene)) {
+                continue;
+            }
+            if (hasDialogueMissingSpeaker(scene.getJSONArray("dialogues"))) {
+                problems.add("第" + index + "场有对白缺少说话人");
+            }
+            // 硬性校验已保证标头非空，HeadingNormalizer 清洗不改变景别前缀
+            String heading = scene.getStr("sceneHeading");
+            if (!heading.startsWith("内景") && !heading.startsWith("外景")) {
+                problems.add("场次" + index + "标头缺少内景/外景前缀");
+            }
+        }
+        return problems;
+    }
+
+    /** 该场是否存在 type=1 却缺说话人的对白条目 */
+    private static boolean hasDialogueMissingSpeaker(JSONArray dialogues) {
+        if (dialogues == null) {
+            return false;
+        }
+        for (Object obj : dialogues) {
+            if (obj instanceof JSONObject dialogue
+                    && Integer.valueOf(1).equals(dialogue.getInt("type", 0))
+                    && dialogue.getStr("character_name", "").isBlank()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 原文是否包含任一对白引号 */

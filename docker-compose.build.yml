@@ -20,9 +20,9 @@ services:
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-time-zone=${MYSQL_SESSION_TIME_ZONE:-+08:00}
     volumes:
       - mysql_data:/var/lib/mysql
-    # 如需从宿主机访问 MySQL，取消以下注释：
-    # ports:
-    #   - "127.0.0.1:43306:3306"
+    # 宿主机跑后端/全量测试用：仅绑定本机回环地址，不对局域网暴露
+    ports:
+      - "127.0.0.1:43306:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -36,9 +36,9 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD:-123456}
     volumes:
       - redis_data:/data
-    # 如需从宿主机访问 Redis，取消以下注释：
-    # ports:
-    #   - "127.0.0.1:46379:6379"
+    # 宿主机跑后端/全量测试用：仅绑定本机回环地址，不对局域网暴露
+    ports:
+      - "127.0.0.1:46379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-123456}", "ping"]
       interval: 10s

@@ -265,6 +265,95 @@ class ScriptChunkValidatorTests {
         assertThat(result.valid()).isTrue();
     }
 
+    // ========== 软性校验（对白缺说话人/标头缺景别前缀，修复重试后接受现状）==========
+
+    @Test
+    void parseAndNormalize_type1DialogueWithoutSpeaker_reportsAcceptableProblem() {
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"内景 厨房 夜","sceneDescription":"描述","dialogues":[\
+                {"type":1,"content":"怎么才回来？"}]}]}\
+                """);
+
+        // 软性问题：valid=true 且归一化结果仍交付，由调用方修复重试一次后接受现状
+        assertThat(result.valid()).isTrue();
+        assertThat(result.problems()).containsExactly("第1场有对白缺少说话人");
+        // JSONObject 同时是 Map 与 Iterable，套 Object 避免 AssertJ 重载歧义
+        assertThat((Object) result.normalized()).isNotNull();
+        assertThat(result.normalized().getJSONArray("scenes").getJSONObject(0)
+                .getJSONArray("dialogues").getJSONObject(0).getStr("content"))
+                .isEqualTo("怎么才回来？");
+    }
+
+    @Test
+    void parseAndNormalize_speakerOnDriftedField_notFlaggedAsMissingSpeaker() {
+        // type=1 但讲者漂移到 speaker 字段：归一化映射为 character_name，不触发软性校验
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"内景 厨房 夜","sceneDescription":"描述","dialogues":[\
+                {"type":"1","speaker":"张三","content":"我回来了。"}]}]}\
+                """);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.problems()).isEmpty();
+        assertThat(result.normalized().getJSONArray("scenes").getJSONObject(0)
+                .getJSONArray("dialogues").getJSONObject(0).getStr("character_name"))
+                .isEqualTo("张三");
+    }
+
+    @Test
+    void parseAndNormalize_typeInferredFromSpeaker_neverFlaggedAsMissingSpeaker() {
+        // type 缺失但有讲者：推断为对白且必有讲者，与缺说话人校验互不打架
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"内景 厨房 夜","sceneDescription":"描述","dialogues":[\
+                {"character_name":"母亲","content":"怎么才回来？"}]}]}\
+                """);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.problems()).isEmpty();
+    }
+
+    @Test
+    void parseAndNormalize_headingWithoutScenePrefix_reportsAcceptableProblem() {
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"高空 日","sceneDescription":"描述","dialogues":[]}]}\
+                """);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.problems()).containsExactly("场次1标头缺少内景/外景前缀");
+        // 不做兜底改写：缺前缀标头经 HeadingNormalizer 清洗后原样交付
+        assertThat(result.normalized().getJSONArray("scenes").getJSONObject(0)
+                .getStr("sceneHeading")).isEqualTo("高空 日");
+    }
+
+    @Test
+    void parseAndNormalize_softProblems_carrySceneIndex() {
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[\
+                {"sceneHeading":"高空 日","sceneDescription":"a","dialogues":[]},\
+                {"sceneHeading":"内景 厨房 夜","sceneDescription":"b","dialogues":[\
+                {"type":1,"content":"怎么才回来？"}]}]}\
+                """);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.problems()).containsExactlyInAnyOrder(
+                "场次1标头缺少内景/外景前缀", "第2场有对白缺少说话人");
+    }
+
+    @Test
+    void parseAndNormalize_missingDialogue_hardFailsAlongsideSoftProblems() {
+        // 对白漏抽是硬性问题：即使同时存在软性问题也整块判失败、不交付归一化结果
+        String source = "「怎么才回来？」母亲低声问。";
+        ScriptChunkValidator.Result result = ScriptChunkValidator.parseAndNormalize("""
+                {"scenes":[{"sceneHeading":"高空 日","sceneDescription":"只有动作","dialogues":[\
+                {"type":2,"content":"张三推开厨房门。"}]}]}\
+                """, source);
+
+        assertThat(result.valid()).isFalse();
+        // 硬性问题不交付归一化结果（Object 接收避免 AssertJ 重载歧义）
+        assertThat((Object) result.normalized()).isNull();
+        assertThat(result.problems()).hasSize(1);
+        assertThat(result.problems().get(0)).contains("原文中有对白未提取");
+    }
+
     // ========== 标头清洗（落库前经 HeadingNormalizer）==========
 
     @Test
