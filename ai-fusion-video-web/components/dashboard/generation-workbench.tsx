@@ -425,10 +425,11 @@ export default function GenerationWorkbench({
     if (!capabilities) return [];
 
     const options: SimpleAttachmentUploadOption[] = [];
+    // 引用计数与提交校验保持同一口径：统一走 clean（trim + 过滤空串）后的数量
     const imageInputCount =
-      form.firstFrame.length +
-      form.lastFrame.length +
-      form.referenceImages.length;
+      clean(form.firstFrame).length +
+      clean(form.lastFrame).length +
+      clean(form.referenceImages).length;
     const sharedImageRemaining =
       mode === "video" && capabilities.maxImageInputs > 0
         ? Math.max(0, capabilities.maxImageInputs - imageInputCount)
@@ -438,9 +439,9 @@ export default function GenerationWorkbench({
         ? Math.max(
             0,
             capabilities.maxReferenceTotal -
-              (form.referenceImages.length +
-                form.referenceVideos.length +
-                form.referenceAudios.length),
+              (clean(form.referenceImages).length +
+                clean(form.referenceVideos).length +
+                clean(form.referenceAudios).length),
           )
         : Number.POSITIVE_INFINITY;
     const imageDisabledReason = referenceImageUploadAvailability.supported
@@ -471,7 +472,7 @@ export default function GenerationWorkbench({
           Math.max(
             0,
             parseLimit(capabilities.maxReferenceImages, 1) -
-              form.referenceImages.length,
+              clean(form.referenceImages).length,
           ),
         );
       }
@@ -479,10 +480,18 @@ export default function GenerationWorkbench({
     }
 
     if (capabilities.supportsFirstFrame) {
-      addImageOption("firstFrame", "首帧图片", form.firstFrame.length ? 0 : 1);
+      addImageOption(
+        "firstFrame",
+        "首帧图片",
+        clean(form.firstFrame).length ? 0 : 1,
+      );
     }
     if (capabilities.supportsLastFrame) {
-      addImageOption("lastFrame", "尾帧图片", form.lastFrame.length ? 0 : 1);
+      addImageOption(
+        "lastFrame",
+        "尾帧图片",
+        clean(form.lastFrame).length ? 0 : 1,
+      );
     }
     if (capabilities.supportsReferenceImages) {
       addImageOption(
@@ -491,7 +500,7 @@ export default function GenerationWorkbench({
         Math.max(
           0,
           parseLimit(capabilities.maxReferenceImages, 1) -
-            form.referenceImages.length,
+            clean(form.referenceImages).length,
         ),
       );
     }
@@ -500,7 +509,7 @@ export default function GenerationWorkbench({
         Math.max(
           0,
           parseLimit(capabilities.maxReferenceVideos, 3) -
-            form.referenceVideos.length,
+            clean(form.referenceVideos).length,
         ),
         referenceTotalRemaining,
       );
@@ -518,7 +527,7 @@ export default function GenerationWorkbench({
         Math.max(
           0,
           parseLimit(capabilities.maxReferenceAudios, 3) -
-            form.referenceAudios.length,
+            clean(form.referenceAudios).length,
         ),
         referenceTotalRemaining,
       );
@@ -668,6 +677,27 @@ export default function GenerationWorkbench({
       if (totalReferences > capabilities.maxReferenceTotal) {
         return `当前模型参考素材总数最多 ${capabilities.maxReferenceTotal} 个（参考图 + 参考视频 + 参考音频），当前已选 ${totalReferences} 个`;
       }
+    }
+    // 与后端提交期校验保持同一套规则来源（模型能力声明），在表单侧先行给出即时提示。
+    if (form.duration < capabilities.minDuration) {
+      return `当前模型最短支持 ${capabilities.minDuration} 秒`;
+    }
+    if (form.duration > capabilities.maxDuration) {
+      return `当前模型最长支持 ${capabilities.maxDuration} 秒`;
+    }
+    if (
+      form.ratio &&
+      capabilities.supportedAspectRatios.length > 0 &&
+      !capabilities.supportedAspectRatios.includes(form.ratio)
+    ) {
+      return `当前模型不支持画幅 ${form.ratio}`;
+    }
+    if (
+      form.resolution &&
+      capabilities.supportedResolutions.length > 0 &&
+      !capabilities.supportedResolutions.includes(form.resolution)
+    ) {
+      return `当前模型不支持分辨率 ${form.resolution}`;
     }
     return "";
   };
