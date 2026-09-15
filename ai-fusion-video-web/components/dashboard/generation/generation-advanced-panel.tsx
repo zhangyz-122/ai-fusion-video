@@ -82,6 +82,24 @@ export function GenerationAdvancedPanel({
           (capabilities.supportsReferenceVideos ||
             capabilities.supportsReferenceAudios))),
   );
+  const referenceTotalRemaining =
+    mode === "video" && capabilities && capabilities.maxReferenceTotal > 0
+      ? Math.max(
+          0,
+          capabilities.maxReferenceTotal -
+            (form.referenceImages.filter(Boolean).length +
+              form.referenceVideos.filter(Boolean).length +
+              form.referenceAudios.filter(Boolean).length),
+        )
+      : undefined;
+  const clampReferenceMaxCount = (values: string[], perTypeMax: number) => {
+    const used = values.filter(Boolean).length;
+    const typeRemaining = Math.max(0, perTypeMax - used);
+    const remaining = referenceTotalRemaining !== undefined
+      ? Math.min(typeRemaining, referenceTotalRemaining)
+      : typeRemaining;
+    return used + remaining;
+  };
 
   const appendPromptSection = (section: string) => {
     const token = `${section}：`;
@@ -267,7 +285,7 @@ export function GenerationAdvancedPanel({
                     label="参考图片"
                     hint="主体、构图、风格或场景参考"
                     values={form.referenceImages}
-                    maxCount={parseLimit(capabilities.maxReferenceImages, 12)}
+                    maxCount={clampReferenceMaxCount(form.referenceImages, parseLimit(capabilities.maxReferenceImages, 12))}
                     mediaType="image"
                     uploadDisabledReason={
                       !referenceImageUploadAvailability.supported
@@ -288,7 +306,7 @@ export function GenerationAdvancedPanel({
                     label="参考视频"
                     hint="动作、运镜或特效参考"
                     values={form.referenceVideos}
-                    maxCount={parseLimit(capabilities.maxReferenceVideos, 3)}
+                    maxCount={clampReferenceMaxCount(form.referenceVideos, parseLimit(capabilities.maxReferenceVideos, 3))}
                     mediaType="video"
                     onChange={(referenceVideos) =>
                       onFormChange({ referenceVideos })
@@ -300,7 +318,7 @@ export function GenerationAdvancedPanel({
                     label="参考音频"
                     hint="节奏、音乐、声音或对白参考"
                     values={form.referenceAudios}
-                    maxCount={parseLimit(capabilities.maxReferenceAudios, 3)}
+                    maxCount={clampReferenceMaxCount(form.referenceAudios, parseLimit(capabilities.maxReferenceAudios, 3))}
                     mediaType="audio"
                     onChange={(referenceAudios) =>
                       onFormChange({ referenceAudios })

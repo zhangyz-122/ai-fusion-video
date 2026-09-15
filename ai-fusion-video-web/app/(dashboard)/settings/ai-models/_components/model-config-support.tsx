@@ -426,6 +426,7 @@ export function buildVideoCapabilityView(config: Record<string, unknown>): Gener
   const maxReferenceImages = getOptionalConfigNumber(config.maxReferenceImages);
   const maxReferenceVideos = getOptionalConfigNumber(config.maxReferenceVideos);
   const maxReferenceAudios = getOptionalConfigNumber(config.maxReferenceAudios);
+  const maxReferenceTotal = getOptionalConfigNumber(config.maxReferenceTotal);
 
   const chips: CapabilityChipDef[] = [
     { label: supportsFirstFrame ? "首帧" : "无首帧", tone: supportsFirstFrame ? "positive" : "muted" },
@@ -450,6 +451,10 @@ export function buildVideoCapabilityView(config: Record<string, unknown>): Gener
     },
   ];
 
+  if (maxReferenceTotal !== undefined && maxReferenceTotal > 0) {
+    chips.push({ label: `参考总数 ≤${maxReferenceTotal}`, tone: "info" });
+  }
+
   if (minImageInputs !== undefined || maxImageInputs !== undefined) {
     const imageInputLabel = minImageInputs !== undefined && maxImageInputs !== undefined
       ? `图输 ${minImageInputs}-${maxImageInputs} 张`
@@ -469,7 +474,8 @@ export function buildVideoCapabilityView(config: Record<string, unknown>): Gener
 
   return {
     chips,
-    summary: summaryParts.join("，") + "。",
+    summary: summaryParts.join("，")
+      + (maxReferenceTotal !== undefined && maxReferenceTotal > 0 ? `；参考素材总数 ≤${maxReferenceTotal}。` : "。"),
   };
 }
 

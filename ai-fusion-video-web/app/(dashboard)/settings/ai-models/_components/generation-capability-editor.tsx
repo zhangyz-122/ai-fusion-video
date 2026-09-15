@@ -190,6 +190,15 @@ export function GenerationCapabilityEditor({
           placeholder="例如：1"
           hint="referenceAudioUrls 的单独上限。"
         />
+        <CapabilityNumberField
+          label="参考素材总数上限"
+          value={getConfigNumberValue(config.maxReferenceTotal)}
+          onChange={value => updateNumberField("maxReferenceTotal", value)}
+          min={0}
+          step={1}
+          placeholder="例如：12"
+          hint="参考图 + 参考视频 + 参考音频的总数上限，留空表示不限制。"
+        />
       </div>
 
       <div className="space-y-2 border-t border-border/20 pt-2">

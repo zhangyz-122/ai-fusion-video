@@ -103,6 +103,8 @@ public class GenerationModelCapabilityService {
         Integer maxReferenceImages = getInteger(config, "maxReferenceImages", "maxRefImages");
         Integer maxReferenceVideos = getInteger(config, "maxReferenceVideos", "maxRefVideos");
         Integer maxReferenceAudios = getInteger(config, "maxReferenceAudios", "maxRefAudios");
+        Integer maxReferenceTotal = getInteger(config,
+                "maxReferenceTotal", "maxTotalReferences", "maxRefTotal", "refTotalMax");
 
         boolean finalSupportsFirstFrame = supportsFirstFrame != null
                 ? supportsFirstFrame : false;
@@ -120,6 +122,9 @@ public class GenerationModelCapabilityService {
         Integer finalMaxReferenceImages = maxReferenceImages != null ? Math.max(maxReferenceImages, 0) : null;
         Integer finalMaxReferenceVideos = maxReferenceVideos != null ? Math.max(maxReferenceVideos, 0) : null;
         Integer finalMaxReferenceAudios = maxReferenceAudios != null ? Math.max(maxReferenceAudios, 0) : null;
+        // 参考素材总数上限（参考图 + 参考视频 + 参考音频）；未配置或非正数表示不限制。
+        Integer finalMaxReferenceTotal = maxReferenceTotal != null && maxReferenceTotal > 0
+                ? maxReferenceTotal : null;
 
         if (!finalSupportsReferenceImages) {
             finalMaxReferenceImages = 0;
@@ -144,7 +149,8 @@ public class GenerationModelCapabilityService {
                 finalMaxImageInputs,
                 finalMaxReferenceImages,
                 finalMaxReferenceVideos,
-                finalMaxReferenceAudios
+                finalMaxReferenceAudios,
+                finalMaxReferenceTotal
         );
     }
 
@@ -257,6 +263,13 @@ public class GenerationModelCapabilityService {
                     + " 最多支持 " + capability.maxReferenceAudios() + " 个 referenceAudioUrls，当前传入了 " + referenceAudios.size() + " 个。");
         }
 
+        int totalReferenceInputs = referenceImages.size() + referenceVideos.size() + referenceAudios.size();
+        if (capability.maxReferenceTotal() != null && totalReferenceInputs > capability.maxReferenceTotal()) {
+            throw new BusinessException("当前视频模型 " + modelLabel(model)
+                    + " 参考素材总数（参考图 + 参考视频 + 参考音频）最多 " + capability.maxReferenceTotal()
+                    + " 个，当前传入了 " + totalReferenceInputs + " 个，请减少参考素材后重试。");
+        }
+
         if (referenceImageTransportService != null && totalImageInputs > 0) {
             List<String> imageInputs = new ArrayList<>();
             if (hasFirstFrame) imageInputs.add(task.getFirstFrameImageUrl());
@@ -333,6 +346,9 @@ public class GenerationModelCapabilityService {
         }
         parts.add("参考视频：" + referenceSupportText(capability.supportsReferenceVideos(), capability.maxReferenceVideos(), "个"));
         parts.add("参考音频：" + referenceSupportText(capability.supportsReferenceAudios(), capability.maxReferenceAudios(), "个"));
+        if (capability.maxReferenceTotal() != null) {
+            parts.add("参考素材总数最多 " + capability.maxReferenceTotal() + " 个");
+        }
         if (capability.minImageInputs() > 0) {
             parts.add("至少需要 " + capability.minImageInputs() + " 张图片输入");
         }
@@ -373,6 +389,7 @@ public class GenerationModelCapabilityService {
                 .set("maxReferenceImages", capability.maxReferenceImages())
                 .set("maxReferenceVideos", capability.maxReferenceVideos())
                 .set("maxReferenceAudios", capability.maxReferenceAudios())
+                .set("maxReferenceTotal", capability.maxReferenceTotal())
                 .set("supportedAspectRatios", getStringList(config, "supportedAspectRatios"))
                 .set("supportedResolutions", getStringList(config, "supportedResolutions"))
                 .set("minDuration", getInteger(config, "minDuration"))
@@ -599,6 +616,27 @@ public class GenerationModelCapabilityService {
                                        Integer maxImageInputs,
                                        Integer maxReferenceImages,
                                        Integer maxReferenceVideos,
-                                       Integer maxReferenceAudios) {
+                                       Integer maxReferenceAudios,
+                                       Integer maxReferenceTotal) {
+
+        /** 兼容既有调用方的构造器：未声明参考素材总数上限时视为不限制。 */
+        public VideoModelCapability(boolean supportsFirstFrame,
+                                    boolean supportsLastFrame,
+                                    boolean supportsReferenceImages,
+                                    boolean supportsReferenceVideos,
+                                    boolean supportsReferenceAudios,
+                                    List<String> referenceImageInputFormats,
+                                    boolean supportsReferenceImageUrlInput,
+                                    boolean supportsReferenceImageBase64Input,
+                                    int minImageInputs,
+                                    Integer maxImageInputs,
+                                    Integer maxReferenceImages,
+                                    Integer maxReferenceVideos,
+                                    Integer maxReferenceAudios) {
+            this(supportsFirstFrame, supportsLastFrame, supportsReferenceImages, supportsReferenceVideos,
+                    supportsReferenceAudios, referenceImageInputFormats, supportsReferenceImageUrlInput,
+                    supportsReferenceImageBase64Input, minImageInputs, maxImageInputs, maxReferenceImages,
+                    maxReferenceVideos, maxReferenceAudios, null);
+        }
     }
 }

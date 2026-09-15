@@ -398,15 +398,27 @@ export default function GenerationWorkbench({
     if (!capabilities) return 0;
     const imageCapacity = maxSimpleImageAttachments;
     if (mode === "image") return imageCapacity;
-    return (
-      imageCapacity +
-      (capabilities.supportsReferenceVideos
-        ? parseLimit(capabilities.maxReferenceVideos, 3)
-        : 0) +
-      (capabilities.supportsReferenceAudios
-        ? parseLimit(capabilities.maxReferenceAudios, 3)
-        : 0)
-    );
+    const frameSlots =
+      (capabilities.supportsFirstFrame ? 1 : 0) +
+      (capabilities.supportsLastFrame ? 1 : 0);
+    const imageReferenceSlots = capabilities.supportsReferenceImages
+      ? Math.min(
+          parseLimit(capabilities.maxReferenceImages, 1),
+          capabilities.maxImageInputs > 0
+            ? Math.max(0, capabilities.maxImageInputs - frameSlots)
+            : Number.POSITIVE_INFINITY,
+        )
+      : 0;
+    const videoSlots = capabilities.supportsReferenceVideos
+      ? parseLimit(capabilities.maxReferenceVideos, 3)
+      : 0;
+    const audioSlots = capabilities.supportsReferenceAudios
+      ? parseLimit(capabilities.maxReferenceAudios, 3)
+      : 0;
+    const referenceSlots = capabilities.maxReferenceTotal > 0
+      ? Math.min(imageReferenceSlots + videoSlots + audioSlots, capabilities.maxReferenceTotal)
+      : imageReferenceSlots + videoSlots + audioSlots;
+    return frameSlots + referenceSlots;
   }, [capabilities, maxSimpleImageAttachments, mode]);
 
   const simpleAttachmentOptions = useMemo<SimpleAttachmentUploadOption[]>(() => {
@@ -421,6 +433,16 @@ export default function GenerationWorkbench({
       mode === "video" && capabilities.maxImageInputs > 0
         ? Math.max(0, capabilities.maxImageInputs - imageInputCount)
         : Number.POSITIVE_INFINITY;
+    const referenceTotalRemaining =
+      mode === "video" && capabilities.maxReferenceTotal > 0
+        ? Math.max(
+            0,
+            capabilities.maxReferenceTotal -
+              (form.referenceImages.length +
+                form.referenceVideos.length +
+                form.referenceAudios.length),
+          )
+        : Number.POSITIVE_INFINITY;
     const imageDisabledReason = referenceImageUploadAvailability.supported
       ? undefined
       : referenceImageUploadAvailability.reason;
@@ -429,7 +451,7 @@ export default function GenerationWorkbench({
       label: string,
       typeRemaining: number,
     ) => {
-      const remaining = Math.min(typeRemaining, sharedImageRemaining);
+      const remaining = Math.min(typeRemaining, sharedImageRemaining, referenceTotalRemaining);
       if (remaining > 0) {
         options.push({
           kind,
@@ -474,10 +496,13 @@ export default function GenerationWorkbench({
       );
     }
     if (capabilities.supportsReferenceVideos) {
-      const remaining = Math.max(
-        0,
-        parseLimit(capabilities.maxReferenceVideos, 3) -
-          form.referenceVideos.length,
+      const remaining = Math.min(
+        Math.max(
+          0,
+          parseLimit(capabilities.maxReferenceVideos, 3) -
+            form.referenceVideos.length,
+        ),
+        referenceTotalRemaining,
       );
       if (remaining > 0) {
         options.push({
@@ -489,10 +514,13 @@ export default function GenerationWorkbench({
       }
     }
     if (capabilities.supportsReferenceAudios) {
-      const remaining = Math.max(
-        0,
-        parseLimit(capabilities.maxReferenceAudios, 3) -
-          form.referenceAudios.length,
+      const remaining = Math.min(
+        Math.max(
+          0,
+          parseLimit(capabilities.maxReferenceAudios, 3) -
+            form.referenceAudios.length,
+        ),
+        referenceTotalRemaining,
       );
       if (remaining > 0) {
         options.push({
@@ -631,6 +659,15 @@ export default function GenerationWorkbench({
       clean(form.lastFrame).length;
     if (mode === "video" && imageInputs < capabilities.minImageInputs) {
       return `当前模型至少需要 ${capabilities.minImageInputs} 个图片输入`;
+    }
+    if (mode === "video" && capabilities.maxReferenceTotal > 0) {
+      const totalReferences =
+        referenceImages.length +
+        clean(form.referenceVideos).length +
+        clean(form.referenceAudios).length;
+      if (totalReferences > capabilities.maxReferenceTotal) {
+        return `当前模型参考素材总数最多 ${capabilities.maxReferenceTotal} 个（参考图 + 参考视频 + 参考音频），当前已选 ${totalReferences} 个`;
+      }
     }
     return "";
   };

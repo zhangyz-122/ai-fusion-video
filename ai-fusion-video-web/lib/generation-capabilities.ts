@@ -17,6 +17,8 @@ export interface GenerationCapabilities {
   maxImageInputs: number;
   maxReferenceVideos: number;
   maxReferenceAudios: number;
+  /** 参考图 + 参考视频 + 参考音频的总数上限；0 表示不限制。 */
+  maxReferenceTotal: number;
   supportedAspectRatios: string[];
   supportedResolutions: string[];
   minDuration: number;
@@ -116,6 +118,7 @@ export function resolveGenerationCapabilities(model: AiModel, presets: ModelPres
     maxImageInputs: num(config, 0, "maxImageInputs", "maxImages"),
     maxReferenceVideos: num(config, 0, "maxReferenceVideos", "maxRefVideos"),
     maxReferenceAudios: num(config, 0, "maxReferenceAudios", "maxRefAudios"),
+    maxReferenceTotal: num(config, 0, "maxReferenceTotal", "maxTotalReferences", "maxRefTotal", "refTotalMax"),
     supportedAspectRatios: strings(config, ["1:1", "4:3", "3:4", "16:9", "9:16"], "supportedAspectRatios"),
     supportedResolutions: strings(config, imageModel ? (sizeStrings(config).slice(0, 12).length ? sizeStrings(config).slice(0, 12) : ["1024x1024"]) : ["720p", "1080p"], "supportedResolutions", "resolutions"),
     minDuration: num(config, 3, "minDuration"),

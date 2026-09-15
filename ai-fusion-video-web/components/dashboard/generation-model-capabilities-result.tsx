@@ -192,6 +192,9 @@ function VideoCapabilitySection({ data }: { data: CapabilityResultRecord }) {
         <CapabilityBadge label={supportsReferenceImages ? formatLimit("参考图 ≤", toNumber(data.maxReferenceImages), " 张") : "无参考图"} tone={supportsReferenceImages ? "positive" : "muted"} />
         <CapabilityBadge label={supportsReferenceVideos ? formatLimit("参考视频 ≤", toNumber(data.maxReferenceVideos), " 个") : "无参考视频"} tone={supportsReferenceVideos ? "positive" : "muted"} />
         <CapabilityBadge label={supportsReferenceAudios ? formatLimit("参考音频 ≤", toNumber(data.maxReferenceAudios), " 个") : "无参考音频"} tone={supportsReferenceAudios ? "positive" : "muted"} />
+        {toNumber(data.maxReferenceTotal) !== undefined && (
+          <CapabilityBadge label={`参考总数 ≤${toNumber(data.maxReferenceTotal)}`} tone="info" />
+        )}
         <CapabilityBadge label={`${toNumber(data.minImageInputs) ?? 0} - ${toNumber(data.maxImageInputs) ?? "∞"} 张图片输入`} tone="info" />
       </div>
 

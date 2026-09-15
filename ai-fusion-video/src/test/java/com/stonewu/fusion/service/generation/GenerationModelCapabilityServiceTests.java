@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -470,5 +471,159 @@ class GenerationModelCapabilityServiceTests {
         assertFalse(capability.supportsReferenceImages());
         assertFalse(capability.supportsReferenceVideos());
         assertFalse(capability.supportsReferenceAudios());
+    }
+
+    private AiModel buildMultiRefVideoModel(String configJson) {
+        return AiModel.builder()
+                .name("MultiRef Video")
+                .code("multiref_video_model")
+                .config(configJson)
+                .build();
+    }
+
+    private static final String MULTI_REF_CONFIG = """
+            {
+              "supportFirstFrame": false,
+              "supportLastFrame": false,
+              "supportReferenceImages": true,
+              "maxReferenceImages": 9,
+              "supportReferenceVideos": true,
+              "maxReferenceVideos": 3,
+              "supportReferenceAudios": true,
+              "maxReferenceAudios": 3,
+              "minImageInputs": 1,
+              "maxReferenceTotal": 12
+            }
+            """;
+
+    @Test
+    void shouldExposeReferenceTotalLimitFromModelConfig() {
+        AiModel model = buildMultiRefVideoModel(MULTI_REF_CONFIG);
+
+        GenerationModelCapabilityService.VideoModelCapability capability =
+                service.resolveVideoCapability(model, "comfyui");
+
+        assertEquals(12, capability.maxReferenceTotal());
+        assertEquals(9, capability.maxReferenceImages());
+        assertEquals(3, capability.maxReferenceVideos());
+        assertEquals(3, capability.maxReferenceAudios());
+    }
+
+    @Test
+    void shouldRejectReferenceInputsOverTotalLimit() {
+        AiModel model = buildMultiRefVideoModel(MULTI_REF_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.png",
+                        "https://example.com/ref-2.png",
+                        "https://example.com/ref-3.png",
+                        "https://example.com/ref-4.png",
+                        "https://example.com/ref-5.png",
+                        "https://example.com/ref-6.png",
+                        "https://example.com/ref-7.png",
+                        "https://example.com/ref-8.png",
+                        "https://example.com/ref-9.png")))
+                .referenceVideoUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.mp4",
+                        "https://example.com/ref-2.mp4")))
+                .referenceAudioUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.mp3",
+                        "https://example.com/ref-2.mp3")))
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "comfyui"));
+
+        assertTrue(ex.getMessage().contains("参考素材总数"));
+        assertTrue(ex.getMessage().contains("最多 12 个"));
+    }
+
+    @Test
+    void shouldAllowReferenceInputsExactlyAtTotalLimit() {
+        AiModel model = buildMultiRefVideoModel(MULTI_REF_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.png",
+                        "https://example.com/ref-2.png",
+                        "https://example.com/ref-3.png",
+                        "https://example.com/ref-4.png",
+                        "https://example.com/ref-5.png",
+                        "https://example.com/ref-6.png",
+                        "https://example.com/ref-7.png",
+                        "https://example.com/ref-8.png",
+                        "https://example.com/ref-9.png")))
+                .referenceVideoUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.mp4",
+                        "https://example.com/ref-2.mp4",
+                        "https://example.com/ref-3.mp4")))
+                .build();
+
+        service.validateVideoTask(model, task, "comfyui");
+    }
+
+    @Test
+    void shouldStillRejectReferenceInputsOverPerTypeLimit() {
+        AiModel model = buildMultiRefVideoModel(MULTI_REF_CONFIG);
+        VideoTask task = VideoTask.builder()
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.png",
+                        "https://example.com/ref-2.png",
+                        "https://example.com/ref-3.png",
+                        "https://example.com/ref-4.png",
+                        "https://example.com/ref-5.png",
+                        "https://example.com/ref-6.png",
+                        "https://example.com/ref-7.png",
+                        "https://example.com/ref-8.png",
+                        "https://example.com/ref-9.png",
+                        "https://example.com/ref-10.png")))
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "comfyui"));
+
+        assertTrue(ex.getMessage().contains("最多支持 9 张 referenceImageUrls"));
+    }
+
+    @Test
+    void shouldNotLimitReferenceTotalWhenUnconfigured() {
+        AiModel model = buildMultiRefVideoModel("""
+                {
+                  "supportFirstFrame": false,
+                  "supportLastFrame": false,
+                  "supportReferenceImages": true,
+                  "maxReferenceImages": 9,
+                  "supportReferenceVideos": true,
+                  "maxReferenceVideos": 3,
+                  "supportReferenceAudios": true,
+                  "maxReferenceAudios": 3,
+                  "minImageInputs": 1
+                }
+                """);
+        VideoTask task = VideoTask.builder()
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.png",
+                        "https://example.com/ref-2.png",
+                        "https://example.com/ref-3.png",
+                        "https://example.com/ref-4.png",
+                        "https://example.com/ref-5.png",
+                        "https://example.com/ref-6.png",
+                        "https://example.com/ref-7.png",
+                        "https://example.com/ref-8.png",
+                        "https://example.com/ref-9.png")))
+                .referenceVideoUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.mp4",
+                        "https://example.com/ref-2.mp4",
+                        "https://example.com/ref-3.mp4")))
+                .referenceAudioUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/ref-1.mp3",
+                        "https://example.com/ref-2.mp3",
+                        "https://example.com/ref-3.mp3")))
+                .build();
+
+        GenerationModelCapabilityService.VideoModelCapability capability =
+                service.resolveVideoCapability(model, "comfyui");
+
+        assertNull(capability.maxReferenceTotal());
+        service.validateVideoTask(model, task, "comfyui");
     }
 }
