@@ -9,6 +9,7 @@ import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.ai.model.AiModelToolCallSupportResolver;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -37,6 +38,7 @@ public class AiModelService {
     private final ApiConfigService apiConfigService;
     private final ModelPresetService modelPresetService;
     private final AiModelMetadataResolver aiModelMetadataResolver;
+    private final AiModelToolCallSupportResolver aiModelToolCallSupportResolver;
     private final ChatModelFactory chatModelFactory;
     private final ComfyUiWorkflowService comfyUiWorkflowService;
 
@@ -151,6 +153,13 @@ public class AiModelService {
         return aiModelMapper.selectList(new LambdaQueryWrapper<AiModel>()
                 .eq(AiModel::getStatus, 1)
                 .eq(AiModel::getModelType, modelType));
+    }
+
+    /**
+     * 解析模型是否支持工具调用；null 表示未知（如 Ollama 不在线）。
+     */
+    public Boolean supportsToolCalls(AiModel model) {
+        return aiModelToolCallSupportResolver.supportsToolCalls(model);
     }
 
     public AiModel getDefaultByType(Integer modelType) {

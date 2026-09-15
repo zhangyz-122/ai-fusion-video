@@ -451,7 +451,7 @@ export default function ScriptTabPage() {
     setShowEpisodeParseDialog(true);
   };
 
-  const handleEpisodeParse = async (rawContent: string) => {
+  const handleEpisodeParse = async (rawContent: string, modelId?: number) => {
     if (!script || !episodeToParseId) return;
     const ep = episodes.find((e) => e.id === episodeToParseId);
     if (!ep) return;
@@ -460,7 +460,7 @@ export default function ScriptTabPage() {
       // 1. 先保存原文到分集记录
       await scriptApi.updateEpisode({ id: episodeToParseId, rawContent });
 
-      // 2. 启动 script_episode_parse Pipeline
+      // 2. 启动 script_episode_parse Pipeline（依赖工具调用，modelId 由弹窗下拉过滤后提供）
       const pipelineId = addPipeline({
         label: `AI 解析 · 第 ${ep.episodeNumber} 集`,
         projectId,
@@ -470,6 +470,7 @@ export default function ScriptTabPage() {
           category: "pipeline",
           title: `AI 解析 · 第 ${ep.episodeNumber} 集`,
           projectId,
+          modelId,
           context: { episodeId: episodeToParseId, scriptId: script.id },
         },
         onComplete: async () => {

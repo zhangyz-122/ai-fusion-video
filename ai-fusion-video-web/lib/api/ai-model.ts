@@ -29,6 +29,8 @@ export interface AiModel {
   contextWindow: number | null;
   apiConfigId: number | null;
   comfyuiWorkflowId: number | null;
+  /** 是否支持工具调用：false 不支持（无法完成 Agent 完整解析），null 未知（如 Ollama 不在线） */
+  supportsToolCalls: boolean | null;
   createTime: string;
   updateTime: string;
 }

@@ -104,3 +104,14 @@ script 包测试 115 例全绿，全量 `./mvnw test` 804+ 例通过。
 3. 「正在合成剧本元数据」进度文案仅经 SSE 与 `parsing_progress` 传递，不写后端日志文件，如需留痕需补日志语句。
 4. 火山引擎账户欠费（403）待用户充值；充值后可考虑元数据合成等低成本步骤走 API 的混合路由。
 5. E2E 临时基建已随两轮验证清理完毕（socat 转发容器、临时后端、测试数据）；`.e2e-backup/` 保留两代数据备份（v1/v2）与测试样本。
+
+---
+
+## 关联改进：模型工具调用能力标注（2026-09-15 同日）
+
+防止在需要工具调用的完整解析入口选中不支持的模型（实测 Ollama Qwen3-8B 直接 400「does not support tools」）：
+
+- 后端新增 `OllamaCapabilitiesClient`（POST `/api/show` 读 `capabilities`，Redis 缓存 1h，Ollama 离线返回"未知"不报错）与 `AiModelToolCallSupportResolver`（API 平台默认支持）；模型列表接口新增 `supportsToolCalls` 字段（true/false/null）。
+- 前端在三个 agent 解析入口（原文页故事转剧本/按剧本结构解析、每集解析弹窗）禁用并标注「不支持完整解析」，失效选中自动回退可用默认模型；auto-split 入口不受限制。
+- 顺带修复两个隐藏缺陷：①「按剧本结构解析」原先不传所选 modelId（下拉形同虚设）；②每集「AI 解析该集」弹窗原先没有模型选择、只能吃后端默认模型（正是选错模型 400 的盲区），已补「解析模型」下拉。
+- 验证：后端新增 12 个单测、全量 852 例全绿；前端 tsc 零错误、eslint 0 error。

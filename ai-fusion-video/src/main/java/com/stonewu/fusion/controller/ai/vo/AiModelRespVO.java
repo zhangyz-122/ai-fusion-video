@@ -30,6 +30,8 @@ public class AiModelRespVO {
     private Integer contextWindow;
     private Long apiConfigId;
     private Long comfyuiWorkflowId;
+    @Schema(description = "是否支持工具调用：true 支持，false 不支持（无法完成 Agent 完整解析），null 未知（如 Ollama 不在线）")
+    private Boolean supportsToolCalls;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

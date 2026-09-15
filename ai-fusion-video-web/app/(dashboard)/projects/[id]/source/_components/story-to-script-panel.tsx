@@ -22,6 +22,12 @@ import { useAuthStore } from "@/lib/store/auth-store";
 /** 超过该字数自动切换为“自动分块解析”模式 */
 const LONG_TEXT_THRESHOLD = 30000;
 
+/** 不支持工具调用的模型在下拉项中的弱化标注 */
+const TOOL_CALL_UNSUPPORTED_LABEL = "不支持完整解析";
+
+/** 不支持工具调用的模型在下拉项中的悬停说明 */
+const TOOL_CALL_UNSUPPORTED_HINT = "该模型不支持工具调用，无法完成 Agent 完整解析；请更换模型，长文本可改用自动分块解析。";
+
 type Phase = "idle" | "starting" | "polling";
 
 /**
@@ -68,6 +74,8 @@ export function StoryToScriptPanel({
   const hasText = rawContent.trim().length > 0;
   const longText = rawContent.length > LONG_TEXT_THRESHOLD;
   const busy = phase !== "idle";
+  /** Agent 完整解析（story_to_script / script_full_parse）要求模型支持工具调用；自动分块解析对模型无要求 */
+  const isAgentParse = !longText;
 
   useEffect(() => {
     let active = true;
@@ -87,6 +95,17 @@ export function StoryToScriptPanel({
       active = false;
     };
   }, []);
+
+  /** Agent 解析入口已选模型不支持工具调用时清空选择，回退到可用的默认模型，避免启动后 400 */
+  useEffect(() => {
+    if (!isAgentParse) return;
+    const selected = models.find((m) => String(m.id) === modelId);
+    if (!selected || selected.supportsToolCalls !== false) return;
+    const candidate =
+      models.find((m) => m.supportsToolCalls !== false && m.defaultModel) ??
+      models.find((m) => m.supportsToolCalls !== false);
+    setModelId(candidate ? String(candidate.id) : "");
+  }, [isAgentParse, models, modelId]);
 
   /** 已有剧集时，转换前先重置（保留原文，清空旧剧集） */
   const resetExistingEpisodes = async () => {
@@ -164,6 +183,7 @@ export function StoryToScriptPanel({
           category: "pipeline",
           title: `AI 剧本解析：${displayTitle}`,
           projectId,
+          modelId: modelId ? Number(modelId) : undefined,
           context: { scriptId },
         },
         onComplete: async () => {
@@ -274,12 +294,25 @@ export function StoryToScriptPanel({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {models.map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)}>
-                        {m.name}
-                        {m.defaultModel ? "（默认）" : ""}
-                      </SelectItem>
-                    ))}
+                    {models.map((m) => {
+                      const toolUnsupported = isAgentParse && m.supportsToolCalls === false;
+                      return (
+                        <SelectItem
+                          key={m.id}
+                          value={String(m.id)}
+                          disabled={toolUnsupported}
+                          title={toolUnsupported ? TOOL_CALL_UNSUPPORTED_HINT : undefined}
+                        >
+                          {m.name}
+                          {m.defaultModel ? "（默认）" : ""}
+                          {toolUnsupported && (
+                            <span className="text-xs text-muted-foreground">
+                              {TOOL_CALL_UNSUPPORTED_LABEL}
+                            </span>
+                          )}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -303,6 +336,12 @@ export function StoryToScriptPanel({
               </div>
             )}
           </div>
+
+          {isAgentParse && models.length > 0 && !modelId && (
+            <p className="text-xs text-muted-foreground">
+              当前模型均不支持完整解析，请在模型管理中调整后再试。
+            </p>
+          )}
 
           {longText && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
@@ -344,7 +383,7 @@ export function StoryToScriptPanel({
                   : "转成剧本"}
             </Button>
             {!longText && (
-              <Button variant="ghost" size="sm" onClick={() => void startStructuredParse()} disabled={busy}>
+              <Button variant="ghost" size="sm" onClick={() => void startStructuredParse()} disabled={busy || !modelId}>
                 <FileText data-icon="inline-start" />
                 按剧本结构解析
               </Button>

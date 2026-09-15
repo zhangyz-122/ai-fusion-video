@@ -1,11 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { X, Sparkles, Loader2, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Sparkles, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { ScriptEpisode } from "@/lib/api/script";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
+
+/** 不支持工具调用的模型在下拉项中的弱化标注与悬停说明 */
+const TOOL_CALL_UNSUPPORTED_LABEL = "不支持完整解析";
+const TOOL_CALL_UNSUPPORTED_HINT = "该模型不支持工具调用，无法完成 AI 解析，请更换模型。";
 
 interface EpisodeParseDialogProps {
   open: boolean;
@@ -14,8 +27,8 @@ interface EpisodeParseDialogProps {
   hasExistingScenes: boolean;
   existingSceneCount?: number;
   onClose: () => void;
-  /** 用户确认后回调，传入粘贴的剧本原文 */
-  onStartParse: (rawContent: string) => void;
+  /** 用户确认后回调，传入粘贴的剧本原文与所选解析模型（未选时走后端默认模型） */
+  onStartParse: (rawContent: string, modelId?: number) => void;
 }
 
 export function EpisodeParseDialog({
@@ -29,6 +42,31 @@ export function EpisodeParseDialog({
   const [rawContent, setRawContent] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
+  const [models, setModels] = useState<AiModel[]>([]);
+  const [modelId, setModelId] = useState("");
+
+  // 打开时加载文本模型；分集解析是 Agent 流程，需禁用不支持工具调用的模型
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    aiModelApi
+      .listByType(1)
+      .then((list) => {
+        if (!active) return;
+        const enabled = list.filter((m) => m.status === 1);
+        setModels(enabled);
+        const usable = enabled.filter((m) => m.supportsToolCalls !== false);
+        const fallback = usable.find((m) => m.defaultModel) ?? usable[0];
+        setModelId((prev) => prev || (fallback ? String(fallback.id) : ""));
+      })
+      .catch(() => {
+        // 模型列表加载失败不阻塞解析：不传 modelId 时由后端走默认模型
+        if (active) setModels([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   const handleSubmit = () => {
     if (!rawContent.trim()) {
@@ -40,10 +78,11 @@ export function EpisodeParseDialog({
       return;
     }
     setError("");
-    onStartParse(rawContent.trim());
+    onStartParse(rawContent.trim(), modelId ? Number(modelId) : undefined);
     // 重置状态
     setRawContent("");
     setConfirmed(false);
+    setModelId("");
     onClose();
   };
 
@@ -51,6 +90,7 @@ export function EpisodeParseDialog({
     setRawContent("");
     setConfirmed(false);
     setError("");
+    setModelId("");
     onClose();
   };
 
@@ -143,6 +183,47 @@ export function EpisodeParseDialog({
                     autoFocus
                   />
                 </div>
+
+                {/* 解析模型：分集解析依赖工具调用，禁用不支持的模型 */}
+                {models.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium" htmlFor="episode-parse-model">
+                      解析模型
+                    </label>
+                    <Select
+                      value={modelId}
+                      onValueChange={(v) => setModelId(v ?? "")}
+                      items={models.map((m) => ({ value: String(m.id), label: m.name }))}
+                    >
+                      <SelectTrigger id="episode-parse-model" className="w-full">
+                        <SelectValue placeholder="选择文本模型（默认使用系统默认模型）" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {models.map((m) => {
+                            const toolUnsupported = m.supportsToolCalls === false;
+                            return (
+                              <SelectItem
+                                key={m.id}
+                                value={String(m.id)}
+                                disabled={toolUnsupported}
+                                title={toolUnsupported ? TOOL_CALL_UNSUPPORTED_HINT : undefined}
+                              >
+                                {m.name}
+                                {m.defaultModel ? "（默认）" : ""}
+                                {toolUnsupported && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {TOOL_CALL_UNSUPPORTED_LABEL}
+                                  </span>
+                                )}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {error && <p className="text-sm text-destructive">{error}</p>}
               </div>

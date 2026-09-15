@@ -101,14 +101,26 @@ public class AiModelController {
     @GetMapping("/list")
     @Operation(summary = "获取启用的AI模型列表")
     public CommonResult<List<AiModelRespVO>> list() {
-        return success(AiModelConvert.INSTANCE.convertList(aiModelService.getEnabledList()));
+        return success(convertWithToolCallSupport(aiModelService.getEnabledList()));
     }
 
     @GetMapping("/list-by-type")
     @Operation(summary = "按类型获取AI模型列表")
     @Parameter(name = "type", description = "模型类型", required = true)
     public CommonResult<List<AiModelRespVO>> listByType(@RequestParam("type") Integer type) {
-        return success(AiModelConvert.INSTANCE.convertList(aiModelService.getListByType(type)));
+        return success(convertWithToolCallSupport(aiModelService.getListByType(type)));
+    }
+
+    /**
+     * 下拉列表响应附带工具调用能力标注（supportsToolCalls），
+     * 供前端在 Agent 完整解析入口禁用不支持的模型。
+     */
+    private List<AiModelRespVO> convertWithToolCallSupport(List<AiModel> models) {
+        List<AiModelRespVO> respList = AiModelConvert.INSTANCE.convertList(models);
+        for (int index = 0; index < respList.size(); index++) {
+            respList.get(index).setSupportsToolCalls(aiModelService.supportsToolCalls(models.get(index)));
+        }
+        return respList;
     }
 
     @GetMapping("/presets")
