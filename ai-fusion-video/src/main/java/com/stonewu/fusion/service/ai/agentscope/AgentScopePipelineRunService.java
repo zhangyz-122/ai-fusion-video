@@ -57,6 +57,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /** The only production entry point for starting a root AgentScope Harness run. */
 @Service
@@ -64,6 +65,16 @@ public final class AgentScopePipelineRunService {
 
     private static final int MAX_ACTIVE_SKILLS = 8;
     private static final int MAX_ACTIVE_SKILL_CONTENT_LENGTH = 128 * 1024;
+
+    /**
+     * 结构上必须依赖服务端工具调用才能完成任务的完整解析 Agent（见 {@link AiAgentRegistry}）：
+     * 这类管线的结构化产物（分集/场次/对白）只能通过工具调用落库，模型不支持工具调用时
+     * 管线必然失败，需在启动前拒绝。
+     */
+    private static final Set<String> TOOL_CALL_REQUIRED_AGENT_TYPES = Set.of(
+            "script_full_parse",
+            "story_to_script",
+            "script_episode_parse");
 
     private static final String DEFAULT_SYSTEM_PROMPT = """
             你是一个专业的 AI 视频创作助手，专注于帮助用户进行剧本编辑和分镜设计。
@@ -235,8 +246,10 @@ public final class AgentScopePipelineRunService {
         String visibleUserContent = userContent(request, definition, promptVariables);
         String input = input(request, visibleUserContent);
         String systemPrompt = systemPrompt(request, definition, promptVariables, activeSkills);
+        AiModel resolvedModel = model(request.getModelId());
+        requireToolCallSupportForFullParse(resolvedModel, request.getAgentType());
         AiModel model = AiModelRequestOptions.withReasoningEffort(
-                model(request.getModelId()), request.getReasoningEffort(), objectMapper);
+                resolvedModel, request.getReasoningEffort(), objectMapper);
         AiModelMultimodalCapabilities.validateInputs(model, request.getMultimodalInputs());
         ToolExecutionMode toolExecutionMode = toolExecutionMode(request);
         request.setToolExecutionMode(toolExecutionMode.name());
@@ -392,6 +405,22 @@ public final class AgentScopePipelineRunService {
             throw new BusinessException("AI 模型未启用: " + model.getId());
         }
         return model;
+    }
+
+    /**
+     * 完整解析管线的服务端工具调用门控：模型明确不支持工具调用（supportsToolCalls=false）
+     * 时直接拒绝，提示改用自动分块解析或更换模型；能力未知（null，如 Ollama 离线探测不到）
+     * 时放行——不因探测不可用而硬阻塞用户显式选择的模型。
+     */
+    private void requireToolCallSupportForFullParse(AiModel model, String agentType) {
+        String normalizedType = normalize(agentType);
+        if (normalizedType == null || !TOOL_CALL_REQUIRED_AGENT_TYPES.contains(normalizedType)) {
+            return;
+        }
+        if (Boolean.FALSE.equals(modelService.supportsToolCalls(model))) {
+            throw new BusinessException("模型 " + model.getName()
+                    + " 不支持工具调用，无法执行完整解析，请改用自动分块解析或更换模型");
+        }
     }
 
     private AiAgentDefinition definition(String agentType) {

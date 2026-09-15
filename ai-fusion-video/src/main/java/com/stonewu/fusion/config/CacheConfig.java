@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.stonewu.fusion.service.ai.model.OllamaCapabilitiesClient;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,8 +40,19 @@ public class CacheConfig {
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
                 .disableCachingNullValues();
 
+        // Ollama 能力探测负缓存：探测结果为“未知”（如 Ollama 离线）时短期记住，
+        // TTL 内模型下拉不再全量重试探测；正结果走主缓存 ollamaModelCapabilities（默认 1h）
+        RedisCacheConfiguration ollamaNegativeConfig = RedisCacheConfiguration
+                .defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(3))
+                .prefixCacheNameWith(CACHE_SCHEMA_PREFIX)
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
+                .disableCachingNullValues();
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(config)
+                .withCacheConfiguration(OllamaCapabilitiesClient.NEGATIVE_CACHE_NAME, ollamaNegativeConfig)
                 .build();
     }
 

@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai.agentscope;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.config.AgentScopeRuntimeProperties;
 import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
@@ -341,6 +342,160 @@ class AgentScopePipelineRunServiceTests {
                 .verify();
 
         verify(coordinator, never()).start(any(StartAgentRunCommand.class));
+    }
+
+    // ========== 完整解析 Agent 的服务端工具调用门控 ==========
+
+    @Test
+    void fullParseAgentRejectsModelExplicitlyWithoutToolCallSupport() {
+        AiModelService models = mock(AiModelService.class);
+        AgentKernelSpecFactory specs = mock(AgentKernelSpecFactory.class);
+        AgentRunCoordinator coordinator = mock(AgentRunCoordinator.class);
+        AiModel model = AiModel.builder().id(7L).name("qwen2.5:7b").code("qwen2.5:7b").status(1).build();
+        when(models.getDefaultByType(1)).thenReturn(model);
+        when(models.supportsToolCalls(model)).thenReturn(Boolean.FALSE);
+        AgentScopePipelineRunService service =
+                fullyStubbedService(models, specs, coordinator);
+
+        StepVerifier.create(service.start(fullParseRequest(), 42L))
+                .expectErrorSatisfies(error -> assertThat(error)
+                        .isInstanceOf(BusinessException.class)
+                        .hasMessage("模型 qwen2.5:7b 不支持工具调用，无法执行完整解析，"
+                                + "请改用自动分块解析或更换模型"))
+                .verify();
+
+        // 门控在内核装配之前生效：不支持工具调用的模型不允许进入完整解析
+        verify(specs, never()).createRoot(any(), any(), any(), any());
+        verify(coordinator, never()).start(any());
+    }
+
+    @Test
+    void fullParseAgentAllowsModelWithUnknownToolCallSupport() {
+        // 能力未知（如 Ollama 离线探测不到）时放行，不因探测不可用硬阻塞用户显式选择的模型
+        AiModelService models = mock(AiModelService.class);
+        AiModel model = AiModel.builder().id(7L).name("qwen3:8b").code("qwen3:8b").status(1).build();
+        when(models.getDefaultByType(1)).thenReturn(model);
+        when(models.supportsToolCalls(model)).thenReturn(null);
+
+        StepVerifier.create(
+                        fullyStubbedService(models,
+                                mock(AgentKernelSpecFactory.class),
+                                mock(AgentRunCoordinator.class))
+                                .start(fullParseRequest(), 42L))
+                .assertNext(started -> assertThat(started.runId()).isNotBlank())
+                .verifyComplete();
+    }
+
+    @Test
+    void fullParseAgentAllowsToolCallCapableModel() {
+        AiModelService models = mock(AiModelService.class);
+        AiModel model = AiModel.builder().id(7L).name("deepseek-chat").code("deepseek-chat").status(1).build();
+        when(models.getDefaultByType(1)).thenReturn(model);
+        when(models.supportsToolCalls(model)).thenReturn(Boolean.TRUE);
+
+        StepVerifier.create(
+                        fullyStubbedService(models,
+                                mock(AgentKernelSpecFactory.class),
+                                mock(AgentRunCoordinator.class))
+                                .start(fullParseRequest(), 42L))
+                .assertNext(started -> assertThat(started.runId()).isNotBlank())
+                .verifyComplete();
+    }
+
+    @Test
+    void nonFullParseAgentSkipsToolCallGate() {
+        // 工具调用门控只约束结构上必须落库的完整解析 Agent，普通助手不因能力标注被拦截
+        AiModelService models = mock(AiModelService.class);
+        AiModel model = AiModel.builder().id(7L).name("qwen2.5:7b").code("qwen2.5:7b").status(1).build();
+        when(models.getDefaultByType(1)).thenReturn(model);
+        when(models.supportsToolCalls(model)).thenReturn(Boolean.FALSE);
+        AgentScopePipelineRunService service =
+                fullyStubbedService(models, mock(AgentKernelSpecFactory.class),
+                        mock(AgentRunCoordinator.class));
+        AiChatReqVO request = new AiChatReqVO()
+                .setConversationId("conversation-2")
+                .setMessage("hello harness")
+                .setAgentType("ai_media")
+                .setToolExecutionMode(ToolExecutionMode.DEFAULT.name());
+
+        StepVerifier.create(service.start(request, 42L))
+                .assertNext(started -> assertThat(started.runId()).isNotBlank())
+                .verifyComplete();
+    }
+
+    private AiChatReqVO fullParseRequest() {
+        return new AiChatReqVO()
+                .setConversationId("conversation-1")
+                .setMessage("请解析项目剧本")
+                .setAgentType("script_full_parse")
+                .setToolExecutionMode(ToolExecutionMode.DEFAULT.name());
+    }
+
+    /** 组装全链路可跑通的 Pipeline 服务：models/specs/coordinator 由调用方注入以便验证交互 */
+    private AgentScopePipelineRunService fullyStubbedService(
+            AiModelService models,
+            AgentKernelSpecFactory specs,
+            AgentRunCoordinator coordinator) {
+        AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
+        AgentUserSkillService userSkillService = mock(AgentUserSkillService.class);
+        AgentConversationService conversations = mock(AgentConversationService.class);
+        AgentMessageService persistedMessages = mock(AgentMessageService.class);
+        AgentKernelSnapshotBuilder snapshots = mock(AgentKernelSnapshotBuilder.class);
+        AgentExecutionRuntimeContextRequests runtimeContexts =
+                mock(AgentExecutionRuntimeContextRequests.class);
+        AgentExecutionFactory executionFactory = mock(AgentExecutionFactory.class);
+        RunExecutionSupervisor supervisor = mock(RunExecutionSupervisor.class);
+        AgentRuntimeInstanceIdentity identity = mock(AgentRuntimeInstanceIdentity.class);
+        AgentKernelSpec spec = mock(AgentKernelSpec.class);
+        AgentScopeRuntimeContextRequest runtime = mock(AgentScopeRuntimeContextRequest.class);
+        AgentKernelSnapshot snapshot = snapshot();
+
+        when(skillRegistry.skills()).thenReturn(List.of());
+        when(userSkillService.list(42L)).thenReturn(List.of());
+        when(specs.createRoot(any(AiChatReqVO.class), any(AiModel.class), any(String.class), eq(42L)))
+                .thenReturn(spec);
+        when(spec.agentDefinitionStableKey()).thenReturn("script_full_parse");
+        when(snapshots.build(spec)).thenReturn(snapshot);
+        when(identity.value()).thenReturn("node-1");
+        when(coordinator.start(any(StartAgentRunCommand.class)))
+                .thenAnswer(invocation -> {
+                    StartAgentRunCommand command = invocation.getArgument(0);
+                    return Mono.just(new StartedAgentRun(
+                            command.runId(),
+                            command.conversationId(),
+                            command.stateSessionCandidate(),
+                            command.ownerInstanceId(),
+                            1L,
+                            command.deadline().minusSeconds(1),
+                            command.deadline(),
+                            snapshot,
+                            1L));
+                });
+        when(runtimeContexts.forRoot(
+                any(), eq("script_full_parse"), isNull(), eq(ToolExecutionMode.DEFAULT)))
+                .thenReturn(Mono.just(runtime));
+        when(supervisor.start(any(StartAgentExecutionCommand.class))).thenReturn(Mono.empty());
+
+        return new AgentScopePipelineRunService(
+                models,
+                mock(AiAgentService.class),
+                conversations,
+                persistedMessages,
+                specs,
+                snapshots,
+                new AgentScopeMessageMapper(),
+                coordinator,
+                runtimeContexts,
+                executionFactory,
+                supervisor,
+                mock(AgentRunQueryService.class),
+                mock(AgentRunReplayService.class),
+                identity,
+                new AgentScopeV2Properties(),
+                schedulers,
+                new ObjectMapper(),
+                skillRegistry,
+                userSkillService);
     }
 
     private AgentKernelSnapshot snapshot() {
