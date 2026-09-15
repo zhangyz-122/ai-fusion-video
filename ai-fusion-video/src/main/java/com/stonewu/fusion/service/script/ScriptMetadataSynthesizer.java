@@ -46,6 +46,9 @@ public class ScriptMetadataSynthesizer {
     static final Set<String> IMPORTANCES = Set.of("主角", "配角", "反派", "龙套");
     /** importance 非法或缺失时的归一化默认值 */
     static final String DEFAULT_IMPORTANCE = "配角";
+    /** 人物表输入的固定标头“角色出场统计：\n”占用字符数（取自 ScriptFinalizePrompts，避免漂移） */
+    private static final int CHARACTER_STATS_HEADER_CHARS =
+            ScriptFinalizePrompts.characterUserMessage(null, "").length();
 
     /** 分集摘要：标题 + 一句话概要（原文兜底的集没有概要） */
     public record EpisodeDigest(String title, String synopsis) {
@@ -216,8 +219,12 @@ public class ScriptMetadataSynthesizer {
         if (characters.isEmpty()) {
             return "[]";
         }
+        // 剧本简介前缀与固定标头先计入输入预算，角色统计只在剩余预算内构造，
+        // 保证最终用户消息整体不超过 SYNTHESIS_INPUT_MAX_CHARS
+        int reservedPrefixChars = ScriptFinalizePrompts
+                .characterUserMessage(storySynopsis, "").length();
         String userMessage = ScriptFinalizePrompts.characterUserMessage(
-                storySynopsis, buildCharacterStatsInput(characters));
+                storySynopsis, buildCharacterStatsInput(characters, reservedPrefixChars));
         return callForCharacters(chatModel, userMessage);
     }
 
@@ -234,30 +241,57 @@ public class ScriptMetadataSynthesizer {
                 ScriptFinalizePrompts.repairMessage(userMessage, "未输出符合格式的 characters JSON 数组")));
     }
 
-    /** 构造角色统计输入：全部角色都保留名字与频次，超出输入预算后省略对白样例 */
-    static String buildCharacterStatsInput(Collection<CharacterStat> characters) {
+    /**
+     * 构造角色统计输入：逐行「- 名字（出现N次）对白样例：…」，与剧本简介前缀共享
+     * {@link #SYNTHESIS_INPUT_MAX_CHARS} 预算——样例超出剩余预算时退化为仅名字+频次，
+     * 名字行也放不进剩余预算（预算耗尽）后停止追加，保留已入的部分，
+     * 确保「前缀 + 角色统计」整体不超过输入上限。
+     *
+     * @param reservedPrefixChars 剧本简介前缀与固定标头已占用的字符数
+     */
+    static String buildCharacterStatsInput(Collection<CharacterStat> characters,
+                                           int reservedPrefixChars) {
+        // 固定标头“角色出场统计：\n”与 reservedPrefixChars 一起先行扣除，预算不为负
+        int budget = SYNTHESIS_INPUT_MAX_CHARS
+                - Math.max(0, reservedPrefixChars)
+                - CHARACTER_STATS_HEADER_CHARS;
         StringBuilder stats = new StringBuilder();
-        int budget = SYNTHESIS_INPUT_MAX_CHARS;
         for (CharacterStat stat : characters) {
+            String line = characterStatLine(stat, true);
+            if (line.length() > budget) {
+                // 样例超出剩余预算：退化为仅名字+频次
+                line = characterStatLine(stat, false);
+            }
+            // 预算耗尽：停止追加名字行（保留已入部分），不产生负预算
+            if (line.length() > budget) {
+                break;
+            }
             if (stats.length() > 0) {
                 stats.append('\n');
+                budget -= 1;
             }
-            String line = "- " + stat.getName() + "（出现" + stat.getCount() + "次）";
-            if (!stat.getSamples().isEmpty()) {
-                StringBuilder samples = new StringBuilder();
-                for (String sample : stat.getSamples()) {
-                    samples.append(samples.isEmpty() ? "" : "；").append("“").append(sample).append("”");
-                }
-                line += "对白样例：" + samples;
-            }
-            // 样例超出预算时退化为仅名字+频次（名字行很短，全部保留）
-            if (line.length() > budget) {
-                line = "- " + stat.getName() + "（出现" + stat.getCount() + "次）";
-            }
-            budget -= line.length() + 1;
+            budget -= line.length();
             stats.append(line);
         }
         return stats.toString();
+    }
+
+    /** 兼容旧调用的重载：无预留前缀（保留供单测与外部直查使用） */
+    static String buildCharacterStatsInput(Collection<CharacterStat> characters) {
+        return buildCharacterStatsInput(characters, 0);
+    }
+
+    /** 角色统计单行：withSamples=false 时只保留名字与频次 */
+    private static String characterStatLine(CharacterStat stat, boolean withSamples) {
+        String line = "- " + stat.getName() + "（出现" + stat.getCount() + "次）";
+        if (withSamples && !stat.getSamples().isEmpty()) {
+            StringBuilder samples = new StringBuilder();
+            for (String sample : stat.getSamples()) {
+                samples.append(samples.isEmpty() ? "" : "；").append("“").append(sample).append("”");
+            }
+            line += "对白样例：" + samples;
+        }
+        return line;
     }
 
     /**

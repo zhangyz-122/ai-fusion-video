@@ -13,7 +13,10 @@ import reactor.core.scheduler.Schedulers;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -135,6 +138,33 @@ class RunLeaseHeartbeatKeeperTests {
         // 进程退出路径：关闭后不再接受新的心跳注册，也不抛出异常
         keeper.start("run-2", "node-a", 1L);
         assertThat(keeper.activeHeartbeats()).isZero();
+    }
+
+    @Test
+    void startToleratesShutdownRaceBetweenCheckAndScheduling() {
+        // 模拟 isShutdown 检查通过之后、调度执行之前线程池被 close() 关闭的停机竞态
+        ScheduledThreadPoolExecutor racingExecutor =
+                new ScheduledThreadPoolExecutor(1, RunLeaseHeartbeatKeeperTests::daemonThread) {
+                    @Override
+                    public ScheduledFuture<?> scheduleAtFixedRate(
+                            Runnable task, long initialDelay, long period, TimeUnit unit) {
+                        throw new RejectedExecutionException("executor shut down");
+                    }
+                };
+        RunLeaseHeartbeatKeeper racingKeeper =
+                new RunLeaseHeartbeatKeeper(leases, TEST_OWNER_LEASE, racingExecutor);
+
+        // 停机竞态下注册静默放弃，不向调用方抛出异常
+        racingKeeper.start("run-9", "node-a", 1L);
+
+        assertThat(racingKeeper.activeHeartbeats()).isZero();
+        racingExecutor.shutdownNow();
+    }
+
+    private static Thread daemonThread(Runnable task) {
+        Thread thread = new Thread(task, "racing-heartbeat");
+        thread.setDaemon(true);
+        return thread;
     }
 
     @Test

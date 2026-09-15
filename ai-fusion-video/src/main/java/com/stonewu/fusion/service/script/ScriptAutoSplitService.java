@@ -37,10 +37,10 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -103,8 +103,8 @@ public class ScriptAutoSplitService {
         return thread;
     });
 
-    /** 正在执行自动分块解析的剧本 ID（内存任务表，滞留恢复时据此避开进行中的任务） */
-    private final Set<Long> runningScriptIds = ConcurrentHashMap.newKeySet();
+    /** 正在执行自动分块解析的剧本任务计数（内存任务表，滞留恢复时据此避开进行中的任务） */
+    private final Map<Long, AtomicInteger> runningScriptTasks = new ConcurrentHashMap<>();
 
     public String startAutoSplit(Long scriptId, Long userId, Long modelId) {
         return startAutoSplit(scriptId, userId, modelId, null);
@@ -126,29 +126,38 @@ public class ScriptAutoSplitService {
         }
 
         int normalizedChunkChars = normalizeChunkChars(chunkChars);
-        String taskId = taskStreamService.createTask(
-                userId,
-                script.getProjectId(),
-                AUTO_SPLIT_TASK_TYPE,
-                "自动分块解析 · " + script.getTitle(),
-                "script",
-                scriptId,
-                "开始自动分块解析，共 " + script.getRawContent().length() + " 字");
-        markParsing(scriptId, script.getProjectId(), 1, "排队中");
-        long capturedModelId = model.getId();
-        markScriptRunning(scriptId);
-        autoSplitExecutor.execute(() -> {
-            try {
-                runAutoSplit(scriptId, userId, capturedModelId, taskId, normalizedChunkChars);
-            } catch (Throwable t) {
-                log.error("[AutoSplit] 自动分块解析失败: scriptId={}", scriptId, t);
-                markParsing(scriptId, script.getProjectId(), 3, "自动分块解析失败: " + t.getMessage());
-                taskStreamService.fail(taskId, "自动分块解析失败: " + t.getMessage());
-            } finally {
-                markScriptFinished(scriptId);
-            }
-        });
-        return taskId;
+        // 原子占位登记：已在跑的剧本直接拒绝，防止并发解析互相覆盖解析产物
+        if (!markScriptRunning(scriptId)) {
+            throw new BusinessException(409, "该剧本正在解析中");
+        }
+        try {
+            String taskId = taskStreamService.createTask(
+                    userId,
+                    script.getProjectId(),
+                    AUTO_SPLIT_TASK_TYPE,
+                    "自动分块解析 · " + script.getTitle(),
+                    "script",
+                    scriptId,
+                    "开始自动分块解析，共 " + script.getRawContent().length() + " 字");
+            markParsing(scriptId, script.getProjectId(), 1, "排队中");
+            long capturedModelId = model.getId();
+            autoSplitExecutor.execute(() -> {
+                try {
+                    runAutoSplit(scriptId, userId, capturedModelId, taskId, normalizedChunkChars);
+                } catch (Throwable t) {
+                    log.error("[AutoSplit] 自动分块解析失败: scriptId={}", scriptId, t);
+                    markParsing(scriptId, script.getProjectId(), 3, "自动分块解析失败: " + t.getMessage());
+                    taskStreamService.fail(taskId, "自动分块解析失败: " + t.getMessage());
+                } finally {
+                    markScriptFinished(scriptId);
+                }
+            });
+            return taskId;
+        } catch (RuntimeException registrationFailure) {
+            // 未能进入任务线程（建任务/排队标记失败）：回收登记，避免滞留恢复豁免泄漏
+            markScriptFinished(scriptId);
+            throw registrationFailure;
+        }
     }
 
     /**
@@ -228,18 +237,27 @@ public class ScriptAutoSplitService {
         return finished;
     }
 
-    /** 登记进行中的解析任务（内存任务表） */
-    void markScriptRunning(Long scriptId) {
-        runningScriptIds.add(scriptId);
+    /**
+     * 登记进行中的解析任务（内存任务表）：按剧本计数。
+     *
+     * @return true 表示该剧本此前空闲（本次启动生效）；false 表示已有任务在跑
+     */
+    boolean markScriptRunning(Long scriptId) {
+        AtomicInteger counter = runningScriptTasks.computeIfAbsent(scriptId, key -> new AtomicInteger());
+        return counter.getAndIncrement() == 0;
     }
 
-    /** 任务结束（成功或失败）后从内存任务表移除 */
-    private void markScriptFinished(Long scriptId) {
-        runningScriptIds.remove(scriptId);
+    /**
+     * 任务结束（成功或失败）后递减计数：计数归零才移除登记，保证并发场景下
+     * 后启动者结束前，滞留恢复的豁免不会被先结束者提前移除。
+     */
+    void markScriptFinished(Long scriptId) {
+        runningScriptTasks.computeIfPresent(scriptId, (key, counter) ->
+                counter.decrementAndGet() <= 0 ? null : counter);
     }
 
     boolean isScriptRunning(Long scriptId) {
-        return runningScriptIds.contains(scriptId);
+        return runningScriptTasks.containsKey(scriptId);
     }
 
     /** 越界钳制分块参数：null 取默认值，超出 [MIN, MAX] 时取边界值 */
@@ -304,9 +322,15 @@ public class ScriptAutoSplitService {
         long synthesisCostMillis = System.currentTimeMillis() - synthesisStartMillis;
         String completionMessage = "解析完成：共 " + episodeNumber + " 集";
         if (metadata.success()) {
-            log.info("[AutoSplit] 剧本元数据合成完成: scriptId={}, 耗时={}ms, 成功项={}",
-                    scriptId, synthesisCostMillis,
-                    String.join("、", synthesizedItemNames(metadata)));
+            List<String> successItems = synthesizedItemNames(metadata);
+            if (successItems.isEmpty()) {
+                // 合成调用成功但没有产出任何可保存字段：按明确语义记录，避免打出空的“成功项=”
+                log.info("[AutoSplit] 剧本元数据合成完成（模型未产出可保存项）: scriptId={}, 耗时={}ms",
+                        scriptId, synthesisCostMillis);
+            } else {
+                log.info("[AutoSplit] 剧本元数据合成完成: scriptId={}, 耗时={}ms, 成功项={}",
+                        scriptId, synthesisCostMillis, String.join("、", successItems));
+            }
         } else {
             log.warn("[AutoSplit] 剧本元数据合成降级: scriptId={}, 耗时={}ms, 成功项={}, 降级项={}",
                     scriptId, synthesisCostMillis,
@@ -339,7 +363,13 @@ public class ScriptAutoSplitService {
         return items;
     }
 
-    /** 记录分集摘要与 type=1 对白的角色出场统计，供收尾合成阶段使用 */
+    /**
+     * 记录分集摘要与角色出场统计，供收尾合成阶段使用。
+     * <p>
+     * 口径说明（有意与 ScriptChunkValidator.normalizeScene 的场次级 characters 不同）：
+     * 剧本级人物表只统计 type=1 对白讲者，避免「旁白」作为讲者混入角色卡；
+     * 场次级 characters 则同时收录对白与旁白讲者，便于前端按场次定位配音角色。
+     */
     private void collectEpisodeDigestAndCharacters(
             List<ScriptMetadataSynthesizer.EpisodeDigest> episodeDigests,
             Map<String, ScriptMetadataSynthesizer.CharacterStat> characterStats,

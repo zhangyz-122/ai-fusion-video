@@ -11,6 +11,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -86,11 +87,19 @@ public final class RunLeaseHeartbeatKeeper {
         if (executor == null || executor.isShutdown()) {
             return;
         }
-        ScheduledFuture<?> future = executor.scheduleAtFixedRate(
-                renewalTask(runId, ownerInstanceId, ownerEpoch),
-                heartbeatInterval.toMillis(),
-                heartbeatInterval.toMillis(),
-                TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> future;
+        try {
+            future = executor.scheduleAtFixedRate(
+                    renewalTask(runId, ownerInstanceId, ownerEpoch),
+                    heartbeatInterval.toMillis(),
+                    heartbeatInterval.toMillis(),
+                    TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException rejectedAfterShutdown) {
+            // 停机竞态：isShutdown 检查与调度之间线程池可能刚好被 close() 关闭，
+            // 此时进程正在退出、心跳已无意义，静默放弃本次注册（close 会统一清理）。
+            log.debug("Agent run lease heartbeat skipped after shutdown: runId={}", runId);
+            return;
+        }
         ScheduledFuture<?> previous = heartbeats.put(runId, future);
         if (previous != null) {
             previous.cancel(false);

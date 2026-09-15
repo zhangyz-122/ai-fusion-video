@@ -287,6 +287,52 @@ class ScriptAutoSplitServiceTests {
         verify(scriptMapper, never()).update(any(), any());
     }
 
+    // ========== 同剧本并发启动防护与内存任务表计数 ==========
+
+    @Test
+    void startAutoSplit_rejectsWhenSameScriptIsAlreadyRunning() {
+        stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        service.markScriptRunning(1L);
+
+        assertThatThrownBy(() -> service.startAutoSplit(1L, 9L, 10L, 6000))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("该剧本正在解析中");
+        // 被拒绝的第二次启动不创建任务，也不改写排队状态
+        verify(taskStreamService, never()).createTask(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void startAutoSplit_registrationSurvivesUntilTaskThreadTakesOverAndReleasesOnSetupFailure() {
+        stubScriptAndModel("第一章 起点\n张三推开厨房门，饭菜早已凉透。");
+        // 建任务阶段失败：登记必须被回收，避免滞留恢复豁免泄漏
+        when(taskStreamService.createTask(any(), any(), any(), any(), any(), any(), any()))
+                .thenThrow(new IllegalStateException("task stream unavailable"));
+
+        assertThatThrownBy(() -> service.startAutoSplit(1L, 9L, 10L, 6000))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(service.isScriptRunning(1L)).isFalse();
+    }
+
+    @Test
+    void markScriptRunning_countsTasksAndKeepsExemptionUntilLastFinisher() {
+        // 第一次登记生效，重复登记被拒绝启动路径识别为“已在跑”
+        assertThat(service.markScriptRunning(7L)).isTrue();
+        assertThat(service.markScriptRunning(7L)).isFalse();
+        assertThat(service.isScriptRunning(7L)).isTrue();
+
+        // 先结束者只递减计数：后启动者仍在跑时，滞留恢复豁免不得被提前移除
+        service.markScriptFinished(7L);
+        assertThat(service.isScriptRunning(7L)).isTrue();
+
+        service.markScriptFinished(7L);
+        assertThat(service.isScriptRunning(7L)).isFalse();
+
+        // 多次回收是幂等的：计数不会跌为负值后误伤后续登记
+        service.markScriptFinished(7L);
+        assertThat(service.markScriptRunning(7L)).isTrue();
+        assertThat(service.isScriptRunning(7L)).isTrue();
+    }
+
     // ========== 僵尸会话终态化 ==========
 
     @Test

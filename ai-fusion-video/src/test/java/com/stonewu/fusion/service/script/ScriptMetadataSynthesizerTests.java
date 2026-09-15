@@ -266,6 +266,56 @@ class ScriptMetadataSynthesizerTests {
     }
 
     @Test
+    void buildCharacterStatsInput_stopsWhenBudgetExhaustedAndKeepsAcceptedPart() {
+        // 每行名字+样例约 210 字：预算耗尽后停止追加名字行，已入部分保留且不产生负预算
+        List<CharacterStat> stats = new ArrayList<>();
+        for (int i = 0; i < 1000; i++) {
+            stats.add(stat("角色" + i, 3, "样".repeat(60), "样".repeat(60)));
+        }
+
+        String input = ScriptMetadataSynthesizer.buildCharacterStatsInput(stats);
+
+        assertThat(input).isNotEmpty();
+        assertThat(input.length()).isLessThanOrEqualTo(ScriptMetadataSynthesizer.SYNTHESIS_INPUT_MAX_CHARS);
+        // 预算内的行完整保留：先有带样例的行，预算收窄后是退化后的整行名字行（无截断残行）
+        assertThat(input).startsWith("- 角色0（出现3次）");
+        assertThat(input).contains("对白样例：");
+        assertThat(input).endsWith("（出现3次）");
+    }
+
+    @Test
+    void buildCharacterStatsInput_thousandsOfCharactersStayWithinBudgetIncludingSynopsisPrefix() {
+        // 300 字梗概前缀 + 固定标头先行计入预算，几千角色构造出的整体输入不超上限
+        String synopsis = "梗".repeat(ScriptMetadataSynthesizer.SYNOPSIS_MAX_CHARS);
+        int reservedPrefixChars = ScriptFinalizePrompts
+                .characterUserMessage(synopsis, "").length();
+        List<CharacterStat> stats = new ArrayList<>();
+        for (int i = 0; i < 5000; i++) {
+            stats.add(stat("龙套" + i, 1, "对白样例".repeat(12), "第二条样例".repeat(8)));
+        }
+
+        String input = ScriptMetadataSynthesizer.buildCharacterStatsInput(stats, reservedPrefixChars);
+        String userMessage = ScriptFinalizePrompts.characterUserMessage(synopsis, input);
+
+        assertThat(userMessage.length())
+                .as("简介前缀 + 角色统计整体不得超过单次合成输入上限")
+                .isLessThanOrEqualTo(ScriptMetadataSynthesizer.SYNTHESIS_INPUT_MAX_CHARS);
+        assertThat(input).isNotEmpty();
+    }
+
+    @Test
+    void buildCharacterStatsInput_oversizedSingleNameLineDoesNotProduceNegativeBudget() {
+        // 单个超长名字连“仅名字+频次”都放不进剩余预算：直接跳过且不破坏已有内容
+        List<CharacterStat> stats = List.of(
+                stat("甲", 1, "样"),
+                stat("超".repeat(ScriptMetadataSynthesizer.SYNTHESIS_INPUT_MAX_CHARS), 1));
+
+        String input = ScriptMetadataSynthesizer.buildCharacterStatsInput(stats);
+
+        assertThat(input).isEqualTo("- 甲（出现1次）对白样例：“样”");
+    }
+
+    @Test
     void characterStat_recordsCountAndCapsSamples() {
         CharacterStat character = new CharacterStat("母亲");
         character.record("怎么才回来？");

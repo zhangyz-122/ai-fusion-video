@@ -264,7 +264,11 @@ final class ScriptChunkValidator {
         normalized.set("sceneHeading", HeadingNormalizer.normalize(scene.getStr("sceneHeading")));
         normalized.set("sceneDescription", truncate(scene.getStr("sceneDescription", "")));
         normalized.set("dialogues", dialogues);
-        // 出场角色从对白/旁白讲者去重推导，避免小模型额外输出 characters 造成与 dialogues 漂移
+        // 出场角色从对白/旁白讲者去重推导，避免小模型额外输出 characters 造成与 dialogues 漂移。
+        // 口径说明（有意与 ScriptAutoSplitService.collectEpisodeDigestAndCharacters 的
+        // 剧本级人物表不同）：场次级 characters 收录对白与旁白(type=3)讲者，
+        // 便于前端按场次定位需要配音的角色；剧本级人物表只收对白(type=1)讲者，
+        // 避免「旁白」污染角色卡。
         Set<String> characters = new LinkedHashSet<>();
         for (Object obj : dialogues) {
             JSONObject dialogue = (JSONObject) obj;
