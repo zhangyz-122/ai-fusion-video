@@ -141,9 +141,13 @@ public class ScriptAutoSplitService {
                     "开始自动分块解析，共 " + script.getRawContent().length() + " 字");
             markParsing(scriptId, script.getProjectId(), 1, "排队中");
             long capturedModelId = model.getId();
+            // 读改前值先存：script 加载于排队标记之前，记录本次解析前的真实解析状态，
+            // 供任务线程在前置准备失败时复原，避免旧解析产物尚在却被误标为失败
+            Integer previousParsingStatus = script.getParsingStatus();
             autoSplitExecutor.execute(() -> {
                 try {
-                    runAutoSplit(scriptId, userId, capturedModelId, taskId, normalizedChunkChars);
+                    runAutoSplit(scriptId, userId, capturedModelId, taskId, normalizedChunkChars,
+                            previousParsingStatus);
                 } catch (Throwable t) {
                     log.error("[AutoSplit] 自动分块解析失败: scriptId={}", scriptId, t);
                     markParsing(scriptId, script.getProjectId(), 3, "自动分块解析失败: " + t.getMessage());
@@ -266,27 +270,49 @@ public class ScriptAutoSplitService {
         return Math.max(MIN_CHUNK_CHARS, Math.min(MAX_CHUNK_CHARS, value));
     }
 
-    void runAutoSplit(Long scriptId, Long userId, Long modelId, String taskId, int chunkChars) {
+    /**
+     * 执行自动分块解析：先分块、后清库——建模型、分块等前置准备成功拿到分块结果
+     * 之前不动任何旧解析产物；前置准备失败（如原文超块数上限）时旧数据原样保留，
+     * 解析状态复原为进入解析前的值（{@code previousParsingStatus}），任务流标记失败。
+     *
+     * @param previousParsingStatus 进入本次解析前的解析状态，由 startAutoSplit 在排队标记前读取
+     */
+    void runAutoSplit(Long scriptId, Long userId, Long modelId, String taskId, int chunkChars,
+                      Integer previousParsingStatus) {
         Script script = scriptMapper.selectById(scriptId);
         if (script == null || script.getRawContent() == null || script.getRawContent().isBlank()) {
             throw new BusinessException("剧本原文为空，无法自动分块解析");
         }
         String raw = script.getRawContent();
         AiModel model = aiModelService.getById(modelId);
-        ChatModel chatModel = aiProviderService.createChatModel(model);
 
-        // 清空旧解析产物
+        // 前置准备阶段：只读不改，任何失败都不影响旧解析产物
+        ChatModel chatModel;
+        List<String> chunks;
+        try {
+            chatModel = aiProviderService.createChatModel(model);
+            chunks = splitIntoChunks(raw, chunkChars);
+        } catch (RuntimeException preparationFailure) {
+            String failureMessage = "自动分块解析失败，旧解析结果已保留：" + preparationFailure.getMessage();
+            log.warn("[AutoSplit] 解析前置准备失败，旧解析产物原样保留: scriptId={}, 原因={}",
+                    scriptId, preparationFailure.getMessage());
+            // 复原为进入解析前的状态并把失败原因写进进度，供用户带着指引重试
+            markParsing(scriptId, script.getProjectId(),
+                    previousParsingStatus == null ? 0 : previousParsingStatus, failureMessage);
+            taskStreamService.fail(taskId, failureMessage);
+            return;
+        }
+        int total = chunks.size();
+        log.info("[AutoSplit] 开始自动分块解析: scriptId={}, chunks={}, model={}",
+                scriptId, total, model.getName());
+        taskStreamService.publishContent(taskId, "已分块：" + total + " 块");
+
+        // 分块成功后才清空旧解析产物，保证任何前置失败都不会损失历史解析数据
         sceneItemMapper.delete(new LambdaQueryWrapper<ScriptSceneItem>()
                 .eq(ScriptSceneItem::getScriptId, scriptId));
         episodeMapper.delete(new LambdaQueryWrapper<ScriptEpisode>()
                 .eq(ScriptEpisode::getScriptId, scriptId));
         evictScriptRelatedCaches(scriptId, script.getProjectId());
-
-        List<String> chunks = splitIntoChunks(raw, chunkChars);
-        int total = chunks.size();
-        log.info("[AutoSplit] 开始自动分块解析: scriptId={}, chunks={}, model={}",
-                scriptId, total, model.getName());
-        taskStreamService.publishContent(taskId, "已分块：" + total + " 块");
 
         int episodeNumber = 0;
         List<ScriptMetadataSynthesizer.EpisodeDigest> episodeDigests = new ArrayList<>();
@@ -500,7 +526,7 @@ public class ScriptAutoSplitService {
             chunks.add(current.toString());
         }
         if (chunks.size() > MAX_CHUNKS) {
-            throw new BusinessException("文本过长（分块超过 " + MAX_CHUNKS + " 块），请先拆分后再导入");
+            throw new BusinessException("原文过长（分块超过 " + MAX_CHUNKS + " 块），请先拆分后再导入");
         }
         return chunks;
     }

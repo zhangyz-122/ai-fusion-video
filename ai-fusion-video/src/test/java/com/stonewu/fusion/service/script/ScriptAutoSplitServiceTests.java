@@ -26,6 +26,7 @@ import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.invocation.InvocationOnMock;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -51,6 +52,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -295,7 +297,8 @@ class ScriptAutoSplitServiceTests {
         service.markScriptRunning(1L);
 
         assertThatThrownBy(() -> service.startAutoSplit(1L, 9L, 10L, 6000))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOfSatisfying(BusinessException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(409))
                 .hasMessageContaining("该剧本正在解析中");
         // 被拒绝的第二次启动不创建任务，也不改写排队状态
         verify(taskStreamService, never()).createTask(any(), any(), any(), any(), any(), any(), any());
@@ -506,7 +509,7 @@ class ScriptAutoSplitServiceTests {
         when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
 
-        service.runAutoSplit(1L, 9L, 10L, "task-1", 6000);
+        service.runAutoSplit(1L, 9L, 10L, "task-1", 6000, 1);
 
         ArgumentCaptor<ScriptEpisode> episodeCaptor = ArgumentCaptor.forClass(ScriptEpisode.class);
         verify(episodeMapper).insert(episodeCaptor.capture());
@@ -547,7 +550,7 @@ class ScriptAutoSplitServiceTests {
                 .thenReturn(chatResponse("{\"scenes\":[]}"))
                 .thenAnswer(invocation -> chatResponse("无法输出"));
 
-        service.runAutoSplit(1L, 9L, 10L, "task-2", 6000);
+        service.runAutoSplit(1L, 9L, 10L, "task-2", 6000, 1);
 
         // 对半再切后全部子块仍失败：原始整块原文兜底保存为该集唯一场景，任务正常完成
         ArgumentCaptor<ScriptEpisode> episodeCaptor = ArgumentCaptor.forClass(ScriptEpisode.class);
@@ -653,7 +656,7 @@ class ScriptAutoSplitServiceTests {
             return chatResponse("无法输出");
         });
 
-        service.runAutoSplit(1L, 9L, 10L, "task-3", 6000);
+        service.runAutoSplit(1L, 9L, 10L, "task-3", 6000, 1);
 
         ArgumentCaptor<ScriptEpisode> episodeCaptor = ArgumentCaptor.forClass(ScriptEpisode.class);
         verify(episodeMapper).insert(episodeCaptor.capture());
@@ -684,7 +687,7 @@ class ScriptAutoSplitServiceTests {
         when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
 
-        service.runAutoSplit(1L, 9L, 10L, "task-4", 6000);
+        service.runAutoSplit(1L, 9L, 10L, "task-4", 6000, 1);
 
         // 元数据写入剧本实体并携带分集摘要与角色出场统计
         @SuppressWarnings("unchecked")
@@ -723,7 +726,7 @@ class ScriptAutoSplitServiceTests {
         when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
 
-        service.runAutoSplit(1L, 9L, 10L, "task-5", 6000);
+        service.runAutoSplit(1L, 9L, 10L, "task-5", 6000, 1);
 
         // 显式降级：任务仍正常完成，完成日志注明元数据合成失败
         verify(metadataSynthesizer).synthesize(eq(chatModel), anyList(), anyCollection());
@@ -744,7 +747,7 @@ class ScriptAutoSplitServiceTests {
         when(aiProviderService.createChatModel(any(AiModel.class))).thenReturn(chatModel);
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
 
-        service.runAutoSplit(1L, 9L, 10L, "task-6", 6000);
+        service.runAutoSplit(1L, 9L, 10L, "task-6", 6000, 1);
 
         verify(taskStreamService).publishContent("task-6", ScriptAutoSplitService.SYNTHESIZING_PROGRESS);
         Set<Object> updatedValues = capturedScriptUpdateValues();
@@ -765,7 +768,7 @@ class ScriptAutoSplitServiceTests {
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
 
         List<String> messages = captureAutoSplitLogs(
-                () -> service.runAutoSplit(1L, 9L, 10L, "task-7", 6000));
+                () -> service.runAutoSplit(1L, 9L, 10L, "task-7", 6000, 1));
 
         assertThat(messages).anySatisfy(message -> assertThat(message)
                 .contains("[AutoSplit]").contains("进入剧本元数据合成阶段").contains("scriptId=1"));
@@ -784,7 +787,7 @@ class ScriptAutoSplitServiceTests {
         when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse(validEpisodeJson()));
 
         List<String> messages = captureAutoSplitLogs(
-                () -> service.runAutoSplit(1L, 9L, 10L, "task-8", 6000));
+                () -> service.runAutoSplit(1L, 9L, 10L, "task-8", 6000, 1));
 
         assertThat(messages).anySatisfy(message -> assertThat(message)
                 .contains("[AutoSplit]").contains("剧本元数据合成降级")

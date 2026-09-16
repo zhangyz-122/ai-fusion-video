@@ -107,6 +107,29 @@ script 包测试 115 例全绿，全量 `./mvnw test` 804+ 例通过。
 
 ---
 
+## 第三批：Agent 完整解析长文本改造 + API 链路实验结论（2026-09-16 追加）
+
+### 火山 Doubao Seed 2.1 Turbo 实验（用户开通 Agent Plan 后）
+
+- 小样本（4649 字）script_full_parse **334 秒 COMPLETED**，质量全优：12 场标准标头、对白全非空、元数据三项齐全——火山 key、工具调用、租约心跳（run-timeout 可配置，实验调至 4h 验证生效）全部实战通过。
+- 74 万字全量 **13 秒失败**：`get_project_script` 全量返回 77 万字符工具结果 → 驱逐中间件滞后一轮 → 超 256k 上下文 400 → 无重试、兜底不覆盖、`/continue` 重放毒化历史（218 万字符）导致会话永久不可恢复。**该通道对长篇的失败与模型无关，是架构问题。**
+- 触发请求三要素踩坑记录：`toolExecutionMode:"FULL_ACCESS"`、`context:{scriptId:N}`、项目 owner 语义是团队 id（owner_type=2）。
+
+### 架构修复（本批代码）
+
+- `get_project_script` 不再全量返回：改为首段（`fusion.agentscope.v2.script.segment-chars`，默认 24000 字符，段落边界收刀）+ `totalChars/totalSegments` 元信息；新增 `read_script_segment(segment=N)` 工具分段续读（4 个含 get_project_script 的 agent 定义均已注册）。工具结果从"整本书"压到"单段"，从源头消除上下文爆炸与 /continue 毒化。
+- supervisor 对上下文超限 400（8 类供应商签名匹配）写人话 error_message 引导改用 auto-split；已落库过分集时保留分集、置 parsing_status=3 并提示可 /continue，不做整本正则兜底污染数据。
+- 超长估算提醒：原文估算 token 超模型上下文 60% 时向系统提示追加强提醒，prompts 强制「边读边落库」。
+- auto-split 时序加固：先分块成功、后清空旧数据，失败时旧解析产物保留、parsing_status 回滚复原。
+- 全量 931 测试全绿（+30：Splitter 7 / GetProjectScript 7 / ReadScriptSegment 10 / OverflowError 6）。
+
+### 实践结论
+
+- 几十万字级剧本的首选路径仍是 **auto-split**（按块独立抽取，不受单上下文限制）；分段阅读方案让 agent 通道「能跑通但逼近上下文天花板」，适合几万~十几万字中等长度。
+- 火山欠费已由用户开通 Agent Plan 解决；e2eautosplit 测试账号密码为 e2ePass2026（仅本地 dev）。
+
+---
+
 ## 关联改进：模型工具调用能力标注（2026-09-15 同日）
 
 防止在需要工具调用的完整解析入口选中不支持的模型（实测 Ollama Qwen3-8B 直接 400「does not support tools」）：

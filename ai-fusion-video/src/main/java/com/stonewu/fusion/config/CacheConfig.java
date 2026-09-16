@@ -40,8 +40,12 @@ public class CacheConfig {
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
                 .disableCachingNullValues();
 
-        // Ollama 能力探测负缓存：探测结果为“未知”（如 Ollama 离线）时短期记住，
-        // TTL 内模型下拉不再全量重试探测；正结果走主缓存 ollamaModelCapabilities（默认 1h）
+        // Ollama 能力探测双层缓存的语义与副作用：
+        // - 主缓存 ollamaModelCapabilities（正结果，走上方默认配置 TTL 1h）：探测成功的
+        //   模型能力结果缓存 1 小时，Ollama 端的模型增删或能力变化最长 1 小时后才反映
+        //   到能力判断，期间同一 baseUrl+模型 不重复发起探测；
+        // - 负缓存 ollamaModelCapabilitiesNegative（TTL 3 分钟）：探测结果为“未知”
+        //   （如 Ollama 离线）时短期记住，TTL 内模型下拉不再全量重试探测
         RedisCacheConfiguration ollamaNegativeConfig = RedisCacheConfiguration
                 .defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(3))
