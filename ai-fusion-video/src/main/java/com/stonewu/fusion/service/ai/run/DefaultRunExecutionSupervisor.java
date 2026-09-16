@@ -179,6 +179,7 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
         AtomicLong lastCommittedSequence = new AtomicLong(-1);
         Set<String> successfulBusinessTools = new LinkedHashSet<>();
         Set<String> failedBusinessToolCalls = new HashSet<>();
+        Set<String> required = requiredBusinessTools(spec.agentDefinitionStableKey());
         return executionFactory.start(
                         runId,
                         ownerInstanceId,
@@ -194,10 +195,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                          chunks::coalesce,
                          events -> events.concatMap(
                                          event -> {
-                                             recordSuccessfulBusinessTool(
-                                                     spec.agentDefinitionStableKey(),
-                                                     event,
-                                                     successfulBusinessTools,
+                                             BusinessToolOutcomeInspector.recordSuccessfulBusinessTool(
+                                                     required, event, successfulBusinessTools,
                                                      failedBusinessToolCalls);
                                              return appendOwned(execution, event)
                                                  .flatMap(committed -> afterAppend(
@@ -410,10 +409,9 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                     execution,
                     AgentRuntimeErrorCode.AGENT_EVENT_BACKPRESSURE_OVERFLOW,
                     "Agent event ingress exceeded its bounded capacity");
-            case SOURCE_FAILURE -> terminalFailure(
-                    execution,
-                    AgentRuntimeErrorCode.AGENTSCOPE_INTERNAL_ERROR,
-                    outcome.failure().getMessage());
+            case SOURCE_FAILURE -> contextOverflowTerminal(
+                    execution, kernelSnapshot, runtimeRequest, outcome,
+                    successfulBusinessTools);
             case JOURNAL_FAILURE -> outcome.failure() instanceof OwnerLostException
                     ? Mono.empty()
                     : terminalFailure(
@@ -427,6 +425,39 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                             "Agent run deadline expired")
                     : Mono.empty();
         };
+    }
+
+    /**
+     * SOURCE_FAILURE 的上下文超限特判：供应商“超出最大消息 tokens/上下文长度”类 400
+     * 不透传原始报错，而是写成可行动的人话；本 run 已成功落库过分集时，先保留已落库
+     * 内容并注明部分完成（刻意不做整本兜底解析），再落地失败终态。
+     */
+    private Mono<Void> contextOverflowTerminal(
+            AgentExecution execution,
+            AgentKernelSnapshot kernelSnapshot,
+            AgentScopeRuntimeContextRequest runtimeRequest,
+            AgentExecutionHandle.Outcome outcome,
+            Set<String> successfulBusinessTools) {
+        Throwable failure = outcome.failure();
+        if (!ScriptContextOverflowError.matches(failure)) {
+            return terminalFailure(
+                    execution,
+                    AgentRuntimeErrorCode.AGENTSCOPE_INTERNAL_ERROR,
+                    failure.getMessage());
+        }
+        boolean episodePersisted = successfulBusinessTools.contains("save_script_episode");
+        Mono<Void> markPartial = episodePersisted && deterministicRecovery != null
+                ? deterministicRecovery
+                        .markPartialOnContextOverflow(
+                                kernelSnapshot.payload().agentDefinitionStableKey(),
+                                runtimeRequest.project())
+                        // 部分完成标注失败不阻断失败终态落地
+                        .onErrorResume(ignored -> Mono.empty())
+                : Mono.empty();
+        return markPartial.then(terminalFailure(
+                execution,
+                AgentRuntimeErrorCode.AGENTSCOPE_INTERNAL_ERROR,
+                ScriptContextOverflowError.terminalMessage(episodePersisted)));
     }
 
     private Mono<Void> recoverThenComplete(
@@ -505,59 +536,6 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                     Set.of("update_storyboard_item_video");
             default -> Set.of();
         };
-    }
-
-    private void recordSuccessfulBusinessTool(
-            String agentName,
-            AgentEventEnvelope event,
-            Set<String> successfulBusinessTools,
-            Set<String> failedBusinessToolCalls) {
-        if (event.rawEventType().endsWith("TOOL_RESULT_TEXT_DELTA")
-                || event.rawEventType().endsWith("TOOL_RESULT_DATA_DELTA")) {
-            String delta = firstText(event.payload(), "delta", "content", "text");
-            if (event.toolCallId() != null && looksLikeToolFailure(delta)) {
-                failedBusinessToolCalls.add(event.toolCallId());
-            }
-            return;
-        }
-        if (!"TOOL_FINISHED".equals(event.outputType())) {
-            return;
-        }
-        Set<String> required = requiredBusinessTools(agentName);
-        if (required.isEmpty()) {
-            return;
-        }
-        JsonNode payload = event.payload();
-        String toolName = firstText(payload, "toolCallName", "toolName", "name");
-        String state = firstText(payload, "state", "status", "toolStatus");
-        if (toolName != null && required.contains(toolName)
-                && "SUCCESS".equalsIgnoreCase(state)
-                && !failedBusinessToolCalls.contains(event.toolCallId())
-                && !looksLikeToolFailure(firstText(payload, "toolResult", "content", "text"))) {
-            successfulBusinessTools.add(toolName);
-        }
-    }
-
-    private boolean looksLikeToolFailure(String value) {
-        if (value == null || value.isBlank()) {
-            return false;
-        }
-        String normalized = value.trim().toLowerCase();
-        return normalized.startsWith("error:")
-                || normalized.contains("\"status\":\"error\"")
-                || normalized.contains("\"status\": \"error\"")
-                || normalized.contains("parameter validation failed")
-                || normalized.contains("tool execution failed");
-    }
-
-    private String firstText(JsonNode object, String... fields) {
-        for (String field : fields) {
-            JsonNode value = object.get(field);
-            if (value != null && value.isTextual() && !value.textValue().isBlank()) {
-                return value.textValue();
-            }
-        }
-        return null;
     }
 
     private Mono<Void> enterWaitingConfirmation(

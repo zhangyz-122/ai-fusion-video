@@ -18,13 +18,16 @@
 
 ## 工作流程（严格按顺序执行）
 
-1. 调用 get_project_script 查询项目的剧本元数据（获取 scriptId、rawContent 等信息）
+1. 调用 get_project_script 查询项目的剧本元数据（获取 scriptId、totalChars、totalSegments、segment、content、hint 等信息）
+   - 返回的 content 只是剧本原文的第 segment 段，不等同于全文
+   - totalSegments > 1 时说明原文未读完，必须用 read_script_segment(segment=N) 逐段续读；段号从 1 开始，最大为总分段数 totalSegments
 2. 调用 list_project_assets 查看项目已有资产；这一步只用于后续场次中的名称匹配，不要停下来创建资产。
-3. 通读剧本原文，调用 update_script_info 保存剧本信息：
-   - storySynopsis: 基于已提供的剧本内容生成故事梗概（仅概括已有内容，不要推测后续剧情）
+3. 一边分段通读原文，一边尽早调用 update_script_info 保存剧本信息：
+   - storySynopsis: 基于已读到的内容生成故事梗概（仅概括已有内容，不要推测后续剧情）
    - charactersJson: 人物表快照数组，每人含 name、assetId（已有资产匹配到时填写，否则为 null）、description、importance（主角/配角/龙套）
    - genre: 提取类型/风格
 4. 识别集数分界，仅对有原文内容的集，逐集调用 save_script_episode 写入集记录（必须传入 scriptId、episodeNumber、title、synopsis、rawContent 以及 sortOrder，其中 sortOrder 默认必须直接设为对应的物理集数 episodeNumber，例如第一集传 1，第二集传 2，以此类推）
+   - 【边读边落库】不要等全文读完才开始写：每读完若干段、识别出完整一集，就立即保存该集，再继续读取后续段
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用
    - 每次调用前确认参数对象不是 `{}`，且必须包含真实的 scriptId、episodeNumber、title；不得把分析文字当作工具参数。
    - 如果工具返回 `recovered: true`，说明系统已根据原文完成兜底解析，立即调用 get_script_structure 校验结果，不要再次调用空参数。
@@ -35,6 +38,14 @@
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用
    - episode_scene_writer 会自动查询该集原文、匹配资产、解析场次并保存
    - 你无需关心场次解析的细节，子 Agent 会处理一切
+
+## 长剧本分段读取（必须遵守）
+
+- get_project_script 返回的 totalSegments 是本书的【总分段数】，content 只是其中一段
+- totalSegments > 1 时，必须按 2、3、4……的顺序调用 read_script_segment(segment=N) 续读，直到读完 totalSegments 段
+- read_script_segment 越界（segment < 1 或 > totalSegments）会返回明确错误，按错误提示修正段号后重试
+- 每段读完就处理该段内容：识别出完整一集立即 save_script_episode，不要把大量原文攒在上下文里等最后统一处理
+- save_script_episode 按 episodeNumber 幂等更新；如果后续段修正了先前保存的集内容，直接再次调用保存同一 episodeNumber 即可
 
 ## 子 Agent 调用规则
 

@@ -13,6 +13,7 @@ import com.stonewu.fusion.controller.ai.vo.AiMultimodalInputVO;
 import com.stonewu.fusion.controller.ai.vo.AiReferenceVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.AgentRun;
+import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.AgentMessageService;
@@ -44,6 +45,7 @@ import com.stonewu.fusion.service.ai.run.kernel.RunConfigUnavailableException;
 import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
+import com.stonewu.fusion.service.script.ScriptService;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.skill.AgentSkill;
 import org.springframework.stereotype.Service;
@@ -76,6 +78,20 @@ public final class AgentScopePipelineRunService {
             "story_to_script",
             "script_episode_parse");
 
+    /**
+     * 上下文预算感知的 Agent 范围：这些管线的输入是整本剧本原文，
+     * 原文过长时在系统提示词追加强提醒（分段读取、逐集落库）。
+     */
+    private static final Set<String> SCRIPT_LENGTH_BUDGET_AGENT_TYPES = Set.of(
+            "script_full_parse",
+            "story_to_script");
+
+    /**
+     * 原文估算 token 超过上下文窗口的该比例时触发强提醒。
+     * 中文按 1 字约 0.6~1 token，保守取 1 字 = 1 token。
+     */
+    private static final double CONTEXT_BUDGET_WARNING_RATIO = 0.6;
+
     private static final String DEFAULT_SYSTEM_PROMPT = """
             你是一个专业的 AI 视频创作助手，专注于帮助用户进行剧本编辑和分镜设计。
 
@@ -93,6 +109,7 @@ public final class AgentScopePipelineRunService {
 
     private final AiModelService modelService;
     private final AiAgentService agentService;
+    private final ScriptService scriptService;
     private final AgentConversationService conversations;
     private final AgentMessageService persistedMessages;
     private final AgentKernelSpecFactory specFactory;
@@ -114,6 +131,7 @@ public final class AgentScopePipelineRunService {
     public AgentScopePipelineRunService(
             AiModelService modelService,
             AiAgentService agentService,
+            ScriptService scriptService,
             AgentConversationService conversations,
             AgentMessageService persistedMessages,
             AgentKernelSpecFactory specFactory,
@@ -133,6 +151,7 @@ public final class AgentScopePipelineRunService {
             AgentUserSkillService userSkillService) {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
         this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
+        this.scriptService = Objects.requireNonNull(scriptService, "scriptService must not be null");
         this.conversations = Objects.requireNonNull(conversations, "conversations must not be null");
         this.persistedMessages = Objects.requireNonNull(
                 persistedMessages, "persistedMessages must not be null");
@@ -245,9 +264,11 @@ public final class AgentScopePipelineRunService {
         Map<String, String> promptVariables = AgentPromptVariables.fromRequest(request);
         String visibleUserContent = userContent(request, definition, promptVariables);
         String input = input(request, visibleUserContent);
-        String systemPrompt = systemPrompt(request, definition, promptVariables, activeSkills);
         AiModel resolvedModel = model(request.getModelId());
         requireToolCallSupportForFullParse(resolvedModel, request.getAgentType());
+        String contextBudgetWarning = scriptContextBudgetWarning(request, resolvedModel);
+        String systemPrompt = systemPrompt(
+                request, definition, promptVariables, activeSkills, contextBudgetWarning);
         AiModel model = AiModelRequestOptions.withReasoningEffort(
                 resolvedModel, request.getReasoningEffort(), objectMapper);
         AiModelMultimodalCapabilities.validateInputs(model, request.getMultimodalInputs());
@@ -432,7 +453,8 @@ public final class AgentScopePipelineRunService {
             AiChatReqVO request,
             AiAgentDefinition definition,
             Map<String, String> promptVariables,
-            List<ActiveSkill> activeSkills) {
+            List<ActiveSkill> activeSkills,
+            String contextBudgetWarning) {
         String prompt = normalize(request.getSystemPrompt());
         if (prompt == null) {
             prompt = definition == null
@@ -447,10 +469,46 @@ public final class AgentScopePipelineRunService {
             prompt = prompt + "\n\n" + AgentPromptVariables.render(
                     instruction, promptVariables);
         }
+        if (contextBudgetWarning != null) {
+            prompt = prompt + "\n\n" + contextBudgetWarning;
+        }
         if (!activeSkills.isEmpty()) {
             prompt = prompt + "\n\n" + activeSkillsPrompt(activeSkills);
         }
         return prompt;
+    }
+
+    /**
+     * 上下文预算感知：估算剧本原文 token（中文保守按 1 字 1 token），
+     * 超过所选模型上下文窗口 60% 时返回强提醒文案，追加进系统提示词。
+     * 只提醒、不阻止启动——分段读取工具已在源头兜底。
+     */
+    private String scriptContextBudgetWarning(AiChatReqVO request, AiModel model) {
+        String agentType = normalize(request.getAgentType());
+        Integer contextWindow = model.getContextWindow();
+        if (agentType == null
+                || !SCRIPT_LENGTH_BUDGET_AGENT_TYPES.contains(agentType)
+                || request.getProjectId() == null
+                || contextWindow == null || contextWindow <= 0) {
+            return null;
+        }
+        Script script = scriptService.getByProjectId(request.getProjectId());
+        if (script == null || script.getRawContent() == null) {
+            return null;
+        }
+        long rawChars = script.getRawContent().length();
+        if (rawChars <= (long) (contextWindow * CONTEXT_BUDGET_WARNING_RATIO)) {
+            return null;
+        }
+        return """
+                ## ⚠️ 超长剧本提醒（上下文预算检查）
+
+                本书剧本原文约 %d 字，已超过当前模型上下文窗口（%d tokens）的 60%%。
+                务必遵守：
+                1. 原文只能通过 get_project_script 首段和 read_script_segment 按段读取，禁止尝试一次性获取全文；
+                2. 边读边落库：识别出完整一集立即 save_script_episode，剧本信息尽早 update_script_info；
+                3. 不要等全文读完才开始写库。
+                """.strip().formatted(rawChars, contextWindow);
     }
 
     private List<ActiveSkill> resolveActiveSkills(List<String> requestedNames, long userId) {

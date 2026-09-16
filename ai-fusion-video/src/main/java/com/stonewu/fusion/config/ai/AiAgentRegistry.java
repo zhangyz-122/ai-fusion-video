@@ -127,7 +127,7 @@ public class AiAgentRegistry {
                                 .name("默认助手")
                                 .toolNames(List.of(
                                                 "list_my_projects", "get_project", "save_project", "delete_project",
-                                                "get_project_script", "list_project_assets", "get_project_storyboard",
+                                                "get_project_script", "read_script_segment", "list_project_assets", "get_project_storyboard",
                                                 "get_script", "get_script_structure", "get_script_episode",
                                                 "update_script", "update_script_info", "save_script_episode",
                                                 "save_script_scene_items", "update_script_scene",
@@ -160,13 +160,13 @@ public class AiAgentRegistry {
                 register(AiAgentDefinition.builder()
                                 .type("script_full_parse")
                                 .name("完整剧本解析")
-                                .toolNames(List.of(
-                                                // Keep the root turn small enough for local Ollama/Qwen models.
-                                                // Asset extraction is intentionally deferred; this pipeline must
-                                                // persist the script structure before doing optional enrichment.
-                                                "get_project_script", "list_project_assets",
-                                                "update_script_info", "save_script_episode",
-                                                "get_script_structure"))
+                                                .toolNames(List.of(
+                                                                // Keep the root turn small enough for local Ollama/Qwen models.
+                                                                // Asset extraction is intentionally deferred; this pipeline must
+                                                                // persist the script structure before doing optional enrichment.
+                                                                "get_project_script", "read_script_segment", "list_project_assets",
+                                                                "update_script_info", "save_script_episode",
+                                                                "get_script_structure"))
                                 .subAgentTools(List.of(
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("episode_scene_writer")
@@ -219,7 +219,7 @@ public class AiAgentRegistry {
                                 .toolNames(List.of(
                                                 "list_project_assets", "batch_create_assets",
                                                 "update_script_info", "save_script_episode",
-                                                "get_project_script", "query_asset_metadata", "get_script_structure"))
+                                                "get_project_script", "read_script_segment", "query_asset_metadata", "get_script_structure"))
                                 .subAgentTools(List.of(
                                                 AiAgentDefinition.SubAgentToolDef.builder()
                                                                 .toolName("episode_script_creator")
@@ -396,6 +396,7 @@ public class AiAgentRegistry {
                                 .toolNames(List.of(
                                                 "get_script_episode", "list_project_assets",
                                                 "save_script_scene_items", "get_project_script",
+                                                "read_script_segment",
                                                 "get_script_scene"))
                                 .systemPrompt(loadPrompt("episode-scene-writer.system.md"))
                                 .instructionTemplate("""

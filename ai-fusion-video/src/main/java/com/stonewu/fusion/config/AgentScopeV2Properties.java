@@ -18,6 +18,7 @@ public class AgentScopeV2Properties {
     private State state = new State();
     private Ingress ingress = new Ingress();
     private Execution execution = new Execution();
+    private Script script = new Script();
     private Skills skills = new Skills();
     private Mcp mcp = new Mcp();
 
@@ -27,6 +28,14 @@ public class AgentScopeV2Properties {
 
     public void setCache(Cache cache) {
         this.cache = Objects.requireNonNull(cache, "cache must not be null");
+    }
+
+    public Script getScript() {
+        return script;
+    }
+
+    public void setScript(Script script) {
+        this.script = Objects.requireNonNull(script, "script must not be null");
     }
 
     public State getState() {
@@ -237,6 +246,25 @@ public class AgentScopeV2Properties {
                 throw new IllegalArgumentException("maxIters must be greater than zero");
             }
             this.maxIters = maxIters;
+        }
+    }
+
+    /**
+     * 剧本分段读取配置：get_project_script / read_script_segment 按该粒度
+     * 把剧本原文切段返回，避免超长原文作为单个工具结果撑爆模型上下文。
+     */
+    public static final class Script {
+        private int segmentChars = 24_000;
+
+        public int getSegmentChars() {
+            return segmentChars;
+        }
+
+        public void setSegmentChars(int segmentChars) {
+            if (segmentChars <= 0) {
+                throw new IllegalArgumentException("segmentChars must be greater than zero");
+            }
+            this.segmentChars = segmentChars;
         }
     }
 

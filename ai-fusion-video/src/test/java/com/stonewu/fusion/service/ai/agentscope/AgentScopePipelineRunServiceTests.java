@@ -36,6 +36,7 @@ import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuil
 import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
+import com.stonewu.fusion.service.script.ScriptService;
 import io.agentscope.core.message.UserMessage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -133,6 +134,7 @@ class AgentScopePipelineRunServiceTests {
         AgentScopePipelineRunService service = new AgentScopePipelineRunService(
                 models,
                 agents,
+                mock(ScriptService.class),
                 conversations,
                 persistedMessages,
                 specs,
@@ -254,6 +256,7 @@ class AgentScopePipelineRunServiceTests {
         AgentScopePipelineRunService service = new AgentScopePipelineRunService(
                 models,
                 agents,
+                mock(ScriptService.class),
                 conversations,
                 persistedMessages,
                 specs,
@@ -318,6 +321,7 @@ class AgentScopePipelineRunServiceTests {
         AgentScopePipelineRunService service = new AgentScopePipelineRunService(
                 mock(AiModelService.class),
                 mock(AiAgentService.class),
+                mock(ScriptService.class),
                 mock(AgentConversationService.class),
                 mock(AgentMessageService.class),
                 mock(AgentKernelSpecFactory.class),
@@ -479,6 +483,7 @@ class AgentScopePipelineRunServiceTests {
         return new AgentScopePipelineRunService(
                 models,
                 mock(AiAgentService.class),
+                mock(ScriptService.class),
                 conversations,
                 persistedMessages,
                 specs,

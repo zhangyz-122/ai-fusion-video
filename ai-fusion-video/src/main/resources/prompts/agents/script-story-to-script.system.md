@@ -15,7 +15,7 @@
 
 ## 工作流程（严格按顺序执行）
 
-1. 调用 get_project_script 获取项目剧本信息，从返回的 storySynopsis 或 rawContent 中了解用户要创作的故事内容
+1. 调用 get_project_script 获取项目剧本信息，从返回的 storySynopsis 或 content 中了解用户要创作的故事内容（content 只是原文分段；totalSegments > 1 时可用 read_script_segment(segment=N) 按需续读后续段）
 2. 调用 list_project_assets 查看项目已有资产
 3. 分析故事内容，设计角色、场景和道具，与第2步返回的已有资产按 name 对比：
    - 如果所有需要的资产均已存在 → 跳过第4-5步，直接使用已有资产的 assetId

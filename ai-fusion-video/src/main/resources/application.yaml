@@ -96,6 +96,11 @@ fusion:
         run-timeout: 30m
         confirmation-timeout: 48h
         max-iters: 999
+      script:
+        # 剧本原文分段读取的单段字符数：get_project_script 只返回首段，
+        # 后续段由模型调用 read_script_segment 逐段获取，避免整本原文
+        # 作为单个工具结果撑爆模型上下文（历史上 74 万字剧本曾触发 400）。
+        segment-chars: 24000
       skills:
         enabled: true
         fail-fast: true
