@@ -5,6 +5,20 @@ Each check returns a dict suitable for QcCheckResult.
 import subprocess, json, os
 from typing import Optional
 
+MEDIA_URL_PREFIX = "/media/"
+MEDIA_ROOT = os.environ.get("QC_MEDIA_ROOT", "")
+
+
+def resolve_media_input(video_url: str) -> str:
+    """把平台媒体地址换算成 sidecar 可读的输入。
+
+    /media/** 由 QC_MEDIA_ROOT 指向的共享媒体卷解析；http(s) 地址原样交给 ffprobe/opencv。
+    """
+    if video_url and video_url.startswith(MEDIA_URL_PREFIX) and MEDIA_ROOT:
+        return os.path.join(MEDIA_ROOT, video_url[len(MEDIA_URL_PREFIX):])
+    return video_url
+
+
 def _ffprobe(video_path: str) -> dict:
     cmd = ["ffprobe", "-v", "quiet", "-print_format", "json",
            "-show_format", "-show_streams", video_path]
@@ -23,8 +37,13 @@ def _extract_frames(video_path: str, timestamps: list[float], out_dir: str) -> l
         if os.path.exists(out): paths.append(out)
     return paths
 
+def _probeable(video_url: str) -> bool:
+    """ffprobe/opencv 可以直接读远程地址，本地文件则要求存在。"""
+    return bool(video_url) and (video_url.startswith(("http://", "https://")) or os.path.exists(video_url))
+
+
 def check_technical(video_url: str) -> dict:
-    if not video_url or not os.path.exists(video_url):
+    if not _probeable(video_url):
         return {"criterion": "TECHNICAL_VALIDITY", "verdict": "FAIL", "failure_code": "FILE_NOT_FOUND"}
     try:
         meta = _ffprobe(video_url)

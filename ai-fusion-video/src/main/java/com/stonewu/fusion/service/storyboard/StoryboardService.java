@@ -27,7 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 分镜脚本服务（含分镜集、分镜场次、分镜条目管理）
@@ -481,9 +483,9 @@ public class StoryboardService {
      * PR-006: 获取分镜条目的 production summary（供 Overview 页面使用）。
      */
     @Cacheable(value = "storyboardItem", key = "#itemId + ':prodSummary'")
-    public java.util.Map<String, Object> getProductionSummary(Long itemId) {
+    public Map<String, Object> getProductionSummary(Long itemId) {
         StoryboardItem item = getItemById(itemId);
-        java.util.Map<String, Object> summary = new java.util.LinkedHashMap<>();
+        Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("itemId", item.getId());
         summary.put("productionStatus", item.getProductionStatus());
         summary.put("selectedTakeId", item.getSelectedTakeId());

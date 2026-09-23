@@ -19,6 +19,6 @@ public class ProductionTake {
     private Long seed;
     private String qcStatus;
     private String metadataJson;
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

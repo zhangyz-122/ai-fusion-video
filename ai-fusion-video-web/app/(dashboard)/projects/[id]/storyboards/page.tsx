@@ -34,6 +34,8 @@ import {
   type StoryboardScene,
 } from "@/lib/api/storyboard";
 import { StoryboardSidebar } from "./_components/storyboard-sidebar";
+import { TakeDrawer } from "./_components/take-drawer";
+import { productionApi, type ProductionTake } from "@/lib/api/production";
 import { StoryboardTableView } from "./_components/storyboard-table-view";
 import { StoryboardCardView } from "./_components/storyboard-card-view";
 import {
@@ -143,6 +145,8 @@ export default function StoryboardTabPage() {
   const [frameDialogItemId, setFrameDialogItemId] = useState<number | null>(null);
   const [frameDialogInitialType, setFrameDialogInitialType] =
     useState<StoryboardFrameType>("first");
+  const [takeDrawerItemId, setTakeDrawerItemId] = useState<number | null>(null);
+  const [takes, setTakes] = useState<ProductionTake[]>([]);
   const [sidebarSelection, setSidebarSelection] = useState<SidebarSelection>({
     type: "episode",
   });
@@ -923,6 +927,43 @@ export default function StoryboardTabPage() {
     setFrameDialogItemId(null);
   }, []);
 
+  /** 打开单个镜头的候选 Take 抽屉，并拉取该镜头的候选产物 */
+  const handleOpenTakes = useCallback(async (item: StoryboardItem) => {
+    setTakeDrawerItemId(item.id);
+    try {
+      setTakes(await productionApi.getTakesByItem(item.id));
+    } catch (error) {
+      toastApiError(error, "获取候选镜头失败");
+    }
+  }, []);
+
+  const handleCloseTakes = useCallback(() => {
+    setTakeDrawerItemId(null);
+    setTakes([]);
+  }, []);
+
+  const handleSelectTake = useCallback(
+    async (takeId: number) => {
+      if (takeDrawerItemId == null) return;
+      try {
+        await productionApi.selectTake(takeDrawerItemId, takeId);
+        await refreshStoryboardData();
+      } catch (error) {
+        toastApiError(error, "选定候选镜头失败");
+      }
+    },
+    [takeDrawerItemId, refreshStoryboardData]
+  );
+
+  const handleEvaluateTakeQc = useCallback(async (takeId: number) => {
+    try {
+      const updated = await productionApi.evaluateTakeQc(takeId);
+      setTakes((prev) => prev.map((take) => (take.id === takeId ? updated : take)));
+    } catch (error) {
+      toastApiError(error, "质检执行失败");
+    }
+  }, []);
+
   // 拖拽排序
   const handleReorderItems = async (
     sceneId: number,
@@ -1405,6 +1446,7 @@ export default function StoryboardTabPage() {
                     }
                     onVideoGen={handleVideoGen}
                     onOpenFrameDialog={handleOpenFrameDialog}
+                    onOpenTakes={handleOpenTakes}
                     assetLookup={assetLookup}
                     onEditAssets={(item) => {
                       setEditingItem(item);
@@ -1425,6 +1467,7 @@ export default function StoryboardTabPage() {
                     }
                     onVideoGen={handleVideoGen}
                     onOpenFrameDialog={handleOpenFrameDialog}
+                    onOpenTakes={handleOpenTakes}
                   />
                 )}
               </div>
@@ -1469,6 +1512,18 @@ export default function StoryboardTabPage() {
         onClose={handleCloseFrameDialog}
         onUpdateFrame={handleUpdateItemFrame}
         onGenerateFrame={handleGenerateItemFrame}
+      />
+
+      <TakeDrawer
+        itemId={takeDrawerItemId ?? 0}
+        takes={takes}
+        selectedTakeId={allItems.find((i) => i.id === takeDrawerItemId)?.selectedTakeId ?? null}
+        open={takeDrawerItemId !== null}
+        onOpenChange={(open) => {
+          if (!open) handleCloseTakes();
+        }}
+        onSelect={handleSelectTake}
+        onEvaluateQc={handleEvaluateTakeQc}
       />
 
       <EditItemAssetsDialog

@@ -24,6 +24,6 @@ public class GenerationUsage {
     private Boolean qcPass;
     private BigDecimal approvedSeconds;
     private BigDecimal humanReviewMinutes;
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

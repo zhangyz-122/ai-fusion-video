@@ -40,6 +40,7 @@ public class ProductionGenerationService {
     private final VideoItemMapper videoItemMapper;
     private final ProductionStepMapper stepMapper;
     private final ProductionTakeMapper takeMapper;
+    private final ProductionModelResolver modelResolver;
     private final WorkflowProfileResolver profileResolver;
 
     /**
@@ -68,7 +69,7 @@ public class ProductionGenerationService {
         task.setFirstFrameImageUrl(firstFrameUrl);
         if (lastFrameUrl != null) task.setLastFrameImageUrl(lastFrameUrl);
         task.setCount(3);
-        task.setModelId(resolved.modelId());
+        task.setModelId(modelResolver.resolveVideoModelId(resolved.modelId()));
         task.setWorkflowVersionId(resolved.workflowVersionId());
         // projectId 从 ProductionRun 关联获取（简化：由调用方预设）
         videoTaskMapper.insert(task);

@@ -1,195 +1,179 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import type { ProductionTake } from '@/lib/api/production';
-import { selectTake } from '@/lib/api/production';
+import { useState } from 'react';
+import { Check, Loader2, ShieldCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { resolveMediaUrl } from '@/lib/api/client';
+import { parseTakeMetadata, type ProductionTake, type ProductionTakeQcStatus } from '@/lib/api/production';
+import { cn } from '@/lib/utils';
 
 interface TakeDrawerProps {
   itemId: number;
   takes: ProductionTake[];
-  selectedTakeId?: number;
+  selectedTakeId: number | null;
   open: boolean;
-  onClose: () => void;
-  onSelected?: (takeId: number) => void;
-  onError?: (message: string) => void;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (takeId: number) => Promise<void>;
+  onEvaluateQc: (takeId: number) => Promise<void>;
 }
 
-type ConfirmState = { takeId: number; action: 'select' } | null;
+const QC_BADGE_CLASS: Record<ProductionTakeQcStatus, string> = {
+  PASS: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  FAIL: 'border-destructive/30 bg-destructive/10 text-destructive',
+  REVIEW_REQUIRED: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  PENDING: 'border-border/30 bg-muted/40 text-muted-foreground',
+};
 
-export function TakeDrawer({ itemId, takes, selectedTakeId, open, onClose, onSelected, onError }: TakeDrawerProps) {
-  const [selecting, setSelecting] = useState<number | null>(null);
-  const [confirm, setConfirm] = useState<ConfirmState>(null);
-  const [error, setError] = useState<string | null>(null);
+const QC_LABEL: Record<ProductionTakeQcStatus, string> = {
+  PASS: '质检通过',
+  FAIL: '质检失败',
+  REVIEW_REQUIRED: '待复核',
+  PENDING: '未质检',
+};
 
-  const handleConfirmSelect = useCallback(async (takeId: number) => {
-    setSelecting(takeId);
-    setError(null);
+export function TakeDrawer({
+  itemId,
+  takes,
+  selectedTakeId,
+  open,
+  onOpenChange,
+  onSelect,
+  onEvaluateQc,
+}: TakeDrawerProps) {
+  const { confirm } = useConfirm();
+  const [busyTakeId, setBusyTakeId] = useState<number | null>(null);
+
+  const run = async (takeId: number, action: () => Promise<void>) => {
+    setBusyTakeId(takeId);
     try {
-      await selectTake(itemId, takeId);
-      onSelected?.(takeId);
-      setConfirm(null);
-      onClose();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-      onError?.(msg);
+      await action();
     } finally {
-      setSelecting(null);
+      setBusyTakeId(null);
     }
-  }, [itemId, onSelected, onClose, onError]);
+  };
 
-  if (!open) return null;
-
-  const qcBadge = (status: string) => {
-    const map: Record<string, string> = {
-      PASS: 'bg-green-100 text-green-800 border-green-300',
-      FAIL: 'bg-red-100 text-red-800 border-red-300',
-      REVIEW_REQUIRED: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      PENDING: 'bg-gray-100 text-gray-600 border-gray-300',
-    };
-    return map[status] || 'bg-gray-100 text-gray-600 border-gray-300';
+  const handleSelect = async (takeId: number) => {
+    const ok = await confirm({
+      title: '选定候选镜头',
+      description: `将把镜头 #${itemId} 的成片指向候选 #${takeId}，原有选定会被覆盖。`,
+      confirmText: '确定选定',
+    });
+    if (!ok) return;
+    await run(takeId, () => onSelect(takeId));
   };
 
   return (
-    <>
-      {/* Overlay */}
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-      {/* Drawer panel */}
-      <div className="fixed inset-y-0 right-0 w-[420px] bg-white shadow-2xl z-50 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Production Takes</h3>
-            <p className="text-xs text-gray-500">Item #{itemId} · {takes.length} take(s)</p>
-          </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label="Close">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-[440px] p-0 sm:w-[440px] sm:max-w-none">
+        <SheetHeader className="shrink-0 border-b border-border/30">
+          <SheetTitle>候选镜头</SheetTitle>
+          <SheetDescription>镜头 #{itemId} · 共 {takes.length} 个候选产物</SheetDescription>
+        </SheetHeader>
 
-        {/* Error banner */}
-        {error && (
-          <div className="mx-4 mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        {/* Takes list */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           {takes.length === 0 && (
-            <div className="text-center py-12 text-gray-400">
-              <p className="text-sm">No takes generated yet.</p>
-              <p className="text-xs mt-1">Trigger a GENERATE_VIDEO step to produce takes.</p>
+            <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+              暂无候选镜头
             </div>
           )}
+
           {takes.map((take) => {
+            const metadata = parseTakeMetadata(take.metadataJson);
+            const videoSrc = resolveMediaUrl(metadata.videoUrl);
             const isSelected = take.id === selectedTakeId;
-            const isBlocked = take.qc_status === 'FAIL';
-            const isBusy = selecting === take.id;
+            const isQcBlocked = take.qcStatus === 'FAIL';
+            const isBusy = busyTakeId === take.id;
+
             return (
-              <div key={take.id} className={`border rounded-xl overflow-hidden transition-colors ${
-                isSelected ? 'border-blue-500 ring-2 ring-blue-200' :
-                isBlocked ? 'border-red-200 opacity-80' : 'border-gray-200 hover:border-gray-300'
-              }`}>
-                {/* Video preview */}
-                {take.metadata_json?.videoUrl && (
+              <div
+                key={take.id}
+                className={cn(
+                  'overflow-hidden rounded-lg border border-border/20 bg-background/70',
+                  isSelected && 'border-primary/50',
+                  isQcBlocked && !isSelected && 'border-destructive/30'
+                )}
+              >
+                {videoSrc ? (
                   <video
-                    src={take.metadata_json.videoUrl}
+                    src={videoSrc}
                     controls
                     preload="metadata"
-                    className="w-full aspect-video bg-black"
+                    className="aspect-video w-full bg-black"
                   />
-                )}
-                {!take.metadata_json?.videoUrl && (
-                  <div className="aspect-video bg-gray-100 flex items-center justify-center">
-                    <span className="text-gray-400 text-sm">No video preview</span>
+                ) : (
+                  <div className="flex aspect-video items-center justify-center bg-muted/20 text-sm text-muted-foreground">
+                    暂无可预览视频
                   </div>
                 )}
 
-                {/* Body */}
-                <div className="p-3 space-y-2">
-                  <div className="flex justify-between items-start">
+                <div className="space-y-3 p-3">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">Take #{take.id}</p>
-                      <p className="text-xs text-gray-500">
-                        {take.source_type === 'VIDEO_ITEM' ? 'Video' : 'Image'} · #{take.source_item_id}
+                      <p className="text-sm font-medium">候选 #{take.id}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {take.modelId || '未知模型'} · 来源 {take.sourceType} #{take.sourceItemId}
                       </p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded border font-medium ${qcBadge(take.qc_status)}`}>
-                      {take.qc_status}
-                    </span>
+                    <Badge variant="outline" className={QC_BADGE_CLASS[take.qcStatus]}>
+                      {QC_LABEL[take.qcStatus]}
+                    </Badge>
                   </div>
 
-                  {/* Metadata grid */}
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
-                    <span className="font-medium">Model:</span><span>{take.model_id || '—'}</span>
-                    <span className="font-medium">Seed:</span><span>{take.seed ?? '—'}</span>
-                    <span className="font-medium">Workflow Version:</span><span>{take.workflow_version_id || '—'}</span>
-                    {take.metadata_json?.duration != null && (
-                      <><span className="font-medium">Duration:</span><span>{take.metadata_json.duration}s</span></>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <dt>种子</dt>
+                    <dd className="text-foreground/80">{take.seed ?? '—'}</dd>
+                    <dt>工作流版本</dt>
+                    <dd className="text-foreground/80">{take.workflowVersionId ?? '—'}</dd>
+                    {metadata.duration != null && (
+                      <>
+                        <dt>时长</dt>
+                        <dd className="text-foreground/80">{metadata.duration}s</dd>
+                      </>
+                    )}
+                  </dl>
+
+                  {isQcBlocked && (
+                    <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      质检未通过的候选不可选定，需先重跑质检或人工复核。
+                    </p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      disabled={isBusy}
+                      onClick={() => run(take.id, () => onEvaluateQc(take.id))}
+                    >
+                      {isBusy ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                      质检
+                    </Button>
+                    {isSelected ? (
+                      <Button size="sm" variant="secondary" className="flex-1" disabled>
+                        <Check />
+                        已选定
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        disabled={isBusy || isQcBlocked}
+                        onClick={() => handleSelect(take.id)}
+                      >
+                        选定
+                      </Button>
                     )}
                   </div>
-
-                  {/* QC FAIL blocking */}
-                  {isBlocked && (
-                    <div className="px-2 py-1.5 bg-red-50 rounded text-xs text-red-600">
-                      ⛔ QC FAIL — selection blocked (override requires audit)
-                    </div>
-                  )}
-
-                  {/* Selected indicator / action button */}
-                  {isSelected && (
-                    <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 rounded-lg">
-                      <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      <span className="text-sm font-medium text-blue-700">Currently selected</span>
-                    </div>
-                  )}
-                  {!isSelected && !isBlocked && (
-                    <button
-                      onClick={() => setConfirm({ takeId: take.id, action: 'select' })}
-                      disabled={isBusy}
-                      className="w-full py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {isBusy ? 'Selecting…' : 'Select this take'}
-                    </button>
-                  )}
-                  {isBlocked && (
-                    <button disabled className="w-full py-2 text-sm bg-gray-100 text-gray-400 rounded-lg cursor-not-allowed">
-                      QC FAIL — selection blocked
-                    </button>
-                  )}
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
-
-      {/* Confirmation dialog */}
-      {confirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4">
-            <h4 className="text-lg font-semibold text-gray-900 mb-2">Confirm Take Selection</h4>
-            <p className="text-sm text-gray-600 mb-4">
-              Select Take #{confirm.takeId} for Item #{itemId}? This will update the storyboard's selected take.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirm(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50">Cancel</button>
-              <button
-                onClick={() => { handleConfirmSelect(confirm.takeId); setConfirm(null); }}
-                disabled={selecting != null}
-                className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {selecting != null ? 'Selecting…' : 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }

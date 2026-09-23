@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.production;
 
+import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import com.stonewu.fusion.entity.production.WorkflowProfile;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import lombok.RequiredArgsConstructor;
@@ -39,12 +40,10 @@ public class WorkflowProfileResolver {
     private String profileCode(WorkflowProfile p) { return p.getProfileCode(); }
 
     private Long getLatestPublishedVersionId(Long workflowId) {
-        // 通过 ComfyUiWorkflowService 查询该 workflow 的最新 published 版本
-        var versions = workflowService.getVersionsByWorkflowId(workflowId);
-        return versions.stream()
-            .filter(v -> "PUBLISHED".equals(v.getStatus()))
-            .map(v -> v.getId())
-            .max(Long::compareTo)
-            .orElse(null);
+        ComfyUiWorkflowVersion active = workflowService.getActiveVersion(workflowId);
+        if (active == null || !Boolean.TRUE.equals(active.getPublished())) {
+            return null;
+        }
+        return active.getId();
     }
 }

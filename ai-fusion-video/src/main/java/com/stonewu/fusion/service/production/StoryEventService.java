@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.production;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.entity.production.StoryEvent;
 import com.stonewu.fusion.entity.production.StoryStateSnapshot;
 import com.stonewu.fusion.mapper.production.StoryEventMapper;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 /**
@@ -25,6 +28,7 @@ public class StoryEventService {
 
     private final StoryEventMapper eventMapper;
     private final StoryStateSnapshotMapper snapshotMapper;
+    private final ObjectMapper objectMapper;
 
     private static final Set<String> VALID_EVENT_TYPES = Set.of(
         "CHARACTER_STATE_CHANGED", "PROP_STATE_CHANGED", "RELATION_CHANGED",
@@ -91,24 +95,42 @@ public class StoryEventService {
     @Transactional
     public StoryStateSnapshot createSnapshot(Long projectId, Long episodeId) {
         Map<String, Object> state = replay(projectId, episodeId);
-        String json = com.fasterxml.jackson.databind.node.TextNode.valueOf(state.toString()).toString();
-        String hash = sha256(json);
+        String json = writeJson(state);
         StoryStateSnapshot snap = new StoryStateSnapshot();
         snap.setProjectId(projectId);
         snap.setEpisodeId(episodeId);
+        snap.setAfterEventId(latestEventId(projectId, episodeId));
         snap.setStateJson(json);
-        snap.setHashVersion(hash);
+        snap.setHashVersion(sha256(json));
         snapshotMapper.insert(snap);
         return snap;
     }
 
+    /** 快照折叠到的最后一条事件，缺失会让快照无法与事件流对齐 */
+    private Long latestEventId(Long projectId, Long episodeId) {
+        List<StoryEvent> events = eventMapper.selectList(
+            new LambdaQueryWrapper<StoryEvent>()
+                .eq(StoryEvent::getProjectId, projectId)
+                .eq(episodeId != null, StoryEvent::getEpisodeId, episodeId)
+                .orderByDesc(StoryEvent::getId)
+                .last("LIMIT 1"));
+        return events.isEmpty() ? null : events.get(0).getId();
+    }
+
+    private String writeJson(Map<String, Object> state) {
+        try {
+            return objectMapper.writeValueAsString(state);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("剧情状态无法序列化为 JSON: " + e.getMessage(), e);
+        }
+    }
+
     private String sha256(String data) {
         try {
-            var digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(data.getBytes(StandardCharsets.UTF_8));
-            return java.util.Base64.getEncoder().encodeToString(hash);
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(data.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("运行环境不支持 SHA-256", e);
         }
     }
 }

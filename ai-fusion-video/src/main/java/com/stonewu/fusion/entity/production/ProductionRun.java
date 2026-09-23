@@ -18,8 +18,8 @@ public class ProductionRun {
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
     private String metadataJson;
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT_UPDATE)
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 }

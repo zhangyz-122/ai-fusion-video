@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ProductionVideoTaskBridge {
 
+    private final ProductionModelResolver modelResolver;
+
     public VideoTask createVideoTaskForStep(ProductionStep step, WorkflowProfile profile,
                                              String prompt, String firstFrameUrl, String lastFrameUrl) {
         VideoTask task = new VideoTask();
@@ -25,7 +27,7 @@ public class ProductionVideoTaskBridge {
         task.setFirstFrameImageUrl(firstFrameUrl);
         if (lastFrameUrl != null) task.setLastFrameImageUrl(lastFrameUrl);
         task.setCount(3);
-        task.setModelId(profile.getDefaultModelId());
+        task.setModelId(modelResolver.resolveVideoModelId(profile.getDefaultModelId()));
         task.setWorkflowVersionId(resolveWorkflowVersionId(profile));
         // projectId 由 ProductionRun 关联获取
         return task;

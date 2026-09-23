@@ -59,6 +59,9 @@ app:
     local-base-path: ./data/media
   agent-workspace:
     local-base-path: ${AGENT_WORKSPACE_LOCAL_PATH:./data/agent-workspace}
+  qc-sidecar:
+    # AI Drama OS 质检 sidecar（ai-drama-qc），视频分析为长耗时调用
+    base-url: ${QC_SIDECAR_BASE_URL:http://localhost:9900}
 
 video:
   compose:

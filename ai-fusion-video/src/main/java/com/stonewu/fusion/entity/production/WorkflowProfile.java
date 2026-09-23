@@ -25,8 +25,8 @@ public class WorkflowProfile {
     private String audioCapabilities;
     private String retryPolicy;
     private Boolean enabled;
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT_UPDATE)
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 }

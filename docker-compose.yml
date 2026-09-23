@@ -64,6 +64,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
       CORS_ALLOWED_ORIGIN_PATTERNS: "${CORS_ALLOWED_ORIGIN_PATTERNS:-*}"
+      QC_SIDECAR_BASE_URL: http://qc:9900
       JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m}
     volumes:
       - media_data:/app/data/media
@@ -73,6 +74,27 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qc:
+        condition: service_started
+
+  # ---------- AI Drama OS 质检 sidecar ----------
+  # 未发布预构建镜像，始终本地构建；与后端共享 media_data 卷以读取 /media/** 产物。
+  qc:
+    build: ./ai-drama-qc
+    image: ai-drama-qc:local
+    container_name: fusion-qc
+    restart: unless-stopped
+    environment:
+      TZ: ${APP_TIME_ZONE:-Asia/Shanghai}
+      QC_MEDIA_ROOT: /media
+      QC_FRAME_OUTPUT_DIR: /tmp/qc-frames
+    volumes:
+      - media_data:/media:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9900/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # ---------- 前端 ----------
   frontend:

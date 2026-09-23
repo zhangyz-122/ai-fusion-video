@@ -30,24 +30,27 @@ public class DirectorV0 {
     private static final List<String> ACTION_COVERAGE = List.of(
         "WIDE_ESTABLISH", "MEDIUM_ACTION", "CLOSE_UP_IMPACT", "REACTION", "INSERT");
 
-    private static final Map<String, Integer> FUNCTION_HERO_LEVEL = Map.of(
-        "ESTABLISH", 0, "MASTER", 1, "DIALOGUE", 1, "REACTION", 1,
-        "INSERT", 0, "REVEAL", 3, "EMOTION", 2, "ACTION", 4,
-        "IMPACT", 4, "TRANSITION", 0, "POV", 2, "CLIFFHANGER", 3);
+    private static final Map<String, Integer> FUNCTION_HERO_LEVEL = Map.ofEntries(
+        Map.entry("ESTABLISH", 0), Map.entry("MASTER", 1),
+        Map.entry("DIALOGUE", 1), Map.entry("REACTION", 1),
+        Map.entry("INSERT", 0), Map.entry("REVEAL", 3),
+        Map.entry("EMOTION", 2), Map.entry("ACTION", 4),
+        Map.entry("IMPACT", 4), Map.entry("TRANSITION", 0),
+        Map.entry("POV", 2), Map.entry("CLIFFHANGER", 3));
 
-    private static final Map<String, Set<String>> FUNCTION_RISKS = Map.of(
-        "DIALOGUE", Set.of("LipSync"),
-        "ACTION", Set.of("Motion", "Continuity"),
-        "REACTION", Set.of("Identity"),
-        "EMOTION", Set.of("Identity"),
-        "REVEAL", Set.of("Continuity", "Prop"),
-        "IMPACT", Set.of("Motion", "Camera"),
-        "CLIFFHANGER", Set.of("Camera"),
-        "MASTER", Set.of("Identity", "Motion"),
-        "ESTABLISH", Set.of("Camera"),
-        "INSERT", Set.of("Prop"),
-        "TRANSITION", Set.of(),
-        "POV", Set.of("Camera"));
+    private static final Map<String, Set<String>> FUNCTION_RISKS = Map.ofEntries(
+        Map.entry("DIALOGUE", Set.of("LipSync")),
+        Map.entry("ACTION", Set.of("Motion", "Continuity")),
+        Map.entry("REACTION", Set.of("Identity")),
+        Map.entry("EMOTION", Set.of("Identity")),
+        Map.entry("REVEAL", Set.of("Continuity", "Prop")),
+        Map.entry("IMPACT", Set.of("Motion", "Camera")),
+        Map.entry("CLIFFHANGER", Set.of("Camera")),
+        Map.entry("MASTER", Set.of("Identity", "Motion")),
+        Map.entry("ESTABLISH", Set.of("Camera")),
+        Map.entry("INSERT", Set.of("Prop")),
+        Map.entry("TRANSITION", Set.<String>of()),
+        Map.entry("POV", Set.of("Camera")));
 
     /** 完整规则引擎：输入 logline + targetShots + duration → 输出结构化 Shot list */
     public List<Map<String, Object>> planShots(String logline, int targetShots, int durationSeconds) {

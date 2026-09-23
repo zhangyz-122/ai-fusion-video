@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.production;
 
+import com.stonewu.fusion.entity.production.ProductionTake;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.mapper.storyboard.StoryboardItemMapper;
 import lombok.RequiredArgsConstructor;

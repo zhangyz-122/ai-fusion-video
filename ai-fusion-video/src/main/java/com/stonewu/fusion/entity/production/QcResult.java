@@ -19,6 +19,6 @@ public class QcResult {
     private String evidenceJson;
     private Long reviewedBy;
     private String overrideReason;
-    @TableField(fill = com.baomidou.mybatisplus.annotation.FieldFill.INSERT)
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

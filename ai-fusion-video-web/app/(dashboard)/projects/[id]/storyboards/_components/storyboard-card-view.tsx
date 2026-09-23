@@ -46,6 +46,7 @@ const CardItemUI = memo(
       onDelete?: (itemId: number) => void;
       onVideoGen?: (itemId: number) => void;
       onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
+      onOpenTakes?: (item: StoryboardItem) => void;
       onPreviewVideo?: (videoUrl: string) => void;
       attributes?: SortableBindings["attributes"];
       listeners?: SortableBindings["listeners"];
@@ -63,6 +64,7 @@ const CardItemUI = memo(
         onDelete,
         onVideoGen,
         onOpenFrameDialog,
+        onOpenTakes,
         onPreviewVideo,
         attributes,
         listeners,
@@ -228,13 +230,13 @@ const CardItemUI = memo(
               </div>
             )}
 
-            {/* 首尾帧入口 - 每个镜头独立设置 */}
-            {onOpenFrameDialog && (
+            {/* 首尾帧与选片入口 - 每个镜头独立设置 */}
+            {(onOpenFrameDialog || onOpenTakes) && (
               <div
                 className="absolute bottom-2 left-2 flex items-center gap-1 z-20"
                 onClick={(e) => e.stopPropagation()}
               >
-                {(["first", "last"] as StoryboardFrameType[]).map((frameType) => {
+                {onOpenFrameDialog && (["first", "last"] as StoryboardFrameType[]).map((frameType) => {
                   const label = frameType === "first" ? "首" : "尾";
                   const title = frameType === "first" ? "首帧参考图" : "尾帧参考图";
                   const hasFrame =
@@ -263,6 +265,26 @@ const CardItemUI = memo(
                     </button>
                   );
                 })}
+                {onOpenTakes && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect?.();
+                      onOpenTakes(item);
+                    }}
+                    className={cn(
+                      "h-7 rounded-md border px-1.5 text-[10px] font-semibold backdrop-blur-sm",
+                      "flex items-center justify-center shadow-sm transition-all",
+                      item.selectedTakeId
+                        ? "border-primary/60 bg-primary/80 text-white"
+                        : "border-white/20 bg-black/45 text-white/80 hover:bg-primary/70 hover:text-white"
+                    )}
+                    title="Production 候选镜头"
+                  >
+                    选片
+                  </button>
+                )}
               </div>
             )}
 
@@ -343,6 +365,7 @@ function SortableCardItem({
   onDelete,
   onVideoGen,
   onOpenFrameDialog,
+  onOpenTakes,
   onPreviewVideo,
 }: {
   item: StoryboardItem;
@@ -352,6 +375,7 @@ function SortableCardItem({
   onDelete?: (itemId: number) => void;
   onVideoGen?: (itemId: number) => void;
   onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
+  onOpenTakes?: (item: StoryboardItem) => void;
   onPreviewVideo?: (videoUrl: string) => void;
 }) {
   const {
@@ -379,6 +403,7 @@ function SortableCardItem({
       onDelete={onDelete}
       onVideoGen={onVideoGen}
       onOpenFrameDialog={onOpenFrameDialog}
+      onOpenTakes={onOpenTakes}
       onPreviewVideo={onPreviewVideo}
       attributes={attributes}
       listeners={listeners}
@@ -396,6 +421,7 @@ export function StoryboardCardView({
   onReorderItems,
   onVideoGen,
   onOpenFrameDialog,
+  onOpenTakes,
 }: {
   items: StoryboardItem[];
   selectedItemId: number | null;
@@ -405,6 +431,7 @@ export function StoryboardCardView({
   onReorderItems?: (reordered: StoryboardItem[]) => void;
   onVideoGen?: (itemId: number) => void;
   onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
+  onOpenTakes?: (item: StoryboardItem) => void;
 }) {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
@@ -488,6 +515,7 @@ export function StoryboardCardView({
                 onDelete={onDeleteItem}
                 onVideoGen={onVideoGen}
                 onOpenFrameDialog={onOpenFrameDialog}
+                onOpenTakes={onOpenTakes}
                 onPreviewVideo={setPreviewVideoUrl}
               />
             ))}

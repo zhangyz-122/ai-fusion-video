@@ -1,87 +1,104 @@
+import { http } from "./client";
+
 /**
- * AI Drama OS Production API — types + fetch wrappers
- * PR-014: Frontend Production API/Types
+ * AI Drama OS Production API 类型与调用封装。
+ * 字段命名与后端实体保持一致（camelCase），JSON 列以字符串下发后在使用处解析。
  */
 
 export interface ProductionRun {
   id: number;
-  project_id: number;
-  storyboard_id: number;
-  storyboard_episode_id?: number;
-  run_type: string;
+  projectId: number;
+  storyboardId: number;
+  storyboardEpisodeId: number | null;
+  runType: string;
   status: string;
-  idempotency_key?: string;
-  started_at?: string;
-  finished_at?: string;
-  metadata_json?: Record<string, unknown>;
+  idempotencyKey: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  metadataJson: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface ProductionStep {
-  id: number;
-  run_id: number;
-  storyboard_item_id: number;
-  step_type: 'GENERATE_IMAGE' | 'GENERATE_VIDEO' | 'QC' | 'MEDIA' | 'HUMAN';
-  status: 'PENDING' | 'READY' | 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'RETRYING' | 'BLOCKED' | 'REVIEW_REQUIRED' | 'APPROVED' | 'CANCELLED';
-  execution_type: 'IMAGE' | 'VIDEO' | 'QC' | 'MEDIA' | 'HUMAN';
-  execution_ref_id?: number;
-  attempt: number;
-  error_code?: string;
-  error_message?: string;
-}
+export type ProductionTakeSourceType = "IMAGE_ITEM" | "VIDEO_ITEM";
+export type ProductionTakeQcStatus = "PENDING" | "PASS" | "FAIL" | "REVIEW_REQUIRED";
 
 export interface ProductionTake {
   id: number;
-  run_id: number;
-  storyboard_item_id: number;
-  source_type: 'IMAGE_ITEM' | 'VIDEO_ITEM';
-  source_item_id: number;
-  workflow_profile_id?: number;
-  workflow_version_id?: number;
-  model_id?: string;
-  seed?: number;
-  qc_status: 'PENDING' | 'PASS' | 'FAIL' | 'REVIEW_REQUIRED';
-  metadata_json?: {
-    videoUrl?: string;
-    firstFrameUrl?: string;
-    lastFrameUrl?: string;
-    duration?: number;
-  };
+  runId: number;
+  storyboardItemId: number;
+  sourceType: ProductionTakeSourceType;
+  sourceItemId: number;
+  workflowProfileId: number | null;
+  workflowVersionId: number | null;
+  modelId: string | null;
+  seed: number | null;
+  qcStatus: ProductionTakeQcStatus;
+  metadataJson: string | null;
+  createdAt: string;
+}
+
+/** afv_production_take.metadata_json 的结构 */
+export interface ProductionTakeMetadata {
+  videoUrl?: string;
+  firstFrameUrl?: string;
+  lastFrameUrl?: string;
+  duration?: number;
+}
+
+export interface QcResult {
+  id: number;
+  takeId: number;
+  criterion: string;
+  verdict: "PASS" | "FAIL" | "REVIEW_REQUIRED";
+  valueScore: number | null;
+  thresholdValue: number | null;
+  evidenceUrl: string | null;
+  evidenceJson: string | null;
+  reviewedBy: number | null;
+  overrideReason: string | null;
+  createdAt: string;
 }
 
 export interface ProductionSummary {
   itemId: number;
-  productionStatus: string;
-  selectedTakeId?: number;
-  workflowProfileId?: number;
-  videoUrl?: string;
-  firstFrameUrl?: string;
-  lastFrameUrl?: string;
+  productionStatus: string | null;
+  selectedTakeId: number | null;
+  workflowProfileId: number | null;
+  videoUrl: string | null;
+  firstFrameUrl: string | null;
+  lastFrameUrl: string | null;
 }
 
-const API_BASE = '/api';
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } });
-  const json = await res.json();
-  if (json.code !== '0000') throw new Error(json.msg || `HTTP ${res.status}`);
-  return json.data as T;
+/** metadata_json 解析失败时按空对象处理，避免列表整体渲染中断 */
+export function parseTakeMetadata(metadataJson: string | null): ProductionTakeMetadata {
+  if (!metadataJson) return {};
+  try {
+    return JSON.parse(metadataJson) as ProductionTakeMetadata;
+  } catch {
+    return {};
+  }
 }
 
-export async function getProductionSummary(itemId: number): Promise<ProductionSummary> {
-  return fetchJson(`${API_BASE}/storyboard/item/${itemId}/production-summary`);
-}
+export const productionApi = {
+  getRuns: (projectId: number) =>
+    http.get<never, ProductionRun[]>("/api/production/runs", { params: { projectId } }),
 
-export async function getProductionRuns(projectId: number): Promise<ProductionRun[]> {
-  return fetchJson(`${API_BASE}/video-fusion/production/runs?projectId=${projectId}`);
-}
+  getTakesByItem: (itemId: number) =>
+    http.get<never, ProductionTake[]>(`/api/production/takes/item/${itemId}`),
 
-export async function getTakesForItem(itemId: number): Promise<ProductionTake[]> {
-  return fetchJson(`${API_BASE}/video-fusion/production/takes?storyboardItemId=${itemId}`);
-}
+  selectTake: (storyboardItemId: number, takeId: number) =>
+    http.post<never, ProductionTake>("/api/production/takes/select", { storyboardItemId, takeId }),
 
-export async function selectTake(itemId: number, takeId: number): Promise<void> {
-  await fetchJson(`${API_BASE}/video-fusion/production/select-take`, {
-    method: 'POST',
-    body: JSON.stringify({ storyboardItemId: itemId, takeId }),
-  });
-}
+  deselectTake: (itemId: number) =>
+    http.delete<never, void>(`/api/production/takes/deselect/${itemId}`),
+
+  evaluateTakeQc: (takeId: number) =>
+    http.post<never, ProductionTake>(`/api/production/takes/${takeId}/qc`),
+
+  getTakeQcResults: (takeId: number) =>
+    http.get<never, QcResult[]>(`/api/production/takes/${takeId}/qc`),
+
+  getSummary: (itemId: number) =>
+    http.get<never, ProductionSummary>(`/api/storyboard/item/${itemId}/production-summary`),
+};

@@ -41,3 +41,7 @@ ai-fusion-video/data/
 .superpowers/
 .gemini/
 
+# QC sidecar (ai-drama-qc) Python artifacts
+__pycache__/
+*.pyc
+

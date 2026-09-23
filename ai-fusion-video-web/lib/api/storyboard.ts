@@ -102,6 +102,12 @@ export interface StoryboardItem {
   customData: string | null;
   aiGenerated: boolean;
   status: number;
+  /** AI Drama OS：镜头在生产流程中的状态，NONE 表示尚未进入生产 */
+  productionStatus: string | null;
+  /** AI Drama OS：已选定的候选镜头产物 ID，选片唯一真相来源 */
+  selectedTakeId: number | null;
+  /** AI Drama OS：该镜头使用的工作流方案 ID */
+  workflowProfileId: number | null;
   createTime: string;
   updateTime: string;
 }

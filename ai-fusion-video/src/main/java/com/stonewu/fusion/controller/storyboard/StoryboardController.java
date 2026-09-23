@@ -28,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 
@@ -239,7 +240,7 @@ public class StoryboardController {
 
     @Operation(summary = "获取分镜条目 Production Summary")
     @GetMapping("/item/{id}/production-summary")
-    public CommonResult<java.util.Map<String, Object>> getProductionSummary(
+    public CommonResult<Map<String, Object>> getProductionSummary(
             @PathVariable Long id) {
         return CommonResult.success(storyboardService.getProductionSummary(id));
     }

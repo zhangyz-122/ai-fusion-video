@@ -130,6 +130,7 @@ export function StoryboardTableView({
   onReorderItems,
   onVideoGen,
   onOpenFrameDialog,
+  onOpenTakes,
   assetLookup = {},
   onEditAssets,
 }: {
@@ -142,6 +143,7 @@ export function StoryboardTableView({
   onReorderItems?: (reorderedItems: StoryboardItem[]) => void;
   onVideoGen?: (itemId: number) => void;
   onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
+  onOpenTakes?: (item: StoryboardItem) => void;
   assetLookup?: Record<
     number,
     {
@@ -503,6 +505,34 @@ export function StoryboardTableView({
                             </Tooltip>
                           );
                         })}
+                        {onOpenTakes && (
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectItem(item.id);
+                                    onOpenTakes(item);
+                                  }}
+                                  className={cn(
+                                    "h-7 rounded-md border text-[10px] font-semibold transition-all",
+                                    "flex items-center justify-center px-1.5",
+                                    item.selectedTakeId
+                                      ? "border-primary/40 bg-primary/10 text-primary"
+                                      : "border-border/30 bg-muted/20 text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5"
+                                  )}
+                                >
+                                  选片
+                                </button>
+                              }
+                            />
+                            <TooltipContent className={TOOLTIP_CONTENT_CLASS}>
+                              Production 候选镜头
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                     ) : col.isVideo ? (
                       <div className="flex items-center justify-center h-11 w-16 rounded-md bg-muted/20 border border-border/10 overflow-hidden shrink-0 relative group/video">
