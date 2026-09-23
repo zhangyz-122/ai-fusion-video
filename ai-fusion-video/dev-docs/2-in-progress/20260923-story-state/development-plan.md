@@ -23,7 +23,11 @@
 
 ## 明确不做
 
-- PR-024 把 state refs 注入 Production Context。
-- `input_state_json` 的 lint（缺镜头顺序真相源，见契约文档）。
+- PR-024 把 state refs 注入 Production Context（见 `pr024-decision-proposal.md`）。
 - 剧情时间线 UI、角色身份与资产版本（属于素材层）。
 - 事件的修改与物理删除。
+
+## 可立刻补但没有补
+
+- `input_state_json` 的 lint：镜头顺序可确定，"本集第一镜之前的状态"是算得出来的；
+  本版没做是为了让 PR-023 的评审面停在契约与四类判定上，不是被阻塞。

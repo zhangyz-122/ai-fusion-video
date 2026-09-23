@@ -72,8 +72,10 @@ lint 只做四类可由已提交事件判定的检查：
 | `STORY_REQUIRED_BEAT_MISSING` | 节拍关键词未出现在该集任何已提交事件的取值中 |
 | `STORY_OPEN_LOOP_UNRESOLVED` | 要求闭合的悬念从未登记，或最后一条不是 `RESOLVED` |
 
-`input_state_json` 先存不用：判定"开拍前基线是否被破坏"需要镜头顺序，
-而 Production 层目前没有稳定的镜头序号真相源，等 PR-024 一起定义，避免猜测排序。
+`input_state_json` 本版未参与 lint，但**不是**因为缺排序依据：镜头顺序可由
+`storyboard_id → storyboard_episode_id → storyboard_scene_id → sort_order → id` 确定
+（与 P0 Golden fixture 的取镜规则一致）。缺口是"按顺序取第 N 镜之前的状态"这条规则
+尚未在 lint 里实现，属于可以立刻补的下一项，而不是被阻塞项。
 
 ## Explicit non-goals
 
