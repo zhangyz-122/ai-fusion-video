@@ -55,10 +55,30 @@ Execution State  = 计算任务运行到哪一步（afv_video_task）
 5. `PRE_STATE` 必须是 `POST_STATE` 的前缀折叠结果：同一 `(project, episode)` 下，
    `replay()` 与 `snapshot` 折叠必须产出完全一致的状态。
 
+## Episode contract (PR-023)
+
+`afv_episode_contract` 按 `(project_id, episode_id)` 唯一，覆盖写入时 `revision` 递增。
+
+状态声明的键统一写作 `TYPE:KEY`（例如 `CHARACTER:林川`），值为期望状态；
+`required_beats` 与 `must_resolve` 是字符串数组。
+
+lint 只做四类可由已提交事件判定的检查：
+
+| 编码 | 判定 |
+| --- | --- |
+| `EPISODE_CONTRACT_MISSING` | 该分集没有契约，无法判定 |
+| `STORY_UNKNOWN_SUBJECT` | 契约引用的主体从未产生过已提交事件 |
+| `STORY_OUTPUT_STATE_MISMATCH` | 主体存在但当前值与契约期望不一致 |
+| `STORY_REQUIRED_BEAT_MISSING` | 节拍关键词未出现在该集任何已提交事件的取值中 |
+| `STORY_OPEN_LOOP_UNRESOLVED` | 要求闭合的悬念从未登记，或最后一条不是 `RESOLVED` |
+
+`input_state_json` 先存不用：判定"开拍前基线是否被破坏"需要镜头顺序，
+而 Production 层目前没有稳定的镜头序号真相源，等 PR-024 一起定义，避免猜测排序。
+
 ## Explicit non-goals
 
-- 不做 `PR-023` 的分集契约与 lint，也不定义 knowledge boundary。
-- 不做 `PR-024`：不把 state refs 注入 Production Context 或生成提示词。
+- 不做 knowledge boundary 的机器判定，字段先不建。
+- 不做 PR-024：不把 state refs 注入 Production Context 或生成提示词。
 - 不改动 `ProductionRunService` 的状态机与写路径；提交入口是独立 API，
   待 `PR-024` 决定是否由选定流程调用。
 - 不做剧情时间线 UI，不引入第二套内容存储。

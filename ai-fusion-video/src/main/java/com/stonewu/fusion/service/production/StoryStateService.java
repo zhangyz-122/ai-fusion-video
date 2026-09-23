@@ -125,6 +125,14 @@ public class StoryStateService {
         return committed;
     }
 
+    /** 该范围内的已提交事件，按 id 升序；供契约 lint 复用同一套作用域规则。 */
+    public List<StoryEvent> events(Long projectId, Long episodeId) {
+        return eventMapper.selectList(new LambdaQueryWrapper<StoryEvent>()
+                .eq(StoryEvent::getProjectId, projectId)
+                .in(episodeId != null, StoryEvent::getEpisodeId, episodeScope(episodeId))
+                .orderByAsc(StoryEvent::getId));
+    }
+
     /**
      * 折叠当前剧情状态。{@code episodeId} 为 null 时返回项目全量，
      * 否则返回该分集事件与项目级事件的并集。
@@ -166,17 +174,13 @@ public class StoryStateService {
     }
 
     private Map<String, Object> fold(Long projectId, Long episodeId) {
-        List<StoryEvent> events = eventMapper.selectList(new LambdaQueryWrapper<StoryEvent>()
-                .eq(StoryEvent::getProjectId, projectId)
-                .in(episodeId != null, StoryEvent::getEpisodeId, episodeScope(episodeId))
-                .orderByAsc(StoryEvent::getId));
         Map<String, Object> state = new LinkedHashMap<>();
         state.put("characters", new LinkedHashMap<String, Object>());
         state.put("props", new LinkedHashMap<String, Object>());
         state.put("locations", new LinkedHashMap<String, Object>());
         state.put("facts", new ArrayList<>());
         state.put("openLoops", new ArrayList<>());
-        for (StoryEvent event : events) {
+        for (StoryEvent event : events(projectId, episodeId)) {
             apply(state, event);
         }
         return state;
