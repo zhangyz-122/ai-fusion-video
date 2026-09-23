@@ -16,6 +16,10 @@ import java.util.Locale;
  * Production 失败路由器。
  *
  * <p>只做确定性的策略判断和修复谱系记录，不直接创建第二条视频队列。</p>
+ *
+ * <p>{@code SWITCH_WORKFLOW} 只标记意图、状态为 BLOCKED：Executor 只会复制原任务，
+ * 若把它当作可自动重试就等于换了个名字重跑同一个不可用工作流；而契约禁止在模型与工作流
+ * 之间静默回退。真正的自动切换需要 WorkflowProfile 路由先给出满足能力约束的候选。</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -40,7 +44,7 @@ public class ProductionRepairRouter {
         int safeCount = Math.max(0, retryCount);
         int safeBudget = Math.min(MAX_RETRY_BUDGET,
                 retryBudget <= 0 ? DEFAULT_RETRY_BUDGET : retryBudget);
-        boolean retryRoute = RETRY_SAME_WORKFLOW.equals(route) || SWITCH_WORKFLOW.equals(route);
+        boolean retryRoute = RETRY_SAME_WORKFLOW.equals(route);
         boolean allowed = retryRoute && safeCount < safeBudget;
         String status = allowed ? PLANNED : BLOCKED;
         String reason = explain(route, normalizedCode, safeCount, safeBudget, allowed);
@@ -93,14 +97,15 @@ public class ProductionRepairRouter {
     }
 
     private String explain(String route, String code, int count, int budget, boolean allowed) {
+        if (SWITCH_WORKFLOW.equals(route)) {
+            return "失败 " + code + " 表明当前工作流不可用；生产契约禁止在模型与工作流之间静默回退，"
+                    + "自动切换需要先由 WorkflowProfile 路由给出满足能力约束的候选，因此需人工指定替代工作流。";
+        }
         if (!allowed) {
             return "失败 " + code + " 不允许继续自动重试，或已达到预算 " + budget + "。";
         }
         if (RETRY_SAME_WORKFLOW.equals(route)) {
             return "可在同一工作流上进行第 " + (count + 1) + " 次受限重试。";
-        }
-        if (SWITCH_WORKFLOW.equals(route)) {
-            return "当前工作流不可用，应切换到满足能力约束的候选工作流。";
         }
         return "需要人工复核后决定是否继续。";
     }

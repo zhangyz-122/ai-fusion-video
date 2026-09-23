@@ -7,6 +7,9 @@ import com.stonewu.fusion.controller.production.vo.ProductionStartReqVO;
 import com.stonewu.fusion.entity.production.ProductionRun;
 import com.stonewu.fusion.service.production.ProductionRunDetail;
 import com.stonewu.fusion.service.production.ProductionRunService;
+import com.stonewu.fusion.service.production.ProductionRunUsage;
+import com.stonewu.fusion.service.production.ProductionShotUsage;
+import com.stonewu.fusion.service.production.ProductionUsageService;
 import com.stonewu.fusion.service.production.ShotReadiness;
 import com.stonewu.fusion.service.project.ProjectAccessGuard;
 import com.stonewu.fusion.security.SecurityUtils;
@@ -28,6 +31,7 @@ import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 public class ProductionController {
 
     private final ProductionRunService productionRunService;
+    private final ProductionUsageService productionUsageService;
     private final ProjectAccessGuard accessGuard;
 
     @Operation(summary = "当前用户的生产运行分页列表")
@@ -47,6 +51,14 @@ public class ProductionController {
         return CommonResult.success(productionRunService.readiness(storyboardItemId));
     }
 
+    @Operation(summary = "查询镜头的生产用量汇总")
+    @GetMapping("/shots/{storyboardItemId}/usage")
+    public CommonResult<ProductionShotUsage> shotUsage(@PathVariable Long storyboardItemId) {
+        accessGuard.assertStoryboardItem(storyboardItemId);
+        return CommonResult.success(productionUsageService.shotUsage(
+                storyboardItemId, requireCurrentUserId()));
+    }
+
     @Operation(summary = "启动分镜条目生产（固定生成3个候选）")
     @PostMapping("/runs")
     public CommonResult<ProductionRunDetail> start(@Valid @RequestBody ProductionStartReqVO request) {
@@ -59,6 +71,13 @@ public class ProductionController {
     public CommonResult<ProductionRunDetail> detail(@PathVariable Long runId) {
         accessGuard.assertProductionRun(runId);
         return CommonResult.success(productionRunService.detail(runId, requireCurrentUserId()));
+    }
+
+    @Operation(summary = "查询生产运行的用量观测")
+    @GetMapping("/runs/{runId}/usage")
+    public CommonResult<ProductionRunUsage> runUsage(@PathVariable Long runId) {
+        accessGuard.assertProductionRun(runId);
+        return CommonResult.success(productionUsageService.runUsage(runId, requireCurrentUserId()));
     }
 
     @Operation(summary = "同步现有视频任务结果为候选视频")
