@@ -72,10 +72,11 @@ lint 只做四类可由已提交事件判定的检查：
 | `STORY_REQUIRED_BEAT_MISSING` | 节拍关键词未出现在该集任何已提交事件的取值中 |
 | `STORY_OPEN_LOOP_UNRESOLVED` | 要求闭合的悬念从未登记，或最后一条不是 `RESOLVED` |
 
-`input_state_json` 本版未参与 lint，但**不是**因为缺排序依据：镜头顺序可由
-`storyboard_id → storyboard_episode_id → storyboard_scene_id → sort_order → id` 确定
-（与 P0 Golden fixture 的取镜规则一致）。缺口是"按顺序取第 N 镜之前的状态"这条规则
-尚未在 lint 里实现，属于可以立刻补的下一项，而不是被阻塞项。
+契约**不含 `input_state`**。这不是"待实现的校验"，而是刻意不预留字段：判断"本集开拍前的
+基线是否成立"需要**跨分集的镜头全序**，而 `storyboard_id → episode → scene → sort_order → id`
+只保证集内顺序，跨集连续性由谁负责尚未定（属 PR-024 范围）。留一个存了没人读的列，
+等于让表结构声明一件系统并不执行的事——和"路由产出 `SWITCH_WORKFLOW` 却没人执行它"
+是同一类缺陷。等全序语义定了，再连校验一起加回。
 
 ## Explicit non-goals
 

@@ -19,9 +19,6 @@ public class EpisodeContractReqVO {
     @NotNull(message = "分集不能为空")
     private Long episodeId;
 
-    @Schema(description = "开拍前必须成立的剧情状态")
-    private String inputStateJson;
-
     @Schema(description = "本集结束时应成立的剧情状态")
     private String outputStateJson;
 

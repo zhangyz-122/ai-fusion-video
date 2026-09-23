@@ -41,7 +41,7 @@
 ## 未开始
 
 - [ ] PR-024 把 state refs 注入 Production Context 与生成提示词
-- [ ] `input_state_json` 的 lint：排序依据已确认存在，属可立即补项（本版未做）
+- [ ] `input_state` / 跨集基线校验：随 PR-024 的镜头状态声明与提交时机一起定义（本版已删列）
 - [ ] 选定流程是否自动触发剧情提交的决策（当前仅显式 API，不改 `ProductionRunService` 状态机）
 - [ ] `ADD` 型主体的撤销与去重语义（当前 `RESOLVED` 只是追加一条，折叠端未做配对）
 - [ ] 前端剧情状态与 lint 结果展示

@@ -75,9 +75,8 @@ public class StoryStateController {
         accessGuard.assertProject(request.getProjectId());
         return CommonResult.success(episodeContractService.define(
                 request.getProjectId(), request.getEpisodeId(),
-                new EpisodeContractService.ContractInput(request.getInputStateJson(),
-                        request.getOutputStateJson(), request.getRequiredBeatsJson(),
-                        request.getMustResolveJson()),
+                new EpisodeContractService.ContractInput(request.getOutputStateJson(),
+                        request.getRequiredBeatsJson(), request.getMustResolveJson()),
                 requireCurrentUserId()));
     }
 

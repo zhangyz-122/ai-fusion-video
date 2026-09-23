@@ -48,10 +48,9 @@ public class EpisodeContractService {
     private final EpisodeContractMapper contractMapper;
     private final StoryStateService storyStateService;
 
-    public record ContractInput(String inputStateJson,
-                               String outputStateJson,
-                               String requiredBeatsJson,
-                               String mustResolveJson) {
+    public record ContractInput(String outputStateJson,
+                                String requiredBeatsJson,
+                                String mustResolveJson) {
     }
 
     public record Violation(String code, String detail) {
@@ -62,7 +61,6 @@ public class EpisodeContractService {
         if (projectId == null || episodeId == null) {
             throw new BusinessException(400, "剧情契约必须同时指定项目与分集");
         }
-        requireJson(input.inputStateJson(), "inputState");
         requireJson(input.outputStateJson(), "outputState");
         requireJsonArray(input.requiredBeatsJson(), "requiredBeats");
         requireJsonArray(input.mustResolveJson(), "mustResolve");
@@ -72,7 +70,6 @@ public class EpisodeContractService {
             EpisodeContract contract = EpisodeContract.builder()
                     .projectId(projectId)
                     .episodeId(episodeId)
-                    .inputStateJson(input.inputStateJson())
                     .outputStateJson(input.outputStateJson())
                     .requiredBeatsJson(input.requiredBeatsJson())
                     .mustResolveJson(input.mustResolveJson())
@@ -82,7 +79,6 @@ public class EpisodeContractService {
             contractMapper.insert(contract);
             return contract;
         }
-        existing.setInputStateJson(input.inputStateJson());
         existing.setOutputStateJson(input.outputStateJson());
         existing.setRequiredBeatsJson(input.requiredBeatsJson());
         existing.setMustResolveJson(input.mustResolveJson());

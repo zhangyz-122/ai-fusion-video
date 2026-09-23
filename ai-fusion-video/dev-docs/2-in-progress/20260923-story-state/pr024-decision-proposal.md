@@ -2,12 +2,16 @@
 
 这份文件只为收敛决策，不含实现。三个问题按依赖顺序排列，第一个不定，后面都动不了。
 
-## 先更正一条我记错的债
+## 关于 `input_state`：已删列，不是待补的校验
 
-`technical-debt.md` 里我写过"`input_state_json` 缺镜头顺序真相源所以不 lint"。这条不成立：
-`afv_storyboard_item` 已有 `storyboard_id / storyboard_episode_id / storyboard_scene_id /
-sort_order / id`，且 `evidence/2026-09-13/golden/P0_GOLDEN_FIXTURE_001.json:35` 已经把
-"按 storyboard, episode, scene, sort_order, id 取前 12 镜"写成规则。所以开拍基线校验可以做。
+我对这件事先后给过两个说法，都不准确：先是"缺镜头顺序真相源所以不 lint"，后来改口
+"顺序是有的，属可立刻补的活"。真实情况在两者之间——`storyboard_id → episode → scene →
+sort_order → id`（与 P0 fixture 第 35 行一致）给出的是**集内**顺序；而"本集开拍前基线
+是否成立"需要**跨集**全序：上一集的 `POST_STATE` 如何成为本集的 `PRE_STATE`、项目级
+事实何时参与折叠，都没有定义。
+
+所以本版**删掉 `input_state_json` 列与接口字段**，不留"存了没人读"的结构。等下面的
+决定 1、决定 2 定了镜头状态声明与提交时机，跨集基线才有可校验的语义。
 
 ## 决定 1：镜头的 State Delta 声明存在哪里
 

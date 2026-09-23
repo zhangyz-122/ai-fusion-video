@@ -32,8 +32,6 @@ public class EpisodeContract extends BaseEntity {
 
     private Long episodeId;
 
-    private String inputStateJson;
-
     private String outputStateJson;
 
     private String requiredBeatsJson;

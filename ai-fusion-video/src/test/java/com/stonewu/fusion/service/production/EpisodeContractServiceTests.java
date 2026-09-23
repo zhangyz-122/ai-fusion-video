@@ -105,7 +105,7 @@ class EpisodeContractServiceTests {
         when(contractMapper.selectOne(any())).thenReturn(existing);
 
         EpisodeContract saved = service().define(1L, 2L,
-                new ContractInput(null, "{}", "[]", null), 7L);
+                new ContractInput("{}", "[]", null), 7L);
 
         assertThat(saved.getRevision()).isEqualTo(4);
         assertThat(saved.getDefinedBy()).isEqualTo(7L);
@@ -118,11 +118,11 @@ class EpisodeContractServiceTests {
         EpisodeContractService service = service();
 
         assertThatThrownBy(() -> service.define(1L, 2L,
-                new ContractInput("不是JSON", null, null, null), 7L))
+                new ContractInput("不是JSON", null, null), 7L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("必须是 JSON 对象");
         assertThatThrownBy(() -> service.define(1L, 2L,
-                new ContractInput(null, null, "{\"a\":1}", null), 7L))
+                new ContractInput(null, "{\"a\":1}", null), 7L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("必须是 JSON 数组");
     }
