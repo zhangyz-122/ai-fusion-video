@@ -49,6 +49,16 @@ class ProductionRepairRouterTests {
     }
 
     @Test
+    void workflowSwitchFailureBlocksAutoRepairUntilACandidateIsRouted() {
+        ProductionRepairRouter.Decision decision = router().decide("WORKFLOW_NODE_MISSING", 0, 2);
+
+        assertThat(decision.route()).isEqualTo(ProductionRepairRouter.SWITCH_WORKFLOW);
+        assertThat(decision.status()).isEqualTo(ProductionRepairRouter.BLOCKED);
+        assertThat(decision.retryAllowed()).isFalse();
+        assertThat(decision.reason()).contains("静默回退");
+    }
+
+    @Test
     void recordFailureIsIdempotentAndKeepsParentStep() {
         when(attemptMapper.selectCount(any())).thenReturn(0L);
         when(attemptMapper.selectOne(any())).thenReturn(null);
