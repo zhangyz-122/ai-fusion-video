@@ -24,5 +24,7 @@ ProductionTechnicalQcService.inspect
   `mediaCheck=UNAVAILABLE` 且不改 status，不把未测量当作通过或失败。
 - **阈值刻意保守**：只有逐像素平均差恰为 0（完全静止）才判静止；
   平均灰度 ≤ 2 或 ≥ 253 才判无内容。低运动、轻微欠曝一律交给人工复核。
-- 原 `ai-drama-qc` Python sidecar 的 opencv 算法改为 Java + `ImageIO` 实现，
-  不引入新依赖，也不违反 fork 侧"不另起 Python Worker"的 IA 约束。
+- 原 `ai-drama-qc` Python sidecar 的 opencv 算法改为 Java + `ImageIO` 实现，不引入新依赖。
+  这也避开了一条仍然有效的仓库约束——
+  `dev-docs/1-todo/2026-09-13-页面整改与短剧制造平台IA.md` 写着
+  "Production Worker：现有 Consumer + Reaper，禁止再起 Python Worker"。
