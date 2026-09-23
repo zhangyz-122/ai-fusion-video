@@ -51,6 +51,7 @@ public class ProductionTechnicalQcService {
 
     private final QcResultMapper qcResultMapper;
     private final StorageConfigService storageConfigService;
+    private final ProductionMediaAnalysisService mediaAnalysisService;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15))
@@ -128,7 +129,11 @@ public class ProductionTechnicalQcService {
             if (!probe.success()) {
                 return Evaluation.fail("VIDEO_PROBE_FAILED", probe.error());
             }
-            return validateProbe(probe.json());
+            Evaluation streamEvaluation = validateProbe(probe.json());
+            if (QcResult.FAIL.equals(streamEvaluation.status())) {
+                return streamEvaluation;
+            }
+            return withMediaSignals(streamEvaluation, input);
         } catch (Exception exception) {
             log.warn("[ProductionTechnicalQc] 视频技术质检失败: url={}, error={}", videoUrl, exception.getMessage());
             return Evaluation.fail("VIDEO_QC_EXCEPTION", trim(exception.getMessage()));
@@ -141,6 +146,22 @@ public class ProductionTechnicalQcService {
                 }
             }
         }
+    }
+
+    /**
+     * 流属性通过后再看帧信号：静止与全黑全白是客观缺陷，但测不出来时不改动原判定。
+     */
+    Evaluation withMediaSignals(Evaluation evaluation, String input) {
+        Object durationValue = evaluation.metrics().get("durationSeconds");
+        double duration = durationValue instanceof Number number ? number.doubleValue() : 0;
+        ProductionMediaAnalysisService.MediaSignals signals = mediaAnalysisService.measure(input, duration);
+        Map<String, Object> metrics = new LinkedHashMap<>(evaluation.metrics());
+        metrics.putAll(mediaAnalysisService.metrics(signals));
+        ProductionMediaAnalysisService.Finding finding = mediaAnalysisService.judge(signals);
+        if (finding == null) {
+            return new Evaluation(QcResult.PASS, null, evaluation.note(), metrics);
+        }
+        return new Evaluation(QcResult.FAIL, finding.code(), finding.note(), metrics);
     }
 
     Evaluation validateProbe(JSONObject root) {

@@ -39,7 +39,7 @@ class ProductionTechnicalQcServiceTests {
         }).when(qcResultMapper).insert(any(QcResult.class));
 
         ProductionTechnicalQcService service = new ProductionTechnicalQcService(
-                qcResultMapper, storageConfigService);
+                qcResultMapper, storageConfigService, new ProductionMediaAnalysisService());
         QcResult result = service.evaluate(
                 ProductionTake.builder()
                         .id(11L).runId(21L).storyboardItemId(31L).qcStatus(QcResult.REVIEW_REQUIRED).build(),
@@ -84,7 +84,8 @@ class ProductionTechnicalQcServiceTests {
     }
 
     private ProductionTechnicalQcService service() {
-        return new ProductionTechnicalQcService(qcResultMapper, storageConfigService);
+        return new ProductionTechnicalQcService(
+                qcResultMapper, storageConfigService, new ProductionMediaAnalysisService());
     }
 
     private cn.hutool.json.JSONObject loadProbe(String fileName) throws IOException {
